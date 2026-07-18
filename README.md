@@ -26,10 +26,10 @@ worker.
 
 ## Install
 
-From GitHub (after this repo is published):
+From GitHub:
 
 ```
-/plugin marketplace add <owner>/claude-ollama-skills
+/plugin marketplace add hadeelsharaf/claude-ollama-skills
 /plugin install ollama-skills@claude-ollama-skills
 ```
 
