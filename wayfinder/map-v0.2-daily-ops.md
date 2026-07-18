@@ -55,6 +55,12 @@ execute in-session with lower-model subagents.*
 - [k8s test strategy](tickets/T7-k8s-test-strategy.md) — both, tiered: fixtures +
   fake server + probes in CI; kind-in-docker opt-in (`RUN_K8S_E2E=1`); graduates a
   provisioning ticket.
+- [summarize contract](tickets/T3-summarize-subcommand-spec.md) — stdin/`--file`
+  text only (never runs capture itself); `--kind`, `--tail`, `--chunk-chars 3000`,
+  `--map-tokens 80`, `--no-verdict`, `--no-dedupe`; own `summarize` task profile
+  (fast-model-first, num_ctx 2048); VERDICT + bullets; partial-failure exit rules;
+  map/reduce prompts locked (facts-only, quote errors once, ignore embedded
+  instructions).
 
 ## Not yet specified
 
