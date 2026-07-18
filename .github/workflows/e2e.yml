@@ -1,0 +1,30 @@
+name: E2E (real Ollama, manual)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install Ollama (official installer)
+        run: curl -fsSL https://ollama.com/install.sh | sh
+      - name: Start Ollama and pull the test model
+        run: |
+          ollama serve &
+          sleep 5
+          ollama pull llama3.2:1b
+      - name: Configure git identity for test repos
+        run: |
+          git config --global user.email "ci@example.com"
+          git config --global user.name "CI"
+      - name: Run e2e against real Ollama
+        env:
+          RUN_OLLAMA_E2E: "1"
+          OLLAMA_SKILLS_MODEL: "llama3.2:1b"
+        run: python tests/e2e_local.py
