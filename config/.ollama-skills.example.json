@@ -1,0 +1,13 @@
+{
+  "host": "http://localhost:11434",
+  "keep_alive": "30m",
+  "stall_seconds": 90,
+  "total_timeout_seconds": 480,
+  "max_input_chars": 2500,
+  "tasks": {
+    "commit":  { "model": "qwen3:8b",  "max_tokens": 96,  "temperature": 0.4 },
+    "shell":   { "model": "qwen3:8b",  "max_tokens": 192, "temperature": 0.0 },
+    "code":    { "model": "qwen3:8b",  "max_tokens": 512, "temperature": 0.2 },
+    "general": { "model": "qwen3:8b",  "max_tokens": 256, "temperature": 0.3 }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "ollama-skills",
+  "displayName": "Ollama Skills",
+  "version": "0.1.0",
+  "description": "Skills and agents that let Claude Code delegate small tasks (commit messages, pre-commit fixes, shell commands, small code) to local Ollama models. Private data stays on your machine.",
+  "author": { "name": "Hadeel Sharaf" },
+  "license": "MIT",
+  "keywords": ["ollama", "local-llm", "skills", "agents", "privacy", "offline"]
+}

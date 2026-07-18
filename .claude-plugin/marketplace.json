@@ -1,0 +1,11 @@
+{
+  "name": "claude-ollama-skills",
+  "owner": { "name": "Hadeel Sharaf" },
+  "plugins": [
+    {
+      "name": "ollama-skills",
+      "source": "./",
+      "description": "Delegate small tasks to local Ollama models. Claude plans and reviews; your local model drafts."
+    }
+  ]
+}
