@@ -31,11 +31,15 @@ def rmtree_force(path: str) -> None:
 
 def run_step(name: str, argv: list, cwd=None) -> str:
     started = time.monotonic()
-    result = subprocess.run(
-        [sys.executable, str(SCRIPT)] + argv + ["--quiet"],
-        capture_output=True, text=True, encoding="utf-8", errors="replace",
-        cwd=cwd, timeout=600,
-    )
+    try:
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT)] + argv + ["--quiet"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            cwd=cwd, timeout=600,
+        )
+    except subprocess.TimeoutExpired:
+        print(f"E2E {name} FAILED: no answer within 600s (is the model too big for this machine?)")
+        sys.exit(1)
     seconds = time.monotonic() - started
     if result.returncode != 0:
         print(f"E2E {name} FAILED (exit {result.returncode}) after {seconds:.1f}s")
@@ -60,7 +64,7 @@ def main() -> int:
     try:
         repo = Path(tmp) / "repo"
         repo.mkdir()
-        subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+        subprocess.run(["git", "init", "-q"], cwd=repo, check=True, capture_output=True)
         (repo / "notify.py").write_text(
             "def notify(user, message):\n"
             "    if not user.email:\n"

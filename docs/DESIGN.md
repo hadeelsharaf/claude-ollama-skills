@@ -137,13 +137,14 @@ All skills share three hard rules printed in each SKILL.md:
 
 ### 5.3 Agents (3)
 
-Subagents run on **haiku** (cheap) and preload their skills. They keep delegation
+Subagents run on **haiku** (cheap) and carry their whole workflow inline in the
+agent body (self-contained — no skill loading needed). They keep delegation
 chatter out of the main context.
 
-| Agent | Job | Skills preloaded | Tools |
+| Agent | Job | Workflow inlined from | Tools |
 |---|---|---|---|
 | `ollama-coder` | Small coding tasks via the local model, verified | ollama-code, ollama-ask | Read, Grep, Glob, Bash, Write, Edit |
-| `ollama-git` | Stage → local commit message → validate → commit | ollama-commit, ollama-precommit | Bash, Read, Grep |
+| `ollama-git` | Stage → local commit message → validate → commit | ollama-commit | Bash, Read, Grep |
 | `ollama-ops` | Simple file/shell chores via drafted commands | ollama-shell, ollama-ask | Bash, Read, Glob |
 
 ### 5.4 Model mapping
@@ -151,7 +152,8 @@ chatter out of the main context.
 Per-task auto-detect preference lists (first installed match wins), based on research
 and sized for common machines:
 
-- `code`: qwen3-coder, qwen2.5-coder (any), devstral, deepseek-coder, codegemma
+- `code`: qwen3-coder, qwen2.5-coder (any), devstral, deepseek-coder, codegemma,
+  then the general list as a curated fallback (never an arbitrary installed model)
 - `commit`: qwen2.5-coder, llama3.1, llama3.2, qwen3, gemma3
 - `shell`: qwen3, llama3.1, llama3.2, qwen2.5
 - `general`: qwen3, llama3.1, gemma3, llama3.2, mistral

@@ -18,7 +18,8 @@ Use `python` on Windows, `python3` on macOS/Linux.
 
 1. **Deterministic fixers first.** In order, run only the ones that apply:
    - `.pre-commit-config.yaml` present and `pre-commit` installed →
-     `pre-commit run --all-files` (its auto-fix hooks do most of the work).
+     `pre-commit run` (staged files only; its auto-fix hooks do most of the work).
+     Use `--all-files` only when the user asks for a repo-wide cleanup.
    - Otherwise, run the project's own fixers if configured: `ruff check --fix .`,
      `black .`, `npx prettier --write .`, `npx eslint --fix .` — only those the
      project already uses (check config files first).

@@ -41,6 +41,7 @@ SUGGESTION_TEXT = (
 class FakeOllamaHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.0"
     counters: dict = {}
+    last_payload: dict = {}
 
     def log_message(self, *args):  # silence
         pass
@@ -64,6 +65,7 @@ class FakeOllamaHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         length = int(self.headers.get("Content-Length", 0))
         payload = json.loads(self.rfile.read(length) or b"{}")
+        FakeOllamaHandler.last_payload = payload
         if self.path != "/api/generate":
             self._send_json(404, {"error": "unknown path"})
             return
@@ -81,6 +83,12 @@ class FakeOllamaHandler(BaseHTTPRequestHandler):
             text = "<think>secret reasoning</think>" + CANNED_TEXT
         elif "CODEBLOCK" in prompt:
             text = "```python\nprint('hi')\n```"
+        elif "BADCOMMIT" in prompt:
+            text = "I cannot help with that request."
+        elif "SKIPFIX" in prompt:
+            text = "SKIP"
+        elif "NONASCII" in prompt:
+            text = "naïve ✓ done"
         elif "SUGGESTFIX" in prompt:
             text = SUGGESTION_TEXT
         elif "BADJSON" in prompt:
@@ -123,12 +131,11 @@ def rmtree_force(path: str) -> None:
     shutil.rmtree(path, onerror=onerror)
 
 
-def free_closed_port() -> int:
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    port = sock.getsockname()[1]
-    sock.close()
-    return port
+class QuietServer(ThreadingHTTPServer):
+    """Client aborts (stall tests) make handlers raise on write; keep stderr clean."""
+
+    def handle_error(self, request, client_address):
+        pass
 
 
 class OllamaAskTests(unittest.TestCase):
@@ -136,7 +143,7 @@ class OllamaAskTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.server = ThreadingHTTPServer(("127.0.0.1", 0), FakeOllamaHandler)
+        cls.server = QuietServer(("127.0.0.1", 0), FakeOllamaHandler)
         cls.port = cls.server.server_address[1]
         cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
         cls.thread.start()
@@ -199,6 +206,15 @@ class OllamaAskTests(unittest.TestCase):
         os.chdir(project)
         data = self.resolved()
         self.assertEqual(data["tasks"]["commit"]["model"], "project-model")
+
+    def test_config_with_utf8_bom_is_read(self):
+        """PowerShell's Out-File -Encoding utf8 writes a BOM; must still parse."""
+        config = json.dumps({"tasks": {"commit": {"model": "bom-model"}}})
+        (Path(self._tmp) / ".ollama-skills.json").write_bytes(
+            b"\xef\xbb\xbf" + config.encode("utf-8"))
+        data = self.resolved()
+        self.assertEqual(data["tasks"]["commit"]["model"], "bom-model")
+        self.assertEqual(data["tasks"]["commit"]["source"], "config")
 
     def test_resolve_model_autodetect_prefers_commit_list(self):
         data = self.resolved()
@@ -319,15 +335,87 @@ class OllamaAskTests(unittest.TestCase):
         self.assertIn("0.0-test", out)
 
     def test_unreachable_exits_3(self):
-        os.environ["OLLAMA_HOST"] = f"http://127.0.0.1:{free_closed_port()}"
-        code, _, err = self.run_cli("health")
-        self.assertEqual(code, 3)
-        self.assertIn("running", err.lower())
+        # A bound-but-not-listening socket refuses connections deterministically.
+        blocker = socket.socket()
+        blocker.bind(("127.0.0.1", 0))
+        try:
+            port = blocker.getsockname()[1]
+            os.environ["OLLAMA_HOST"] = f"http://127.0.0.1:{port}"
+            code, _, err = self.run_cli("health")
+            self.assertEqual(code, 3)
+            self.assertIn("running", err.lower())
+        finally:
+            blocker.close()
 
     def test_missing_model_exits_4(self):
         code, _, err = self.run_cli("ask", "hello", "--model", "missing-model")
         self.assertEqual(code, 4)
         self.assertIn("pull", err.lower())
+
+    # -- validation-failure and robustness paths ------------------------------
+
+    def test_commit_msg_invalid_twice_exits_6(self):
+        repo = Path(self._tmp) / "repo6"
+        repo.mkdir()
+        subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+        (repo / "notes.txt").write_text("BADCOMMIT marker\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=repo, check=True)
+        os.chdir(repo)
+        code, _, err = self.run_cli("commit-msg")
+        self.assertEqual(code, 6)
+        self.assertIn("cannot help", err.lower())  # raw output surfaced on stderr
+
+    def test_fix_lint_skip_path(self):
+        target = Path(self._tmp) / "skipme.py"
+        target.write_text("import os\n", encoding="utf-8")
+        code, out, _ = self.run_cli(
+            "fix-lint", "--file", str(target), "--line", "1",
+            "--error", "SKIPFIX E501 line too long")
+        self.assertEqual(code, 0)
+        self.assertEqual(out.strip(), "SKIP")
+
+    def test_payload_pins_think_false_and_defaults(self):
+        code, _, _ = self.run_cli("ask", "hello there")
+        self.assertEqual(code, 0)
+        payload = FakeOllamaHandler.last_payload
+        self.assertIs(payload.get("think"), False)
+        self.assertEqual(payload["options"]["num_predict"], 256)  # 'general' default
+        self.assertEqual(payload.get("keep_alive"), "30m")
+
+    def test_json_object_sets_format(self):
+        code, _, _ = self.run_cli("ask", "give json", "--json-object")
+        self.assertEqual(code, 0)
+        self.assertEqual(FakeOllamaHandler.last_payload.get("format"), "json")
+
+    def test_staged_lockfiles_excluded_from_prompt(self):
+        repo = Path(self._tmp) / "repolock"
+        repo.mkdir()
+        subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+        (repo / "package-lock.json").write_text(
+            '{"comment": "LOCKMARKER999"}\n', encoding="utf-8")
+        (repo / "app.py").write_text("print('SRCMARKER777')\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=repo, check=True)
+        os.chdir(repo)
+        code, _, err = self.run_cli("commit-msg")
+        self.assertEqual(code, 0, msg=err)
+        prompt = FakeOllamaHandler.last_payload.get("prompt", "")
+        self.assertNotIn("LOCKMARKER999", prompt)  # lockfile content stays out
+        self.assertIn("SRCMARKER777", prompt)      # real source goes in
+
+    def test_subprocess_pipe_nonascii_is_safe(self):
+        """Regression: Windows pipes default to the ANSI codepage and crashed
+        on non-ASCII model output before main() forced UTF-8."""
+        env = dict(os.environ)
+        env.pop("PYTHONUTF8", None)
+        env.pop("PYTHONIOENCODING", None)
+        script = ROOT / "scripts" / "ollama_ask.py"
+        result = subprocess.run(
+            [sys.executable, str(script), "ask", "NONASCII please", "--quiet"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            env=env, timeout=60,
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIn("done", result.stdout)
 
 
 if __name__ == "__main__":

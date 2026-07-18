@@ -12,11 +12,13 @@ Subcommands:
   ask            Generic prompt -> text (or JSON object with --json-object).
   commit-msg     Read the STAGED git diff locally -> Conventional Commit message.
   draft-command  Plain-words task -> JSON {command, explanation, caution}.
-  draft-code     Small spec -> code only (fences stripped, syntax-checked).
+  draft-code     Small spec -> code only (fences stripped; syntax check for
+                 python, and for javascript when node is installed).
   fix-lint       Lint error + code window -> SEARCH/REPLACE suggestion (never applies).
 
 Exit codes: 0 ok · 2 bad usage/over budget · 3 Ollama unreachable ·
-4 model missing · 5 timeout/stall · 6 output failed validation.
+4 model missing · 5 timeout/stall · 6 output failed validation ·
+1 unexpected error · 130 interrupted (Ctrl-C).
 """
 from __future__ import annotations
 
@@ -26,7 +28,6 @@ import fnmatch
 import json
 import os
 import platform
-import py_compile
 import re
 import shutil
 import socket
@@ -55,8 +56,11 @@ TASK_DEFAULTS = {
 }
 
 # First installed model whose name starts with a prefix wins (top first).
+# Code prefers coder-specialized models, then falls back to curated general
+# models — never to an arbitrary installed model (embedding models must lose).
 PREFERENCES = {
-    "code": ["qwen3-coder", "qwen2.5-coder", "devstral", "deepseek-coder", "codegemma"],
+    "code": ["qwen3-coder", "qwen2.5-coder", "devstral", "deepseek-coder",
+             "codegemma", "qwen3", "llama3.1", "gemma3", "llama3.2", "mistral"],
     "commit": ["qwen2.5-coder", "llama3.1", "llama3.2", "qwen3", "gemma3"],
     "shell": ["qwen3", "llama3.1", "llama3.2", "qwen2.5"],
     "general": ["qwen3", "llama3.1", "gemma3", "llama3.2", "mistral"],
@@ -110,7 +114,8 @@ def debug(message: str) -> None:
 
 def _read_json_file(path: Path) -> dict:
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        # utf-8-sig: Windows editors and PowerShell often write a UTF-8 BOM.
+        return json.loads(path.read_text(encoding="utf-8-sig"))
     except (OSError, json.JSONDecodeError) as exc:
         eprint(f"warning: ignoring bad config {path}: {exc}")
         return {}
@@ -131,25 +136,50 @@ def load_config() -> dict:
         if not path.is_file():
             continue
         data = _read_json_file(path)
+        if not isinstance(data, dict):
+            eprint(f"warning: ignoring config {path}: not a JSON object")
+            continue
         for key, value in data.items():
             if key == "tasks" and isinstance(value, dict):
                 for task, task_cfg in value.items():
-                    cfg["tasks"].setdefault(task, {}).update(task_cfg or {})
+                    if isinstance(task_cfg, dict):
+                        cfg["tasks"].setdefault(task, {}).update(task_cfg)
+                    else:
+                        eprint(f"warning: ignoring tasks.{task} in {path}: not an object")
             else:
                 cfg[key] = value
         debug(f"loaded config {path}")
 
     if os.environ.get("OLLAMA_HOST"):
         host = os.environ["OLLAMA_HOST"]
-        if not host.startswith("http"):
+        if not host.startswith(("http://", "https://")):
             host = "http://" + host
         cfg["host"] = host
+    cfg["host"] = str(cfg["host"]).rstrip("/")
+    warn_if_remote(cfg["host"])
     return cfg
 
 
+_TAGS_CACHE: dict = {}
+
+
 def installed_models(host: str) -> list:
-    data = http_get_json(host, "/api/tags")
-    return data.get("models", [])
+    if host not in _TAGS_CACHE:
+        data = http_get_json(host, "/api/tags")
+        _TAGS_CACHE[host] = data.get("models", [])
+    return _TAGS_CACHE[host]
+
+
+LOOPBACK_HOSTS = ("localhost", "127.", "[::1]", "0.0.0.0")
+
+
+def warn_if_remote(host: str) -> None:
+    """A project .ollama-skills.json can set host — make data leaving loud."""
+    bare = re.sub(r"^https?://", "", host).split("/")[0].rsplit(":", 1)[0]
+    if not any(bare == h.rstrip(".") or bare.startswith(h) for h in LOOPBACK_HOSTS):
+        eprint(f"WARNING: Ollama host is {host} — prompts and diffs will LEAVE "
+               "this machine. Remove 'host' from .ollama-skills.json if that "
+               "is not what you want.")
 
 
 def resolve_model(task: str, cfg: dict, flag_model, installed_cache: dict):
@@ -173,9 +203,16 @@ def resolve_model(task: str, cfg: dict, flag_model, installed_cache: dict):
         for name in names:
             if name.startswith(prefix):
                 return name, "auto"
-    if names:
-        return names[0], "auto"
-    raise CliError(EXIT_NO_MODEL, "No Ollama models installed. Try: ollama pull llama3.2:1b")
+    if not names:
+        raise CliError(EXIT_NO_MODEL,
+                       "No Ollama models installed. Try: ollama pull llama3.2:1b")
+    wanted = ", ".join(PREFERENCES.get(task, []))
+    raise CliError(
+        EXIT_NO_MODEL,
+        f"No installed model matches the '{task}' preference list ({wanted}). "
+        f"Installed: {', '.join(names)}. Set tasks.{task}.model in "
+        ".ollama-skills.json or pass --model.",
+    )
 
 
 # --------------------------------------------------------------------------
@@ -192,11 +229,18 @@ def _unreachable(host: str) -> CliError:
 def http_get_json(host: str, path: str) -> dict:
     try:
         with urllib.request.urlopen(host + path, timeout=10) as resp:
-            return json.loads(resp.read().decode("utf-8"))
+            body = resp.read().decode("utf-8", "replace")
     except urllib.error.HTTPError as exc:
         raise CliError(EXIT_UNREACHABLE, f"Ollama returned HTTP {exc.code} for {path}")
     except (urllib.error.URLError, socket.timeout, ConnectionError, OSError):
         raise _unreachable(host)
+    try:
+        return json.loads(body)
+    except json.JSONDecodeError:
+        raise CliError(
+            EXIT_UNREACHABLE,
+            f"{host}{path} did not return JSON — is this really Ollama?",
+        )
 
 
 def stream_generate(cfg: dict, payload: dict, stall_seconds: int,
@@ -211,6 +255,7 @@ def stream_generate(cfg: dict, payload: dict, stall_seconds: int,
     )
     deadline = time.monotonic() + total_seconds
     pieces = []
+    done_seen = False
     try:
         # The socket timeout applies to every read: it is the stall detector.
         with urllib.request.urlopen(request, timeout=stall_seconds) as resp:
@@ -223,11 +268,7 @@ def stream_generate(cfg: dict, payload: dict, stall_seconds: int,
                 try:
                     line = resp.readline()
                 except (socket.timeout, TimeoutError):
-                    raise CliError(
-                        EXIT_STALL,
-                        f"Stalled: no output for {stall_seconds}s from {model}. "
-                        "Warm up first, shrink the input, or pick a smaller model.",
-                    )
+                    raise _stall_error(model, stall_seconds)
                 if not line:
                     break
                 try:
@@ -241,6 +282,7 @@ def stream_generate(cfg: dict, payload: dict, stall_seconds: int,
                     sys.stderr.write(".")
                     sys.stderr.flush()
                 if chunk.get("done"):
+                    done_seen = True
                     break
     except urllib.error.HTTPError as exc:
         detail = ""
@@ -248,27 +290,37 @@ def stream_generate(cfg: dict, payload: dict, stall_seconds: int,
             detail = exc.read().decode("utf-8", "replace")
         except OSError:
             pass
-        if exc.code == 404 or "not found" in detail.lower():
+        if exc.code == 404 and (not detail or "not found" in detail.lower()):
             raise CliError(
                 EXIT_NO_MODEL,
                 f"Model '{model}' is not installed. Try: ollama pull {model}",
             )
-        if "think" in detail.lower():
+        if exc.code == 400 and "think" in payload and "think" in detail.lower():
             raise ThinkRejected()
         raise CliError(EXIT_BAD_OUTPUT, f"Ollama HTTP {exc.code}: {detail[:300]}")
     except (socket.timeout, TimeoutError):
-        raise CliError(
-            EXIT_STALL,
-            f"Stalled: no output for {stall_seconds}s from {model}. "
-            "Warm up first, shrink the input, or pick a smaller model.",
-        )
+        raise _stall_error(model, stall_seconds)
     except (urllib.error.URLError, ConnectionError):
         raise _unreachable(host)
     finally:
         if not quiet:
             sys.stderr.write("\n")
             sys.stderr.flush()
+    if not done_seen:
+        raise CliError(
+            EXIT_BAD_OUTPUT,
+            f"Stream from {model} ended before it was finished — output may be "
+            "truncated. Check `ollama serve` logs and retry.",
+        )
     return "".join(pieces)
+
+
+def _stall_error(model: str, stall_seconds: int) -> CliError:
+    return CliError(
+        EXIT_STALL,
+        f"Stalled: no output for {stall_seconds}s from {model}. "
+        "Warm up first, shrink the input, or pick a smaller model.",
+    )
 
 
 def generate(task: str, prompt: str, args, cfg: dict, system=None,
@@ -277,11 +329,12 @@ def generate(task: str, prompt: str, args, cfg: dict, system=None,
     cache: dict = {}
     model, _source = resolve_model(task, cfg, args.model, cache)
     task_cfg = cfg["tasks"].get(task) or {}
-    options = {
-        "num_predict": (args.max_tokens or max_tokens
-                        or task_cfg.get("max_tokens")
-                        or TASK_DEFAULTS[task]["max_tokens"]),
-    }
+    num_predict = args.max_tokens if args.max_tokens is not None else max_tokens
+    if num_predict is None:
+        num_predict = task_cfg.get("max_tokens")
+    if num_predict is None:
+        num_predict = TASK_DEFAULTS[task]["max_tokens"]
+    options = {"num_predict": num_predict}
     temperature = args.temperature
     if temperature is None:
         temperature = task_cfg.get("temperature")
@@ -302,8 +355,8 @@ def generate(task: str, prompt: str, args, cfg: dict, system=None,
     if response_format:
         payload["format"] = response_format
 
-    stall = args.stall_seconds or int(cfg.get("stall_seconds", 90))
-    total = args.timeout or int(cfg.get("total_timeout_seconds", 480))
+    stall = args.stall_seconds if args.stall_seconds is not None else _cfg_int(cfg, "stall_seconds", 90)
+    total = args.timeout if args.timeout is not None else _cfg_int(cfg, "total_timeout_seconds", 480)
     debug(f"model={model} stall={stall}s total={total}s options={options}")
     try:
         text = stream_generate(cfg, payload, stall, total, args.quiet)
@@ -336,8 +389,17 @@ def strip_quotes(text: str) -> str:
     return text
 
 
+def _cfg_int(cfg: dict, key: str, default: int) -> int:
+    try:
+        return int(cfg.get(key, default))
+    except (TypeError, ValueError):
+        eprint(f"warning: config {key} is not a number; using {default}")
+        return default
+
+
 def check_budget(text: str, cfg: dict, args) -> None:
-    limit = args.max_input_chars or int(cfg.get("max_input_chars", 2500))
+    limit = (args.max_input_chars if args.max_input_chars is not None
+             else _cfg_int(cfg, "max_input_chars", 2500))
     if args.force:
         return
     if len(text) > limit:
@@ -428,23 +490,29 @@ def cmd_models(args, cfg: dict) -> int:
     cache: dict = {}
     resolved = {}
     for task in TASKS:
-        model, source = resolve_model(task, cfg, args.model, cache)
-        resolved[task] = {"model": model, "source": source}
+        try:
+            model, source = resolve_model(task, cfg, args.model, cache)
+            resolved[task] = {"model": model, "source": source}
+        except CliError as exc:
+            # models is a diagnostic command: report the gap, don't die on it.
+            resolved[task] = {"model": None, "source": "none", "error": str(exc)}
     if args.json:
         print(json.dumps({"tasks": resolved, "installed": cache.get("models", [])}, indent=2))
         return EXIT_OK
     print(f"{'task':<10} {'model':<28} source")
     for task, info in resolved.items():
-        print(f"{task:<10} {info['model']:<28} {info['source']}")
+        model = info["model"] or "(no match — set it in config)"
+        print(f"{task:<10} {model:<28} {info['source']}")
     return EXIT_OK
 
 
 def cmd_warmup(args, cfg: dict) -> int:
-    started = time.monotonic()
-    generate(args.task, "Reply with the single word: OK", args, cfg, max_tokens=8)
-    seconds = time.monotonic() - started
     cache: dict = {}
     model, _ = resolve_model(args.task, cfg, args.model, cache)
+    args.model = model  # pin it so generate() does not resolve again
+    started = time.monotonic()
+    generate(args.task, "Reply with the single word: OK", args, cfg, max_tokens=1)
+    seconds = time.monotonic() - started
     print(f"warmed {model} in {seconds:.1f}s (keep_alive {cfg.get('keep_alive')})")
     return EXIT_OK
 
@@ -494,14 +562,17 @@ def _staged_context(cfg: dict, args) -> str:
     stat = run_git(["diff", "--cached", "--stat"]).strip()
     if not stat:
         raise CliError(EXIT_USAGE, "Nothing is staged. Run: git add <files> first.")
-    names = [n for n in run_git(["diff", "--cached", "--name-only"]).splitlines() if n]
+    names = [n for n in run_git(
+        ["-c", "core.quotepath=off", "diff", "--cached", "--name-only"]
+    ).splitlines() if n]
     kept = [n for n in names
             if not any(fnmatch.fnmatch(Path(n).name, p) for p in LOCKFILE_PATTERNS)]
-    limit = args.max_input_chars or int(cfg.get("max_input_chars", 2500))
+    limit = (args.max_input_chars if args.max_input_chars is not None
+             else _cfg_int(cfg, "max_input_chars", 2500))
     parts = ["File summary:", stat, ""]
     used = sum(len(p) for p in parts)
     for name in kept:
-        diff = run_git(["diff", "--cached", "-U1", "--", name])
+        diff = run_git(["-c", "core.quotepath=off", "diff", "--cached", "-U1", "--", name])
         excerpt_lines = diff.splitlines()[:40]
         excerpt = "\n".join(excerpt_lines)
         if used + len(excerpt) > limit:
@@ -519,18 +590,23 @@ def cmd_commit_msg(args, cfg: dict) -> int:
     text = generate("commit", prompt, args, cfg, system=COMMIT_SYSTEM + style_note)
     message = _clean_commit(text, args)
 
-    if args.style == "conventional" and not CONVENTIONAL_RE.match(message.splitlines()[0]):
+    if args.style == "conventional" and not _valid_commit_line(message):
         feedback = (COMMIT_SYSTEM + style_note +
                     f" Your last answer was rejected: {message!r}. It must match "
-                    "<type>: <summary> with an allowed type and under 72 chars.")
+                    "<type>: <summary> with an allowed type and under 72 chars total.")
         text = generate("commit", prompt, args, cfg, system=feedback)
         message = _clean_commit(text, args)
-        if not CONVENTIONAL_RE.match(message.splitlines()[0]):
+        if not _valid_commit_line(message):
             eprint(f"raw output:\n{text}")
             raise CliError(EXIT_BAD_OUTPUT,
                            "Model could not produce a valid Conventional Commit line.")
     print(message)
     return EXIT_OK
+
+
+def _valid_commit_line(message: str) -> bool:
+    first = message.splitlines()[0] if message.strip() else ""
+    return bool(first) and len(first) <= 72 and bool(CONVENTIONAL_RE.match(first))
 
 
 def _clean_commit(text: str, args) -> str:
@@ -590,26 +666,24 @@ CODE_SYSTEM = (
 def _syntax_check(code_text: str, lang: str):
     """Returns None when OK, or an error string."""
     if lang == "python":
-        tmp = tempfile.NamedTemporaryFile("w", suffix=".py", delete=False,
-                                          encoding="utf-8")
         try:
-            tmp.write(code_text)
-            tmp.close()
-            py_compile.compile(tmp.name, doraise=True)
+            compile(code_text, "<draft>", "exec")
             return None
-        except py_compile.PyCompileError as exc:
-            return str(exc)
-        finally:
-            os.unlink(tmp.name)
+        except SyntaxError as exc:
+            return f"{exc.msg} (line {exc.lineno})"
     if lang == "javascript" and shutil.which("node"):
         tmp = tempfile.NamedTemporaryFile("w", suffix=".js", delete=False,
                                           encoding="utf-8")
         try:
             tmp.write(code_text)
             tmp.close()
-            result = subprocess.run(["node", "--check", tmp.name],
-                                    capture_output=True, text=True)
+            result = subprocess.run(
+                ["node", "--check", tmp.name], capture_output=True,
+                encoding="utf-8", errors="replace", timeout=30,
+            )
             return None if result.returncode == 0 else result.stderr.strip()
+        except subprocess.TimeoutExpired:
+            return None  # cannot check; do not block the draft on a hung node
         finally:
             os.unlink(tmp.name)
     return None
@@ -617,7 +691,10 @@ def _syntax_check(code_text: str, lang: str):
 
 def cmd_draft_code(args, cfg: dict) -> int:
     if args.spec_file:
-        spec = Path(args.spec_file).read_text(encoding="utf-8")
+        try:
+            spec = Path(args.spec_file).read_text(encoding="utf-8-sig", errors="replace")
+        except OSError as exc:
+            raise CliError(EXIT_USAGE, f"Cannot read spec file {args.spec_file}: {exc}")
     elif args.spec:
         spec = args.spec
     else:
@@ -635,7 +712,15 @@ def cmd_draft_code(args, cfg: dict) -> int:
             eprint(f"raw output:\n{code_text}")
             raise CliError(EXIT_BAD_OUTPUT, f"Draft still has a syntax error: {error[:200]}")
     if args.out:
-        Path(args.out).write_text(code_text + "\n", encoding="utf-8")
+        out_path = Path(args.out)
+        if out_path.exists():
+            raise CliError(EXIT_USAGE,
+                           f"--out refuses to overwrite the existing file {args.out}. "
+                           "Review the printed draft and place it yourself.")
+        try:
+            out_path.write_text(code_text + "\n", encoding="utf-8")
+        except OSError as exc:
+            raise CliError(EXIT_USAGE, f"Cannot write {args.out}: {exc}")
         eprint(f"wrote {args.out}")
     print(code_text)
     return EXIT_OK
@@ -646,14 +731,18 @@ FIX_SYSTEM = (
     "this format and nothing else:\n"
     "SUGGESTION\n<<<<<<< SEARCH\n(the exact original lines)\n=======\n"
     "(the replacement lines)\n>>>>>>> REPLACE\nWHY: one short sentence\n"
-    "Rules: touch ONLY the flagged line(s); never change behavior; if a safe "
-    "fix is not possible, reply with the single word SKIP."
+    "Rules: copy original lines exactly as shown (the code has no line-number "
+    "prefixes; never add any); touch ONLY the flagged line(s); never change "
+    "behavior; if a safe fix is not possible, reply with the single word SKIP."
 )
 
 
 def cmd_fix_lint(args, cfg: dict) -> int:
     if args.errors_file:
-        error_text = Path(args.errors_file).read_text(encoding="utf-8")
+        try:
+            error_text = Path(args.errors_file).read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            raise CliError(EXIT_USAGE, f"Cannot read errors file {args.errors_file}: {exc}")
     elif args.error:
         error_text = args.error
     else:
@@ -661,13 +750,17 @@ def cmd_fix_lint(args, cfg: dict) -> int:
     source = Path(args.file)
     if not source.is_file():
         raise CliError(EXIT_USAGE, f"No such file: {source}")
-    lines = source.read_text(encoding="utf-8").splitlines()
-    center = max(1, args.line)
+    lines = source.read_text(encoding="utf-8", errors="replace").splitlines()
+    if not lines:
+        raise CliError(EXIT_USAGE, f"{source} is empty — nothing to fix.")
+    center = min(max(1, args.line), len(lines))
     start = max(0, center - 1 - 15)
     end = min(len(lines), center + 15)
-    window = "\n".join(f"{i + 1}: {lines[i]}" for i in range(start, end))
-    prompt = (f"Lint finding:\n{error_text}\n\nFile {source.name}, "
-              f"lines {start + 1}-{end} (flagged line {center}):\n{window}")
+    window = "\n".join(lines[start:end])
+    prompt = (f"Lint finding:\n{error_text}\n\n"
+              f"Flagged line {center}: {lines[center - 1]}\n\n"
+              f"File {source.name}, lines {start + 1}-{end} "
+              f"(verbatim, no line numbers):\n{window}")
     check_budget(prompt, cfg, args)
 
     text = generate("code", prompt, args, cfg, system=FIX_SYSTEM, max_tokens=256)
@@ -690,10 +783,11 @@ def cmd_fix_lint(args, cfg: dict) -> int:
 # --------------------------------------------------------------------------
 
 def build_parser() -> argparse.ArgumentParser:
+    # NOTE: --task must NOT live on this shared parent. argparse `parents=` shares
+    # the action OBJECT between subparsers, and set_defaults(task=...) on one
+    # subparser would silently change the default for all of them.
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--model", help="exact Ollama model name (beats all config)")
-    common.add_argument("--task", choices=TASKS, default="general",
-                        help="task profile for model choice and budgets")
     common.add_argument("--max-tokens", type=int, dest="max_tokens")
     common.add_argument("--temperature", type=float)
     common.add_argument("--timeout", type=int, help="total seconds cap")
@@ -701,7 +795,8 @@ def build_parser() -> argparse.ArgumentParser:
     common.add_argument("--max-input-chars", type=int, dest="max_input_chars")
     common.add_argument("--force", action="store_true",
                         help="send input even when over the size budget")
-    common.add_argument("--quiet", action="store_true", help="no progress dots")
+    common.add_argument("--quiet", action="store_true",
+                        help="no progress dots (automatic when stderr is not a terminal)")
 
     parser = argparse.ArgumentParser(
         prog="ollama_ask.py",
@@ -715,9 +810,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_models = sub.add_parser("models", parents=[common], help="show model per task")
     p_models.add_argument("--json", action="store_true")
 
-    sub.add_parser("warmup", parents=[common], help="load a model now")
+    p_warm = sub.add_parser("warmup", parents=[common], help="load a model now")
+    p_warm.add_argument("--task", choices=TASKS, default="general",
+                        help="task profile for model choice and budgets")
 
     p_ask = sub.add_parser("ask", parents=[common], help="generic prompt -> text")
+    p_ask.add_argument("--task", choices=TASKS, default="general",
+                       help="task profile for model choice and budgets")
     p_ask.add_argument("prompt", nargs="?")
     p_ask.add_argument("--stdin", action="store_true", help="read the prompt from stdin")
     p_ask.add_argument("--system", help="system prompt")
@@ -769,20 +868,34 @@ HANDLERS = {
 
 
 def main(argv=None) -> int:
+    # Claude Code runs this script through pipes; on Windows those default to the
+    # ANSI codepage and crash (or mis-decode) on non-ASCII text. Force UTF-8.
+    for stream in (sys.stdin, sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, OSError):
+            pass  # StringIO in tests, or exotic hosts
     parser = build_parser()
     try:
         args = parser.parse_args(argv)
     except SystemExit as exc:
         return EXIT_USAGE if exc.code not in (0, None) else EXIT_OK
-    cfg = load_config()
+    if not args.quiet and not sys.stderr.isatty():
+        args.quiet = True  # progress dots are noise in captured output
     try:
+        cfg = load_config()
         return HANDLERS[args.command](args, cfg)
     except CliError as exc:
         eprint(f"error: {exc}")
         return exc.code
     except KeyboardInterrupt:
         eprint("interrupted")
-        return EXIT_STALL
+        return 130
+    except Exception as exc:  # noqa: BLE001 - keep the exit-code contract
+        eprint(f"unexpected error: {type(exc).__name__}: {exc}")
+        if os.environ.get("OLLAMA_SKILLS_DEBUG"):
+            raise
+        return 1
 
 
 if __name__ == "__main__":

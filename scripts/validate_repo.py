@@ -22,7 +22,7 @@ CONVENTIONAL_MODELS = {"haiku", "sonnet", "opus", "fable", "inherit"}
 
 def ok(path: Path, note: str = "") -> None:
     rel = path.relative_to(ROOT)
-    print(f"OK   {rel}{(' — ' + note) if note else ''}")
+    print(f"OK   {rel}{(' - ' + note) if note else ''}")
 
 
 def fail(path: Path, reason: str) -> None:
@@ -31,16 +31,21 @@ def fail(path: Path, reason: str) -> None:
     FAILURES.append(str(rel))
 
 
+FRONTMATTER_RE = re.compile(r"\A---\r?\n(.*?)\r?\n---\r?\n?(.*)\Z", re.DOTALL)
+
+
 def parse_frontmatter(path: Path) -> tuple[dict, str]:
-    """Parse simple single-line `key: value` frontmatter. Returns (fields, body)."""
-    text = path.read_text(encoding="utf-8")
-    if not text.startswith("---"):
-        raise ValueError("missing frontmatter start '---'")
-    parts = text.split("---", 2)
-    if len(parts) < 3:
-        raise ValueError("missing frontmatter end '---'")
+    """Parse simple single-line `key: value` frontmatter. Returns (fields, body).
+
+    This repo intentionally keeps frontmatter to single-line `key: value` pairs
+    (no YAML lists or multi-line strings) so this stdlib parser stays honest.
+    """
+    text = path.read_text(encoding="utf-8-sig")
+    match = FRONTMATTER_RE.match(text)
+    if not match:
+        raise ValueError("missing or unterminated frontmatter ('---' fences)")
     fields: dict[str, str] = {}
-    for line in parts[1].strip().splitlines():
+    for line in match.group(1).strip().splitlines():
         line = line.strip()
         if not line or line.startswith("#"):
             continue
@@ -48,7 +53,7 @@ def parse_frontmatter(path: Path) -> tuple[dict, str]:
             raise ValueError(f"frontmatter line is not 'key: value': {line!r}")
         key, value = line.split(":", 1)
         fields[key.strip()] = value.strip().strip("'\"")
-    return fields, parts[2]
+    return fields, match.group(2)
 
 
 def check_json(path: Path, required: list[str]) -> dict | None:

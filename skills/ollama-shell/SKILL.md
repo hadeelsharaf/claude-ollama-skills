@@ -30,15 +30,17 @@ Use `python` on Windows, `python3` on macOS/Linux.
 
 ## Deny-list — rewrite or refuse, never run as-is
 
-- Recursive delete outside the folder the user named (`rm -rf`, `Remove-Item -Recurse -Force` on `~`, `/`, `$env:USERPROFILE`, `AppData`, wildcards at high levels)
+- Recursive delete outside the folder the user named (`rm -rf`, `Remove-Item -Recurse -Force`, `rd /s /q`, `del /f /s /q` on `~`, `/`, `$env:USERPROFILE`, `AppData`, wildcards at high levels)
 - `git clean -fdx` / `-fd` (silently deletes untracked files — configs, .env, notes)
+- Anything that discards uncommitted work: `git reset --hard`, `git checkout -- .`, `git restore .`, `git stash drop`, `git stash clear`
 - Disk or partition operations (`format`, `diskpart`, `mkfs`, `dd`)
 - Registry edits, `shutdown`, `reboot`, service stop/start
 - Piping a download into a shell (`curl ... | sh`, `iwr ... | iex`)
-- Reading or sending credential files (`.ssh`, `.aws`, tokens, browser profiles)
-- `git push --force` to a shared branch, `git commit --no-verify`
+- Reading or sending secrets: credential files (`.ssh`, `.aws`, tokens, browser profiles), `.env` files, or dumping env vars (`printenv`, `Get-ChildItem Env:`)
+- Persistence: scheduled tasks (`schtasks /create`, `crontab`), editing `$PROFILE` or `.bashrc`
+- `git push --force`, `git commit --no-verify`
 - Mass permission changes (`chmod -R 777`, `icacls /reset /T`)
-- Anything with `sudo` the user did not explicitly request
+- Elevation the user did not explicitly request (`sudo`, `Start-Process -Verb RunAs`)
 
 A command on this list is not "probably fine". Rewrite a narrow, safe version
 yourself, or ask the user.

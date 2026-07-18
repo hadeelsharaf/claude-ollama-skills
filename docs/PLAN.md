@@ -24,7 +24,7 @@
 - Skill frontmatter: `name` ≤ 64 chars, `description` ≤ 1024 chars and must say **what + when**.
 - Never recommend or use `bypassPermissions` or `--no-verify` anywhere in the repo.
 - The local model's output is always an **untrusted draft**. Every skill must repeat this rule.
-- Script exit codes: `0` ok, `2` bad usage/over budget, `3` Ollama unreachable, `4` model missing, `5` timeout/stall, `6` output failed validation.
+- Script exit codes: `0` ok, `2` bad usage/over budget, `3` Ollama unreachable, `4` model missing, `5` timeout/stall, `6` output failed validation, `1` unexpected error, `130` interrupted.
 - Env vars: `OLLAMA_HOST`, `OLLAMA_SKILLS_MODEL`, `OLLAMA_SKILLS_MODEL_<TASK>` (`COMMIT|SHELL|CODE|GENERAL`), `OLLAMA_SKILLS_CONFIG`, `OLLAMA_SKILLS_DEBUG`.
 - Config files: `./.ollama-skills.json` (project) then `~/.ollama-skills.json` (user).
 - Task defaults: commit `max_tokens 96, temp 0.4` · shell `192, 0.0` · code `512, 0.2` · general `256, 0.3`.
@@ -41,11 +41,12 @@
 2. Config loading: load_config() -> dict           # flag > env > project file > user file > defaults
 3. Model resolution: resolve_model(task, cfg, flag) -> str
    preference lists (first installed match wins; match = installed name starts with prefix):
-     code:    ["qwen3-coder", "qwen2.5-coder", "devstral", "deepseek-coder", "codegemma"]
+     code:    ["qwen3-coder", "qwen2.5-coder", "devstral", "deepseek-coder", "codegemma",
+               "qwen3", "llama3.1", "gemma3", "llama3.2", "mistral"]   # curated general tail
      commit:  ["qwen2.5-coder", "llama3.1", "llama3.2", "qwen3", "gemma3"]
      shell:   ["qwen3", "llama3.1", "llama3.2", "qwen2.5"]
      general: ["qwen3", "llama3.1", "gemma3", "llama3.2", "mistral"]
-   fallback: first installed model; none installed -> exit 4
+   no preference match or nothing installed -> exit 4 with clear advice (never guess)
 4. HTTP: get_json(path), stream_generate(payload, stall_s, total_s) -> str
    - urllib.request, no requests lib
    - POST /api/generate with stream:true; read NDJSON lines; print one dot to stderr per chunk (unless --quiet)
@@ -66,10 +67,10 @@ Behavior that tests pin down (see Task R1):
 |---|---|
 | `health` | prints Ollama version, installed models, free-RAM warning if model bytes > free RAM; `--json` machine form |
 | `models` | table: task → resolved model + why (flag/env/config/auto) |
-| `warmup` | one generate call, `num_predict: 1`, prints load time |
+| `warmup` | one generate call, `num_predict: 1`, prints the warm-up time |
 | `ask` | prompt from arg or `--stdin`; `--system`; `--json-object` adds `"format":"json"` and validates JSON parse |
 | `commit-msg` | runs `git diff --cached` itself; excludes `*.lock|package-lock.json|*.min.*|yarn.lock|pnpm-lock.yaml`; compact form = `--stat` + first changed lines per file, hard-capped to `max_input_chars`; empty staged diff -> exit 2 "nothing staged"; validates `^(feat|fix|build|chore|ci|docs|style|refactor|perf|test)(\([\w\-\./]+\))?(!)?: .{1,72}$` (unless `--style plain`); one retry with feedback; still bad -> print raw to stderr, exit 6 |
-| `draft-command` | output must parse as JSON object with non-empty `command` string + `explanation` + `caution`; one retry; still bad -> exit 6; `--shell` defaults: windows→powershell else bash |
+| `draft-command` | output must parse as JSON object with a non-empty `command` string (missing `explanation`/`caution` default to safe values); one retry; still bad -> exit 6; `--shell` defaults: windows→powershell else bash |
 | `draft-code` | strips fences; `--lang python` runs `py_compile` on result (temp file); `--lang javascript` runs `node --check` when node exists; syntax fail -> one retry with error text; still bad -> exit 6 |
 | `fix-lint` | input: `--file` + `--error` (or `--errors-file`) + `--line`; sends ±15 line window only; output format below; **never writes files** |
 

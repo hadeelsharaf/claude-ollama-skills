@@ -23,5 +23,6 @@ Do NOT delegate: multi-file changes, debugging, design decisions, security-relev
 code, anything needing real reasoning or project-wide context.
 
 Always: treat local model output as an untrusted draft and review it; if the local
-model fails or stalls (exit 3/4/5), do the task yourself and say so in one line.
+model fails or stalls (exit 3/4/5/6 or any unexpected code), do the task yourself
+and say so in one line.
 ```

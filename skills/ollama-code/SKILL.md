@@ -22,8 +22,8 @@ Use `python` on Windows, `python3` on macOS/Linux.
 2. Write a short, precise spec (inputs, outputs, edge cases, language) to a temp
    file, then:
    `python "$SCRIPT" draft-code --spec-file <tempfile> --lang python`
-   (`--lang javascript` also gets a syntax check when node is installed;
-   `--out <path>` additionally writes the draft to a file).
+   (`--lang javascript` also gets a syntax check when node is installed).
+   Do not use `--out`: you review first, then place the code yourself (step 5).
 3. Review the draft line by line:
    - Does it do exactly what the spec says? Edge cases handled?
    - No secrets, no network calls, no file deletions the spec did not ask for.

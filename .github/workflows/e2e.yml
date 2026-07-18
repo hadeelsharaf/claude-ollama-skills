@@ -12,12 +12,17 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      # Note: install-by-pipe is the vendor's official method and runs only in this
+      # throwaway CI VM. It is the one accepted exception to the project deny-list.
       - name: Install Ollama (official installer)
         run: curl -fsSL https://ollama.com/install.sh | sh
       - name: Start Ollama and pull the test model
         run: |
           ollama serve &
-          sleep 5
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:11434/api/version && break
+            sleep 1
+          done
           ollama pull llama3.2:1b
       - name: Configure git identity for test repos
         run: |

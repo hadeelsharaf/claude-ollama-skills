@@ -88,8 +88,9 @@ building and testing this project:
 
 **If you clone this, model choice is yours.** Set models in `.ollama-skills.json`
 (copy `config/.ollama-skills.example.json`) or env vars — any Ollama model works.
-With no config at all, the script auto-detects sensible models per task from what
-you have installed (`python scripts/ollama_ask.py models` shows the result and why).
+With no config at all, the script picks a model per task from a tested preference
+list — or tells you clearly when nothing installed fits, instead of guessing
+(`python scripts/ollama_ask.py models` shows the result and why).
 
 ## Measured speed (development machine: CPU-only, 16 GB RAM, no GPU)
 
@@ -140,7 +141,8 @@ itself and says so** — a failed delegation never blocks work.
 - Drafted shell commands pass a static deny-list and a scope check, then still go
   through Claude Code's normal permission prompt. Nothing here bypasses permissions.
 - Lint fixes are suggest-only and must touch just the flagged lines.
-- These rules are behavior-tested against small models: [docs/skill-tests.md](docs/skill-tests.md).
+- These rules are behavior-tested with small-model (claude-haiku) probes:
+  [docs/skill-tests.md](docs/skill-tests.md).
 - Full threat model: [docs/SECURITY.md](docs/SECURITY.md).
 
 ## Repo map

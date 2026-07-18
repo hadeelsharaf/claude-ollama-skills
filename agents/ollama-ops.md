@@ -30,14 +30,18 @@ Use `python` on Windows, `python3` on macOS/Linux.
 
 ## Deny-list — rewrite or refuse, never run as-is
 
-- Recursive delete outside the folder the user named
+- Recursive delete outside the folder the user named (incl. `rd /s /q`, `del /f /s /q`)
 - `git clean -fdx` / `-fd` (deletes untracked files: configs, .env, notes)
+- Anything that discards uncommitted work: `git reset --hard`, `git checkout -- .`,
+  `git restore .`, `git stash drop|clear`
 - Disk/partition operations, registry edits, shutdown, service changes
 - Piping a download into a shell (`curl ... | sh`, `iwr ... | iex`)
-- Reading or sending credential files (`.ssh`, `.aws`, tokens)
+- Reading or sending secrets: credential files (`.ssh`, `.aws`, tokens), `.env`
+  files, env-var dumps (`printenv`, `Get-ChildItem Env:`)
+- Persistence: `schtasks /create`, `crontab`, editing `$PROFILE` / `.bashrc`
 - `git push --force`, `git commit --no-verify`
 - Mass permission changes (`chmod -R 777`, `icacls /reset /T`)
-- `sudo` the user did not explicitly request
+- Elevation the user did not request (`sudo`, `Start-Process -Verb RunAs`)
 
 ## Rules
 

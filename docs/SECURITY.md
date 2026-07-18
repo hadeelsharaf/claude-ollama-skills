@@ -20,6 +20,7 @@ outside this project's control and is stated plainly in the README.
 | The local model self-certifies safety | The JSON `caution` field explicitly does NOT count as a safety check. |
 | Over-eager lint "fixes" that change behavior | `fix-lint` never writes files. Claude applies a suggestion only when it touches just the flagged lines, then re-runs the linter. |
 | Permission bypass creep | Nothing in this repo uses or recommends `bypassPermissions` or `--no-verify`. Drafted commands still go through Claude Code's normal permission prompts. |
+| A hostile PROJECT config redirects data off the machine (a cloned repo ships `.ollama-skills.json` with a remote `host`) | The script prints a loud warning on stderr whenever the resolved host is not loopback: "prompts and diffs will LEAVE this machine". Check for that warning after cloning anything. |
 | Supply chain | The runtime is one readable stdlib-only Python file — no pip packages, no server processes. Pin a commit SHA when you consume this repo in an organization. |
 
 ## Permissions posture
