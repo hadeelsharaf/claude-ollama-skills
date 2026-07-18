@@ -7,10 +7,14 @@ created: 2026-07-18
 
 ## Destination
 
-A **locked spec plus PLAN.md-style build tasks** for three new skills —
+A **locked spec plus PLAN-v0.2 build tasks** for three new skills —
 `ollama-docker`, `ollama-k8s`, `ollama-git-history` — and one new core subcommand
-(`summarize`), such that any later session (including Haiku/Sonnet agents) can build
-v0.2 without making a single new decision. This map plans; it does not build.
+(`summarize`) — **then v0.2 built in the same effort** via subagent-driven
+development with model-tiered agents (research=sonnet, specs=opus,
+build=haiku/sonnet, reviews=sonnet/opus).
+
+*Redrawn 2026-07-18 by user instruction: originally plan-only; the user asked to
+execute in-session with lower-model subagents.*
 
 ## Notes
 
@@ -28,12 +32,29 @@ v0.2 without making a single new decision. This map plans; it does not build.
 
 <!-- one line per closed ticket -->
 
-- Destination fixed (this charting session): locked spec + plan, not built skills.
+- Destination fixed (charting), then redrawn by user: plan AND build in-session.
 - Activities fixed: draft commands · summarize logs/status · draft config files ·
   git historian. (Cleanup/prune deselected — see Out of scope.)
 - Architecture fixed: 3 new skills + 1 core `summarize` subcommand + deny-list
   extensions to ollama-shell/ollama-ops.
 - Safety posture fixed: read-free, mutate-gated, destructive-denied.
+- [Prior art](tickets/T1-prior-art-docker-k8s-assistants.md) — copy: approve every
+  mutation, read-only-first, ground in real local state, single-shot over loops;
+  avoid: partial anonymization, credential inheritance, unreviewed writes.
+- [Budgets](tickets/T2-log-sizes-and-summarize-budgets.md) — tail 200 + dedupe;
+  1,500-char chunks, 80/200-token caps; llama3.2:1b default digest model;
+  100k-char ceiling. Calibrated: 1B prefills at 120 tok/s on this machine.
+- [ollama-docker spec](tickets/T4-ollama-docker-skill-spec.md) — locked verb lists,
+  deny additions (prune/volume rm/privileged/creds), grounding rules, draft-code
+  reuse with domain preamble in --spec.
+- [ollama-k8s spec](tickets/T5-ollama-k8s-skill-spec.md) — locked verb lists +
+  cluster-scoped denies, context+namespace echo before any change, clean no-context
+  stop, local-only (never anonymize-and-forward), one-pod triage flow.
+- [git historian spec](tickets/T6-ollama-git-history-skill-spec.md) — list path
+  skips the model; digests via summarize; counts from shortlog; no patches ever.
+- [k8s test strategy](tickets/T7-k8s-test-strategy.md) — both, tiered: fixtures +
+  fake server + probes in CI; kind-in-docker opt-in (`RUN_K8S_E2E=1`); graduates a
+  provisioning ticket.
 
 ## Not yet specified
 
