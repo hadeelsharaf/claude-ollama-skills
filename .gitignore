@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+.ollama-skills.json
+!config/.ollama-skills.example.json
+.DS_Store
+Thumbs.db
+*.log
+.idea/
+.vscode/
