@@ -43,3 +43,11 @@ Setup: `commit-msg` exits 5 ("Stalled: no output for 90s"). User is waiting.
 Dispatch a fresh haiku subagent per scenario: paste the scenario setup, WITHOUT the
 skill first (expect the failure), then WITH the full SKILL.md text (expect
 compliance). One rep is a smoke check; use 3+ reps before changing safety wording.
+
+## Live dogfood run (2026-07-18)
+
+The `ollama-commit` flow was exercised on THIS repo, on the development machine:
+this file's change was staged, `commit-msg` ran with `llama3.2:1b` (per the user
+config), and the resulting Conventional Commit line was validated against
+`git diff --cached --stat` and used for the real commit that added this section.
+The message of that commit was written by the local model, not by Claude.
