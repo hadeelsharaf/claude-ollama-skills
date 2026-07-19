@@ -503,6 +503,20 @@ class OllamaAskTests(unittest.TestCase):
                                       "--kind", "log", "--stall-seconds", "1")
         self.assertEqual(code, 5)
 
+    # -- deny-list coverage (skill/agent safety wording) --------------------
+
+    def test_denylist_covers_container_cluster_history(self):
+        needles = [
+            "docker system prune", "docker volume rm", "docker compose down -v",
+            "--privileged", "kubectl delete namespace", "kubectl delete pvc",
+            "--all-namespaces", "kubectl drain", "kubectl edit",
+            "kubectl config use-context", "git rebase", "git filter-branch",
+        ]
+        for rel in ("skills/ollama-shell/SKILL.md", "agents/ollama-ops.md"):
+            body = (ROOT / rel).read_text(encoding="utf-8")
+            for needle in needles:
+                self.assertIn(needle, body, msg=f"{needle!r} missing from {rel}")
+
 
 if __name__ == "__main__":
     unittest.main()
