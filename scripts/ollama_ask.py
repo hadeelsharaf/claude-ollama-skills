@@ -66,7 +66,9 @@ PREFERENCES = {
     "commit": ["qwen2.5-coder", "llama3.1", "llama3.2", "qwen3", "gemma3"],
     "shell": ["qwen3", "llama3.1", "llama3.2", "qwen2.5"],
     "general": ["qwen3", "llama3.1", "gemma3", "llama3.2", "mistral"],
-    "summarize": ["llama3.2", "gemma3", "qwen2.5", "qwen3", "llama3.1", "mistral"],
+    # summarize runs many times per digest (map + reduce), so a fast model must
+    # auto-win; qwen3 sits LAST -> the slow qwen3:8b is a last resort (prefer --model).
+    "summarize": ["llama3.2", "gemma3", "qwen2.5", "llama3.1", "mistral", "qwen3"],
 }
 
 RUNTIME_DEFAULTS = {

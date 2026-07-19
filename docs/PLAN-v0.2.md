@@ -53,7 +53,7 @@
 
 - Input: `--file` if given (read `utf-8-sig`), else stdin. Empty input, or no `--file` while stdin is a TTY → `EXIT_USAGE` with `No input. Pipe text via stdin or pass --file.`
 - `summarize` does NOT run `docker`/`kubectl`/`git` itself. Skills capture and pipe in.
-- Own task profile `summarize`: `max_tokens 200, temperature 0.2, num_ctx 2048`. Fast lane first in the preference list. `qwen3:8b` is opt-in only (`--model qwen3:8b`), never auto-picked.
+- Own task profile `summarize`: `max_tokens 200, temperature 0.2, num_ctx 2048`. Fast lane first in the preference list. `qwen3` sits last, so `qwen3:8b` is auto-picked only as a last resort (prefer `--model qwen3:8b`); the fast models always auto-win ahead of it.
 - Size gate is `--ceiling-chars` (default 100,000), NOT `check_budget()`. `--force` overrides.
 - Single-shot when post-filter text ≤ `--chunk-chars` (3,000); else map (80-token cap per chunk) then reduce in batches of 10 with the FINAL prompt (200-token cap).
 - Output: `VERDICT:` line + fact bullets; `--no-verdict` drops the VERDICT line and its rule. Dropped chunks appear as inline stdout bullets `[chunk N/TOTAL dropped: <reason>]`.
@@ -1590,7 +1590,7 @@ skills/            eight SKILL.md folders (ask, commit, precommit, shell, code, 
 
 ```markdown
 | D11 | `summarize` is a new subcommand: text-in over stdin, digest-out; skills capture and pipe | keeps the one-file, stdlib-only, testable design; capture (docker/kubectl/git variants) belongs in skills; same privacy property as commit-msg |
-| D12 | `summarize` gets its own task profile, fast lane first (llama3.2:1b); qwen3:8b opt-in only | it is called many times per run (map + reduce), so the fast model must auto-win; qwen3:8b's ~7 tok/s CPU prefill is unaffordable at scale, and it needs `--stall-seconds 240` when opted in |
+| D12 | `summarize` gets its own task profile, fast lane first (llama3.2:1b); qwen3 last -> qwen3:8b auto-picked only as a last resort | it is called many times per run (map + reduce), so the fast model must auto-win; qwen3:8b's ~7 tok/s CPU prefill is unaffordable at scale, and it needs `--stall-seconds 240` when opted in |
 | D13 | Budgets: 3,000-char chunks, 80-token map cap, 200-token reduce cap, `num_ctx` 2048, 100,000-char ceiling | fresh llama3.2:1b calibration (a 3,759-char chunk = 24.4 s); fits `num_ctx` 2048 with headroom; bounded worst case (~12 min) with visible per-chunk progress and drop markers |
 | D14 | New skills are read-free, mutate-gated, destructive-and-cluster-scoped-denied | small models must not self-certify safety; Claude is the gate and the permission prompt is the second gate; k8s adds a context+namespace echo and a clean no-context stop |
 | D15 | k8s tested with fixtures + fake-server units + RED→GREEN probes in CI; kind e2e opt-in only | the script never calls kubectl (kubectl output is INPUT to summarize); the no-context stop is the dev machine's default state; a mandatory cluster breaks CI and blows the RAM ceiling |

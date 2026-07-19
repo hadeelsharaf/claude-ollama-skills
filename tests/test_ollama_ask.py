@@ -236,6 +236,20 @@ class OllamaAskTests(unittest.TestCase):
         self.assertEqual(data["tasks"]["commit"]["model"], "llama3.2:1b")
         self.assertEqual(data["tasks"]["commit"]["source"], "auto")
 
+    def test_resolve_model_summarize_qwen3_is_last_resort(self):
+        """summarize must not auto-pick the slow qwen3:8b when a fast model
+        exists; qwen3 is only a last resort (prefer --model qwen3:8b)."""
+        cfg = {"tasks": {}, "host": os.environ["OLLAMA_HOST"]}
+        # qwen3:8b present alongside a fast fallback -> the fast model wins.
+        model, source = ollama_ask.resolve_model(
+            "summarize", cfg, None, {"models": ["qwen3:8b", "mistral:7b"]})
+        self.assertEqual(model, "mistral:7b")
+        self.assertEqual(source, "auto")
+        # qwen3:8b alone -> still picked, as the documented last resort.
+        model, _ = ollama_ask.resolve_model(
+            "summarize", cfg, None, {"models": ["qwen3:8b"]})
+        self.assertEqual(model, "qwen3:8b")
+
     # -- ask ----------------------------------------------------------------
 
     def test_ask_returns_text_and_exit_0(self):
