@@ -709,6 +709,34 @@ class OllamaAskTests(unittest.TestCase):
         for needle in needles:
             self.assertIn(needle, body, msg=f"{needle!r} missing from {rel}")
 
+    def test_commit_push_born_attached_branch_succeeds(self):
+        # The common real-world shape the other commit-push tests miss: a
+        # branch with history and HEAD attached (not unborn, not detached).
+        work, bare = self._make_push_repo(stage=False)
+        subprocess.run(["git", "branch", "-m", "work"], cwd=work, check=True)
+        (work / "one.txt").write_text("one\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=work, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "chore: seed"],
+                       cwd=work, check=True)
+        (work / "two.txt").write_text("two\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=work, check=True)
+        code, out, err = self.run_cli("commit-push", "--message", "feat: add two")
+        self.assertEqual(code, 0, msg=err)
+        self.assertEqual(self._local_commit_count(work), 2)
+        self.assertEqual(self._bare_commit_count(bare, "work"), 2)
+
+    def test_push_safety_wording_present(self):
+        # A silent reword dropping the gate wording would defeat commit-push's
+        # safety story; both the skill and the agent must keep it.
+        needles = [
+            "never the model", "--force-with-lease",
+            "delete a remote branch", "protected branch",
+        ]
+        for rel in ("skills/ollama-commit/SKILL.md", "agents/ollama-git.md"):
+            body = (ROOT / rel).read_text(encoding="utf-8")
+            for needle in needles:
+                self.assertIn(needle, body, msg=f"{needle!r} missing from {rel}")
+
 
 if __name__ == "__main__":
     unittest.main()
