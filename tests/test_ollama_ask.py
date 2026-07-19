@@ -42,6 +42,8 @@ class FakeOllamaHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.0"
     counters: dict = {}
     last_payload: dict = {}
+    generate_calls: int = 0
+    prompts: list = []
 
     def log_message(self, *args):  # silence
         pass
@@ -66,6 +68,9 @@ class FakeOllamaHandler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", 0))
         payload = json.loads(self.rfile.read(length) or b"{}")
         FakeOllamaHandler.last_payload = payload
+        if self.path == "/api/generate":
+            FakeOllamaHandler.generate_calls += 1
+            FakeOllamaHandler.prompts.append(payload.get("prompt", ""))
         if self.path != "/api/generate":
             self._send_json(404, {"error": "unknown path"})
             return
@@ -176,6 +181,16 @@ class OllamaAskTests(unittest.TestCase):
         with redirect_stdout(out), redirect_stderr(err):
             code = ollama_ask.main(list(argv) + ["--quiet"])
         return code, out.getvalue(), err.getvalue()
+
+    def run_stdin(self, text: str, *argv: str) -> tuple[int, str, str]:
+        FakeOllamaHandler.generate_calls = 0
+        FakeOllamaHandler.prompts = []
+        saved = sys.stdin
+        sys.stdin = io.StringIO(text)
+        try:
+            return self.run_cli(*argv)
+        finally:
+            sys.stdin = saved
 
     def resolved(self, *argv: str) -> dict:
         code, out, err = self.run_cli("models", "--json", *argv)
@@ -416,6 +431,77 @@ class OllamaAskTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, msg=result.stderr)
         self.assertIn("done", result.stdout)
+
+    # -- summarize ----------------------------------------------------------
+
+    def test_summarize_single_shot_one_call(self):
+        code, out, err = self.run_stdin("line one\nline two\nline three\n",
+                                        "summarize", "--kind", "log")
+        self.assertEqual(code, 0, msg=err)
+        self.assertIn(CANNED_TEXT, out)
+        self.assertEqual(FakeOllamaHandler.generate_calls, 1)  # no map stage
+
+    def test_summarize_map_reduce_multiple_calls(self):
+        big = "\n".join(f"event number {i} happened on host node-{i}" for i in range(400))
+        code, out, err = self.run_stdin(big, "summarize", "--kind", "events", "--no-dedupe")
+        self.assertEqual(code, 0, msg=err)
+        self.assertGreater(FakeOllamaHandler.generate_calls, 1)  # map + reduce
+
+    def test_summarize_dedupe_collapses_repeats(self):
+        repeated = "\n".join("ERROR connection refused to db" for _ in range(500))
+        code, out, err = self.run_stdin(repeated, "summarize", "--kind", "log")
+        self.assertEqual(code, 0, msg=err)
+        prompt = FakeOllamaHandler.last_payload.get("prompt", "")
+        self.assertIn("500×", prompt)  # collapsed to "500x <line>"
+        self.assertEqual(FakeOllamaHandler.generate_calls, 1)  # collapse -> single-shot
+
+    def test_summarize_no_dedupe_keeps_repeats(self):
+        repeated = "\n".join("ERROR connection refused to db" for _ in range(500))
+        code, _, err = self.run_stdin(repeated, "summarize", "--kind", "log", "--no-dedupe")
+        self.assertEqual(code, 0, msg=err)
+        # 500 identical 30-char lines ~ 15 KB > 3000-char chunk -> map stage runs
+        self.assertGreater(FakeOllamaHandler.generate_calls, 1)
+
+    def test_summarize_over_ceiling_exits_2(self):
+        code, _, err = self.run_stdin("x" * 500, "summarize", "--ceiling-chars", "100")
+        self.assertEqual(code, 2)
+        self.assertIn("ceiling", err.lower())
+
+    def test_summarize_ceiling_force_allows(self):
+        code, out, err = self.run_stdin("x" * 500, "summarize",
+                                        "--ceiling-chars", "100", "--force")
+        self.assertEqual(code, 0, msg=err)
+
+    def test_summarize_empty_input_exits_2(self):
+        code, _, err = self.run_stdin("   \n  \n", "summarize")
+        self.assertEqual(code, 2)
+        self.assertIn("no input", err.lower())
+
+    def test_summarize_verdict_default_and_no_verdict_flag(self):
+        self.run_stdin("a\nb\nc\n", "summarize", "--kind", "log")
+        self.assertIn("VERDICT", FakeOllamaHandler.last_payload.get("system", ""))
+        self.run_stdin("a\nb\nc\n", "summarize", "--kind", "log", "--no-verdict")
+        self.assertNotIn("VERDICT", FakeOllamaHandler.last_payload.get("system", ""))
+
+    def test_summarize_pins_num_ctx(self):
+        self.run_stdin("a\nb\nc\n", "summarize", "--kind", "log")
+        self.assertEqual(FakeOllamaHandler.last_payload["options"].get("num_ctx"), 2048)
+
+    def test_summarize_dropped_chunk_marker_partial_success(self):
+        # Many normal lines + one chunk carrying SLOWSTALL; that chunk is dropped,
+        # the rest still summarize -> exit 0 with an inline dropped marker.
+        lines = [f"normal log line {i} on host abc" for i in range(300)]
+        lines[150] = "SLOWSTALL trigger on this chunk"
+        code, out, err = self.run_stdin("\n".join(lines), "summarize",
+                                        "--kind", "log", "--no-dedupe", "--stall-seconds", "1")
+        self.assertEqual(code, 0, msg=err)
+        self.assertIn("dropped", out.lower())
+
+    def test_summarize_all_chunks_stall_exits_5(self):
+        # Single stalling chunk (fits one chunk) -> all dropped, all stalls -> exit 5.
+        code, _, err = self.run_stdin("SLOWSTALL only", "summarize",
+                                      "--kind", "log", "--stall-seconds", "1")
+        self.assertEqual(code, 5)
 
 
 if __name__ == "__main__":
