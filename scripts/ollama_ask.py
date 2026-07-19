@@ -11,6 +11,7 @@ Subcommands:
   warmup         Load a model so later calls are fast.
   ask            Generic prompt -> text (or JSON object with --json-object).
   commit-msg     Read the STAGED git diff locally -> Conventional Commit message.
+  commit-push    Commit staged changes with a reviewed message and push (gated).
   draft-command  Plain-words task -> JSON {command, explanation, caution}.
   draft-code     Small spec -> code only (fences stripped; syntax check for
                  python, and for javascript when node is installed).
@@ -19,6 +20,7 @@ Subcommands:
 
 Exit codes: 0 ok · 2 bad usage/over budget · 3 Ollama unreachable ·
 4 model missing · 5 timeout/stall · 6 output failed validation ·
+7 protected branch refused · 8 git command failed ·
 1 unexpected error · 130 interrupted (Ctrl-C).
 """
 from __future__ import annotations
@@ -46,6 +48,8 @@ EXIT_UNREACHABLE = 3
 EXIT_NO_MODEL = 4
 EXIT_STALL = 5
 EXIT_BAD_OUTPUT = 6
+EXIT_PROTECTED = 7  # refused: protected branch without --allow-protected
+EXIT_GIT = 8  # a git command (commit or push) failed
 
 TASKS = ("commit", "shell", "code", "general", "summarize")
 
@@ -452,14 +456,25 @@ def gb(num_bytes) -> str:
     return f"{num_bytes / 1e9:.1f} GB"
 
 
-def run_git(cmd_args, check=True) -> str:
+def _run_git(cmd_args) -> subprocess.CompletedProcess:
+    """Run git and return the raw CompletedProcess (caller inspects returncode).
+
+    The one subprocess shape every git call in this file goes through, whether
+    it wants a checked stdout string (run_git) or the raw returncode/stderr
+    (cmd_commit_push, which must react to non-error returncodes like the 1
+    that `diff --cached --quiet` uses to mean "changes present").
+    """
     try:
-        result = subprocess.run(
+        return subprocess.run(
             ["git"] + cmd_args, capture_output=True, text=True,
             encoding="utf-8", errors="replace",
         )
     except FileNotFoundError:
         raise CliError(EXIT_USAGE, "git is not installed or not on PATH.")
+
+
+def run_git(cmd_args, check=True) -> str:
+    result = _run_git(cmd_args)
     if check and result.returncode != 0:
         raise CliError(EXIT_USAGE, f"git {' '.join(cmd_args)} failed: {result.stderr.strip()}")
     return result.stdout
@@ -625,6 +640,72 @@ def _clean_commit(text: str, args) -> str:
         return text.strip()
     line = strip_quotes(text.strip().splitlines()[0] if text.strip() else "")
     return line.rstrip(".")
+
+
+PROTECTED_BRANCHES = ("main", "master")
+
+
+def cmd_commit_push(args, cfg: dict) -> int:
+    """Commit staged changes with an already-reviewed message, then push.
+
+    Calls no Ollama model. Every git argv below is built from fixed literals
+    plus --message/--remote/--allow-protected only -- there is no flag on this
+    subcommand that can smuggle in --force, -f, --force-with-lease, --delete,
+    or a refspec, so a force-push or branch-delete is impossible through it.
+    """
+    inside = run_git(["rev-parse", "--is-inside-work-tree"], check=False).strip()
+    if inside != "true":
+        raise CliError(EXIT_USAGE, "Not a git repository.")
+
+    # symbolic-ref (not rev-parse --abbrev-ref) so an unborn branch -- staged
+    # but never yet committed, the state every caller starts commit-push from
+    # -- resolves to its name instead of failing; it still fails on a true
+    # detached HEAD, which is exactly the case we must refuse.
+    branch = run_git(["symbolic-ref", "-q", "--short", "HEAD"], check=False).strip()
+    if not branch:
+        raise CliError(EXIT_USAGE, "Detached HEAD; checkout a branch first.")
+
+    if args.remote:
+        remote = args.remote
+    else:
+        upstream = run_git(
+            ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"], check=False
+        ).strip()
+        remote = upstream.split("/", 1)[0] if "/" in upstream else "origin"
+    remote_url = run_git(["remote", "get-url", remote], check=False).strip()
+    if not remote_url:
+        raise CliError(EXIT_USAGE, f"Remote '{remote}' not found.")
+
+    if branch in PROTECTED_BRANCHES and not args.allow_protected:
+        raise CliError(
+            EXIT_PROTECTED,
+            f"Refusing to push to protected branch '{branch}'. Pass "
+            "--allow-protected only if the user explicitly asked.",
+        )
+
+    staged = _run_git(["diff", "--cached", "--quiet"])
+    if staged.returncode == 0:
+        raise CliError(EXIT_USAGE, "Nothing staged to commit.")
+
+    message = (args.message or "").strip()
+    if not message:
+        raise CliError(EXIT_USAGE, "Empty commit message.")
+
+    print(f"pushing {branch} -> {remote} ({remote_url})")
+
+    commit_result = _run_git(["commit", "-m", message])
+    if commit_result.returncode != 0:
+        eprint(commit_result.stderr.strip())
+        raise CliError(EXIT_GIT, "git commit failed.")
+
+    push_result = _run_git(["push", remote, branch])
+    if push_result.returncode != 0:
+        eprint(push_result.stderr.strip())
+        raise CliError(EXIT_GIT, "git push failed (commit was made).")
+
+    short_hash = run_git(["rev-parse", "--short", "HEAD"]).strip()
+    print(f"committed {short_hash} and pushed to {remote}/{branch}")
+    return EXIT_OK
 
 
 SHELL_SYSTEM_TEMPLATE = (
@@ -1107,6 +1188,15 @@ def build_parser() -> argparse.ArgumentParser:
                           help="allow a multi-line message body")
     p_commit.set_defaults(task="commit")
 
+    p_push = sub.add_parser("commit-push", parents=[common],
+                            help="commit staged changes with a reviewed message "
+                                 "and push (gated)")
+    p_push.add_argument("--message", required=True, help="the Claude-reviewed commit message")
+    p_push.add_argument("--remote", default=None,
+                        help="remote name (default: upstream or origin)")
+    p_push.add_argument("--allow-protected", action="store_true",
+                        help="permit pushing to main/master (only if the user insisted)")
+
     p_cmd = sub.add_parser("draft-command", parents=[common],
                            help="plain words -> shell command JSON")
     p_cmd.add_argument("task_text", help="the task in plain words")
@@ -1157,6 +1247,7 @@ HANDLERS = {
     "warmup": cmd_warmup,
     "ask": cmd_ask,
     "commit-msg": cmd_commit_msg,
+    "commit-push": cmd_commit_push,
     "draft-command": cmd_draft_command,
     "draft-code": cmd_draft_code,
     "fix-lint": cmd_fix_lint,

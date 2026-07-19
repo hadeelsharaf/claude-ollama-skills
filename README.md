@@ -94,6 +94,18 @@ docker logs --tail 200 web 2>&1 | python scripts/ollama_ask.py summarize --kind 
 
 (`python3` on macOS/Linux.)
 
+## Commit and push with the local model
+
+The local model writes your commit message. Your code diff stays on your machine.
+This saves Claude's tokens.
+
+Claude reads only the short commit message. Claude checks it, then runs one step
+called `commit-push`. This one step commits your change and pushes it.
+
+Some things are always blocked: force-push, deleting a remote branch, and pushing
+to `main` or `master`. Before it pushes, Claude always shows you the target, like
+this: `branch -> remote`.
+
 ## Models used during development
 
 These are the models that were installed on the development machine and used while
@@ -132,7 +144,7 @@ config ([docs/ADVANCED.md](docs/ADVANCED.md) §6 has per-hardware advice).
 ## Configuration
 
 Resolution order for the model of each task:
-`--model` flag → `OLLAMA_SKILLS_MODEL_<TASK>` env (`COMMIT|SHELL|CODE|GENERAL`) →
+`--model` flag → `OLLAMA_SKILLS_MODEL_<TASK>` env (`COMMIT|SHELL|CODE|GENERAL|SUMMARIZE`) →
 `OLLAMA_SKILLS_MODEL` env → `./.ollama-skills.json` → `~/.ollama-skills.json` →
 auto-detect from installed models.
 
@@ -145,9 +157,10 @@ auto-detect from installed models.
 | `stall_seconds` | `90` | abort when no token arrives for this long |
 | `total_timeout_seconds` | `480` | hard cap per call |
 | `max_input_chars` | `2500` | input budget (CPU-friendly; raise on GPU) |
-| `tasks.<task>.model` | auto | model per task (`commit`, `shell`, `code`, `general`) |
+| `tasks.<task>.model` | auto | model per task (`commit`, `shell`, `code`, `general`, `summarize`) |
 | `tasks.<task>.max_tokens` | per task | output cap |
 | `tasks.<task>.temperature` | per task | 0.0 for commands, 0.4 for commit messages |
+| `tasks.<task>.num_ctx` | per task | context window size; only `summarize` sets one by default (2048) |
 
 Exit codes: `0` ok · `2` bad usage / over budget · `3` Ollama unreachable ·
 `4` model missing · `5` stall/timeout · `6` output failed validation.

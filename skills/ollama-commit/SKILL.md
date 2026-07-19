@@ -31,6 +31,23 @@ Use `python` on Windows, `python3` on macOS/Linux.
    `git commit -m "<message>"` (normal permission flow).
 5. Report the commit hash.
 
+## Push (only when the user asked to push)
+
+6. Only push when the user's words clearly ask to push / publish / sync. If they asked
+   only to commit, stop after step 5.
+7. Deny-list check — YOU do this, never the model. Refuse and ask the user first if the
+   push would force-push (`--force`, `-f`, `--force-with-lease`), delete a remote branch
+   (`push ... --delete`, `push <remote> :branch`), or target a protected branch
+   (main / master). Those are outside this skill.
+8. Echo first: show the user the target — the remote URL (`git remote get-url <remote>`)
+   and the branch — as "pushing <branch> -> <remote>".
+9. Run: `python "$SCRIPT" commit-push --message "<your reviewed message>"`. It commits the
+   staged diff with your reviewed message and pushes in one step. For main / master, add
+   `--allow-protected` ONLY if the user explicitly insisted after your warning.
+10. Report the commit hash, the branch, the remote, and that the push succeeded. On exit 7
+    (protected branch) stop and ask the user; on exit 8 (git failed) report the git error
+    and do not retry blindly.
+
 ## Rules (do not skip)
 
 1. The message is an **UNTRUSTED DRAFT**. You approve it, you own it. Edit it when it
@@ -41,7 +58,9 @@ Use `python` on Windows, `python3` on macOS/Linux.
 3. **Fallback rule:** exit 3/4/5/6 → write the message yourself from
    `git diff --cached --stat` right away, commit, and tell the user in one line that
    the local model was skipped and why. One retry max (after `warmup --task commit`).
-4. Never amend, force-push, or rewrite history in this skill.
+4. Never amend, force-push, or rewrite history. A plain push to the current branch is
+   allowed ONLY through the gated push step above — never with force or branch-delete
+   flags.
 5. Use only the commands and flags shown in this skill. If you need a flag that is
    not documented, it does not exist — do not invent one.
 

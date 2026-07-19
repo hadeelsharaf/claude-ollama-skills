@@ -554,6 +554,115 @@ class OllamaAskTests(unittest.TestCase):
             self.assertEqual(code, 0, msg=err)
             self.assertNotIn("```", out)
 
+    # -- commit-push (gated commit + push) -----------------------------------
+
+    def _make_push_repo(self, stage: bool = True):
+        """Work repo + a local bare remote; nothing committed yet (unborn HEAD).
+
+        No network involved: the "remote" is a second temp dir initialized with
+        `git init --bare`. Both dirs live under self._tmp, so tearDown's
+        rmtree_force(self._tmp) cleans them up.
+        """
+        work = Path(self._tmp) / "push_work"
+        bare = Path(self._tmp) / "push_bare.git"
+        work.mkdir()
+        bare.mkdir()
+        subprocess.run(["git", "init", "-q"], cwd=work, check=True)
+        subprocess.run(["git", "config", "user.email", "test@example.com"],
+                       cwd=work, check=True)
+        subprocess.run(["git", "config", "user.name", "Test User"], cwd=work, check=True)
+        subprocess.run(["git", "config", "commit.gpgsign", "false"], cwd=work, check=True)
+        subprocess.run(["git", "init", "--bare", "-q"], cwd=bare, check=True)
+        subprocess.run(["git", "remote", "add", "origin", str(bare)], cwd=work, check=True)
+        if stage:
+            (work / "file.txt").write_text("hello\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=work, check=True)
+        os.chdir(work)
+        return work, bare
+
+    def _local_commit_count(self, work: Path) -> int:
+        result = subprocess.run(["git", "rev-list", "--count", "HEAD"], cwd=work,
+                                capture_output=True, text=True)
+        return int(result.stdout.strip()) if result.returncode == 0 else 0
+
+    def _bare_commit_count(self, bare: Path, ref: str) -> int:
+        result = subprocess.run(
+            ["git", "--git-dir", str(bare), "rev-list", "--count", ref],
+            capture_output=True, text=True)
+        return int(result.stdout.strip()) if result.returncode == 0 else 0
+
+    def test_commit_push_non_protected_branch_succeeds(self):
+        work, bare = self._make_push_repo()
+        subprocess.run(["git", "branch", "-m", "work"], cwd=work, check=True)
+        code, out, err = self.run_cli("commit-push", "--message", "test: add x")
+        self.assertEqual(code, 0, msg=err)
+        self.assertEqual(self._local_commit_count(work), 1)
+        # The bare remote's own HEAD still points at its (never-created) default
+        # branch, so ask for the pushed ref by name rather than relying on HEAD.
+        log = subprocess.run(["git", "--git-dir", str(bare), "log", "--oneline", "work"],
+                            capture_output=True, text=True, check=True).stdout
+        self.assertIn("test: add x", log)
+
+    def test_commit_push_protected_branch_without_allow_exits_7(self):
+        work, bare = self._make_push_repo()
+        subprocess.run(["git", "branch", "-m", "main"], cwd=work, check=True)
+        code, out, err = self.run_cli("commit-push", "--message", "test: add x")
+        self.assertEqual(code, 7, msg=err)
+        self.assertIn("protected", err.lower())
+        self.assertEqual(self._local_commit_count(work), 0)         # HEAD did not advance
+        self.assertEqual(self._bare_commit_count(bare, "main"), 0)  # remote got nothing
+
+    def test_commit_push_protected_branch_with_allow_succeeds(self):
+        work, bare = self._make_push_repo()
+        subprocess.run(["git", "branch", "-m", "main"], cwd=work, check=True)
+        code, out, err = self.run_cli("commit-push", "--message", "test: allow main",
+                                      "--allow-protected")
+        self.assertEqual(code, 0, msg=err)
+        local_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=work,
+                                   capture_output=True, text=True,
+                                   check=True).stdout.strip()
+        remote_sha = subprocess.run(["git", "--git-dir", str(bare), "rev-parse", "main"],
+                                    capture_output=True, text=True,
+                                    check=True).stdout.strip()
+        self.assertEqual(local_sha, remote_sha)
+
+    def test_commit_push_nothing_staged_exits_2(self):
+        work, _bare = self._make_push_repo(stage=False)
+        subprocess.run(["git", "branch", "-m", "work"], cwd=work, check=True)
+        code, out, err = self.run_cli("commit-push", "--message", "test: nothing")
+        self.assertEqual(code, 2, msg=err)
+        self.assertIn("staged", err.lower())
+        self.assertEqual(self._local_commit_count(work), 0)
+
+    def test_commit_push_not_a_git_repo_exits_2(self):
+        notrepo = Path(self._tmp) / "notrepo"
+        notrepo.mkdir()
+        os.chdir(notrepo)
+        code, out, err = self.run_cli("commit-push", "--message", "test: nope")
+        self.assertEqual(code, 2, msg=err)
+        self.assertIn("git repository", err.lower())
+
+    def test_commit_push_detached_head_exits_2(self):
+        """Supplemental beyond the mandated 5 cases: confirms the detached-HEAD
+        refusal. This repo detects the branch with `git symbolic-ref --short
+        HEAD`, not the more common `rev-parse --abbrev-ref HEAD` idiom, because
+        the installed git fails the latter with exit 128 on an UNBORN branch
+        (verified empirically) -- which is exactly the starting state of every
+        case above (staged but not yet committed). symbolic-ref succeeds on an
+        unborn branch and fails only when HEAD is genuinely detached, so it is
+        the one primitive that satisfies both this case and cases 1-4."""
+        work, _bare = self._make_push_repo()
+        subprocess.run(["git", "branch", "-m", "work"], cwd=work, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "seed"], cwd=work, check=True)
+        sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=work,
+                             capture_output=True, text=True, check=True).stdout.strip()
+        subprocess.run(["git", "checkout", "-q", sha], cwd=work, check=True)
+        (work / "file2.txt").write_text("second\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=work, check=True)
+        code, out, err = self.run_cli("commit-push", "--message", "test: detached")
+        self.assertEqual(code, 2, msg=err)
+        self.assertIn("detached", err.lower())
+
     # -- deny-list coverage (skill/agent safety wording) --------------------
 
     def test_denylist_covers_container_cluster_history(self):

@@ -32,6 +32,23 @@ Use `python` on Windows, `python3` on macOS/Linux.
 5. Report: the final message, the commit hash (`git rev-parse --short HEAD`), and
    whether the local model's draft was used, edited, or replaced.
 
+## Push (only when the user asked to push)
+
+6. Only push when the user's words clearly ask to push / publish / sync. If they asked
+   only to commit, stop after step 5.
+7. Deny-list check — YOU do this, never the model. Refuse and ask the user first if the
+   push would force-push (`--force`, `-f`, `--force-with-lease`), delete a remote branch
+   (`push ... --delete`, `push <remote> :branch`), or target a protected branch
+   (main / master). Those are outside this skill.
+8. Echo first: show the user the target — the remote URL (`git remote get-url <remote>`)
+   and the branch — as "pushing <branch> -> <remote>".
+9. Run: `python "$SCRIPT" commit-push --message "<your reviewed message>"`. It commits the
+   staged diff with your reviewed message and pushes in one step. For main / master, add
+   `--allow-protected` ONLY if the user explicitly insisted after your warning.
+10. Report the commit hash, the branch, the remote, and that the push succeeded. On exit 7
+    (protected branch) stop and ask the user; on exit 8 (git failed) report the git error
+    and do not retry blindly.
+
 ## Rules
 
 1. The drafted message is an **UNTRUSTED DRAFT**. You approve it, you own it.
@@ -39,6 +56,8 @@ Use `python` on Windows, `python3` on macOS/Linux.
    away; one retry max (after `python "$SCRIPT" warmup --task commit`); note the
    skip in the report.
 3. Never amend, rebase, force-push, or use `--no-verify`. If hooks fail, report the
-   failure — fixing hooks is the ollama-precommit skill's job.
+   failure — fixing hooks is the ollama-precommit skill's job. A plain push to the
+   current branch is allowed only via `commit-push`, never with force or
+   branch-delete flags.
 4. Use only documented flags (`commit-msg --body --style`, `warmup --task`,
    `health`). Do not invent flags.
