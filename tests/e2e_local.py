@@ -29,13 +29,13 @@ def rmtree_force(path: str) -> None:
     shutil.rmtree(path, onerror=onerror)
 
 
-def run_step(name: str, argv: list, cwd=None) -> str:
+def run_step(name: str, argv: list, cwd=None, stdin_text=None) -> str:
     started = time.monotonic()
     try:
         result = subprocess.run(
             [sys.executable, str(SCRIPT)] + argv + ["--quiet"],
             capture_output=True, text=True, encoding="utf-8", errors="replace",
-            cwd=cwd, timeout=600,
+            cwd=cwd, timeout=600, input=stdin_text,
         )
     except subprocess.TimeoutExpired:
         print(f"E2E {name} FAILED: no answer within 600s (is the model too big for this machine?)")
@@ -81,6 +81,13 @@ def main() -> int:
 
     out = run_step("draft-command", ["draft-command", "show the five newest files in this folder"])
     print(f"  draft-command said: {out[:100]!r}...")
+
+    sample = "\n".join(
+        f"2026-07-14T09:30:0{i % 10}Z ERROR connection refused to db attempt {i}"
+        for i in range(30)
+    )
+    digest = run_step("summarize", ["summarize", "--kind", "log"], stdin_text=sample)
+    print(f"  summarize said: {digest[:100]!r}...")
 
     print("E2E all green")
     return 0

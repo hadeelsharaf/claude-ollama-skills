@@ -18,6 +18,20 @@ worker.
 > CPU-only machines are slow with big models — the defaults here are tuned for that
 > (see the measured numbers below). Fully offline options: [docs/ADVANCED.md](docs/ADVANCED.md).
 
+## What's new in v0.2
+
+- **`summarize`** — a new subcommand that digests logs, Kubernetes events, `kubectl describe`
+  output, or a git range into a short verdict + fact bullets, entirely on the local model.
+  Big raw text is piped in over stdin and never enters Claude's context; only the digest
+  returns. Small input is one call; large input is chunked map-reduce with visible progress
+  and per-chunk drop markers.
+- **Three new skills:** `ollama-docker` (read state, summarize container logs, draft docker /
+  Dockerfile / Compose), `ollama-k8s` (read state, triage failing pods, draft kubectl /
+  manifests, with a context+namespace echo and a clean no-context stop), and
+  `ollama-git-history` (read-only history; a local summary only when asked). Each drafts
+  read-only commands freely, makes changes only when your words clearly ask, refuses
+  destructive / cluster-scoped commands, and treats every draft as an untrusted draft Claude checks.
+
 ## Requirements
 
 - [Ollama](https://ollama.com) running locally (tested with 0.32) and at least one model
@@ -58,6 +72,9 @@ Check the setup, then just ask Claude in plain words:
 | "pre-commit is failing, fix it" | `ollama-precommit` skill (deterministic fixers first) |
 | "zip the logs folder" | `ollama-shell` skill (drafted command + safety check + permission prompt) |
 | "write a small parser for X with the local model" | `ollama-code` skill (draft → line-by-line review) |
+| "explain why this container keeps crashing" | `ollama-docker` skill (logs → local summarize, checked) |
+| "why is this pod crashlooping?" | `ollama-k8s` skill (describe+events+logs → local summarize; context echoed) |
+| "what changed on this branch this week?" | `ollama-git-history` skill (compact log → local summarize) |
 
 Skills can also be invoked directly: `/ollama-skills:ollama-commit`.
 Background agents (run on cheap haiku): `@agent-ollama-skills:ollama-coder`,
@@ -72,6 +89,7 @@ python scripts/ollama_ask.py warmup --task commit
 python scripts/ollama_ask.py commit-msg
 python scripts/ollama_ask.py draft-command "show the five newest files"
 python scripts/ollama_ask.py draft-code --spec "csv to json converter" --lang python
+docker logs --tail 200 web 2>&1 | python scripts/ollama_ask.py summarize --kind log
 ```
 
 (`python3` on macOS/Linux.)
@@ -103,6 +121,7 @@ can set expectations before you wait:
 | `ask` (tiny prompt, warm) | 3.0 s | ~9 s |
 | `commit-msg` (small staged change) | 5.4 s | ~30 s |
 | `draft-command` | 7.2 s | ~30–60 s |
+| `summarize` (single-shot, ~3k chars) | ~20 s | not advised on CPU (prefill ~7 tok/s) |
 | Large prompt (~2,700 tokens) | not advised | **7–10+ minutes** (CPU prefill ~7 tok/s) |
 | `devstral:latest` (14 GB) | — | timed out (larger than free RAM) |
 
@@ -149,7 +168,7 @@ itself and says so** — a failed delegation never blocks work.
 
 ```
 .claude-plugin/    plugin + marketplace manifests
-skills/            five SKILL.md folders (ask, commit, precommit, shell, code)
+skills/            eight SKILL.md folders (ask, commit, precommit, shell, code, docker, k8s, git-history)
 agents/            three subagents (coder, git, ops) — model: haiku
 scripts/           ollama_ask.py (the one runtime file) + validate_repo.py
 config/            example config
