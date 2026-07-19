@@ -568,6 +568,26 @@ class OllamaAskTests(unittest.TestCase):
             for needle in needles:
                 self.assertIn(needle, body, msg=f"{needle!r} missing from {rel}")
 
+    def test_denylist_covers_ollama_docker(self):
+        needles = [
+            "docker system prune", "docker volume rm", "docker compose down -v",
+            "--privileged", "cloud metadata endpoints", "docker rm $(docker ps -aq)",
+        ]
+        rel = "skills/ollama-docker/SKILL.md"
+        body = (ROOT / rel).read_text(encoding="utf-8")
+        for needle in needles:
+            self.assertIn(needle, body, msg=f"{needle!r} missing from {rel}")
+
+    def test_denylist_covers_ollama_k8s(self):
+        needles = [
+            "kubectl delete namespace", "kubectl delete pvc", "kubectl drain",
+            "kubectl replace --force", "ClusterRoleBinding", "base64-decoding secret data",
+        ]
+        rel = "skills/ollama-k8s/SKILL.md"
+        body = (ROOT / rel).read_text(encoding="utf-8")
+        for needle in needles:
+            self.assertIn(needle, body, msg=f"{needle!r} missing from {rel}")
+
 
 if __name__ == "__main__":
     unittest.main()
