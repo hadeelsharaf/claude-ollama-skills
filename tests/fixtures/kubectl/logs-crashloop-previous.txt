@@ -1,0 +1,4 @@
+2026-07-14T09:29:44.010Z INFO  starting api server version 1.4.2
+2026-07-14T09:29:44.052Z INFO  connecting to database postgres://db:5432/app
+2026-07-14T09:29:46.110Z ERROR could not connect to database: dial tcp 10.96.0.12:5432: connect: connection refused
+2026-07-14T09:29:46.111Z ERROR startup failed, exiting

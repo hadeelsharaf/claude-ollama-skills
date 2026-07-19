@@ -517,6 +517,43 @@ class OllamaAskTests(unittest.TestCase):
                                       "--kind", "log", "--stall-seconds", "1")
         self.assertEqual(code, 5)
 
+    # -- fixtures (kubectl / docker stand-ins) ------------------------------
+
+    def _fixture(self, *parts) -> str:
+        return (ROOT / "tests" / "fixtures" / Path(*parts)).read_text(encoding="utf-8")
+
+    def test_summarize_kubectl_and_docker_fixtures_run(self):
+        cases = [
+            (("kubectl", "describe-pod-crashloop.txt"), "describe"),
+            (("kubectl", "events.txt"), "events"),
+            (("kubectl", "logs-crashloop.txt"), "log"),
+            (("docker", "logs-crashloop.txt"), "log"),
+        ]
+        for parts, kind in cases:
+            code, out, err = self.run_stdin(self._fixture(*parts),
+                                            "summarize", "--kind", kind)
+            self.assertEqual(code, 0, msg=f"{parts}: {err}")
+
+    def test_summarize_describe_drops_env_block(self):
+        text = self._fixture("kubectl", "describe-pod-crashloop.txt")
+        self.run_stdin(text, "summarize", "--kind", "describe", "--chunk-chars", "500")
+        sent = "\n".join(FakeOllamaHandler.prompts)
+        self.assertNotIn("SECRET_TOKEN_ENVMARKER", sent)  # Env block pruned before model
+        self.assertIn("Conditions", sent)                 # kept the useful section
+
+    def test_kubectl_no_context_fixture_present(self):
+        self.assertIn("current-context", self._fixture("kubectl", "no-context.txt").lower())
+
+    def test_get_pods_json_fixture_parses(self):
+        json.loads(self._fixture("kubectl", "get-pods.json"))  # must be valid JSON
+
+    def test_draft_code_yaml_and_dockerfile_fence_free(self):
+        for lang in ("yaml", "dockerfile"):
+            code, out, err = self.run_cli("draft-code", "--spec", "CODEBLOCK make it",
+                                          "--lang", lang)
+            self.assertEqual(code, 0, msg=err)
+            self.assertNotIn("```", out)
+
     # -- deny-list coverage (skill/agent safety wording) --------------------
 
     def test_denylist_covers_container_cluster_history(self):

@@ -1,0 +1,8 @@
+LAST SEEN   TYPE      REASON      OBJECT                          MESSAGE
+18m         Normal    Scheduled   pod/api-5c8b6d7f9-klmno         Successfully assigned default/api-5c8b6d7f9-klmno to kind-worker
+17m         Normal    Pulled      pod/api-5c8b6d7f9-klmno         Container image "registry.example.com/api:1.4.2" already present on machine
+17m         Normal    Created     pod/api-5c8b6d7f9-klmno         Created container api
+17m         Normal    Started     pod/api-5c8b6d7f9-klmno         Started container api
+2m          Warning   BackOff     pod/api-5c8b6d7f9-klmno         Back-off restarting failed container api
+4m          Warning   Failed      pod/worker-6f7c9b8d4-pqrst      Error: ImagePullBackOff
+30s         Warning   Unhealthy   pod/worker-6f7c9b8d4-pqrst      Readiness probe failed: connection refused

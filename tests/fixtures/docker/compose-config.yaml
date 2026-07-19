@@ -1,0 +1,18 @@
+name: myapp
+services:
+  api:
+    image: registry.example.com/api:1.4.2
+    depends_on:
+      redis:
+        condition: service_started
+    environment:
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "8080:8080"
+  redis:
+    image: redis:7
+    volumes:
+      - redis-data:/data
+volumes:
+  redis-data:
+    name: myapp_redis-data

@@ -1,0 +1,65 @@
+Name:             api-5c8b6d7f9-klmno
+Namespace:        default
+Priority:         0
+Service Account:  default
+Node:             kind-worker/172.18.0.3
+Start Time:       Mon, 14 Jul 2026 09:12:44 +0000
+Labels:           app=api
+                  pod-template-hash=5c8b6d7f9
+Status:           Running
+IP:               10.244.1.7
+Controlled By:    ReplicaSet/api-5c8b6d7f9
+Containers:
+  api:
+    Container ID:   containerd://a1b2c3d4e5
+    Image:          registry.example.com/api:1.4.2
+    Image ID:       registry.example.com/api@sha256:deadbeef
+    Port:           8080/TCP
+    State:          Waiting
+      Reason:       CrashLoopBackOff
+    Last State:     Terminated
+      Reason:       Error
+      Exit Code:    1
+      Started:      Mon, 14 Jul 2026 09:30:01 +0000
+      Finished:     Mon, 14 Jul 2026 09:30:03 +0000
+    Ready:          False
+    Restart Count:  7
+    Limits:
+      cpu:     500m
+      memory:  256Mi
+    Requests:
+      cpu:     250m
+      memory:  128Mi
+    Environment:
+      DATABASE_URL:   postgres://db:5432/app
+      API_TOKEN:      SECRET_TOKEN_ENVMARKER
+      LOG_LEVEL:      debug
+      FEATURE_FLAGS:  a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p
+    Mounts:
+      /etc/config from config-volume (rw)
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-xyz (ro)
+Conditions:
+  Type              Status
+  Initialized       True
+  Ready             False
+  ContainersReady   False
+  PodScheduled      True
+Volumes:
+  config-volume:
+    Type:      ConfigMap (a volume populated by a ConfigMap)
+    Name:      api-config
+    Optional:  false
+  kube-api-access-xyz:
+    Type:                    Projected (a volume that contains injected data)
+    TokenExpirationSeconds:  3607
+QoS Class:        Burstable
+Node-Selectors:   <none>
+Tolerations:      node.kubernetes.io/not-ready:NoExecute op=Exists for 300s
+Events:
+  Type     Reason     Age                 From               Message
+  ----     ------     ----                ----               -------
+  Normal   Scheduled  18m                 default-scheduler  Successfully assigned default/api-5c8b6d7f9-klmno to kind-worker
+  Normal   Pulled     17m (x3 over 18m)   kubelet            Container image "registry.example.com/api:1.4.2" already present on machine
+  Normal   Created    17m (x3 over 18m)   kubelet            Created container api
+  Normal   Started    17m (x3 over 18m)   kubelet            Started container api
+  Warning  BackOff    2m (x40 over 18m)   kubelet            Back-off restarting failed container api in pod api-5c8b6d7f9-klmno_default

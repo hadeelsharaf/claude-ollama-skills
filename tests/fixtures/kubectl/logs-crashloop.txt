@@ -1,0 +1,5 @@
+2026-07-14T09:30:01.101Z INFO  starting api server version 1.4.2
+2026-07-14T09:30:01.140Z INFO  connecting to database postgres://db:5432/app
+2026-07-14T09:30:03.201Z ERROR could not connect to database: dial tcp 10.96.0.12:5432: connect: connection refused
+2026-07-14T09:30:03.202Z ERROR startup failed, exiting
+2026-07-14T09:30:03.203Z FATAL panic: runtime error: invalid memory address or nil pointer dereference

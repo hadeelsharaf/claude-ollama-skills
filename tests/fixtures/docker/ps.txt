@@ -1,0 +1,4 @@
+CONTAINER ID   IMAGE                       COMMAND                  CREATED       STATUS                          PORTS                    NAMES
+a1b2c3d4e5f6   registry.example.com/web    "nginx -g 'daemon of…"   2 days ago    Up 2 days                       0.0.0.0:8080->80/tcp     web
+b2c3d4e5f6a7   registry.example.com/api    "/app/api"               18 minutes    Restarting (1) 3 seconds ago                             api
+c3d4e5f6a7b8   redis:7                      "docker-entrypoint.s…"   5 days ago    Up 5 days                       6379/tcp                 redis

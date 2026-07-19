@@ -1,0 +1,5 @@
+2026-07-14T09:30:01Z INFO  api starting, version 1.4.2
+2026-07-14T09:30:01Z INFO  connecting to redis at redis:6379
+2026-07-14T09:30:03Z ERROR dial tcp 172.20.0.3:6379: connect: connection refused
+2026-07-14T09:30:03Z ERROR failed to start: redis unavailable
+2026-07-14T09:30:03Z FATAL exiting with code 1
