@@ -1,5 +1,7 @@
 __pycache__/
 .superpowers/
+# internal wayfinder planning docs - kept local, never shipped to GitHub
+wayfinder/
 *.pyc
 .pytest_cache/
 .venv/
