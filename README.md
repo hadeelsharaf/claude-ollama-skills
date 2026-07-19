@@ -102,9 +102,14 @@ This saves Claude's tokens.
 Claude reads only the short commit message. Claude checks it, then runs one step
 called `commit-push`. This one step commits your change and pushes it.
 
-Some things are always blocked: force-push, deleting a remote branch, and pushing
-to `main` or `master`. Before it pushes, Claude always shows you the target, like
-this: `branch -> remote`.
+Some things can never happen: force-push, and deleting a remote branch. There is no
+flag to turn these on. They are always blocked.
+
+Pushing to `main` or `master` works differently. Claude will not push to these
+branches unless you say yes first. Claude only adds `--allow-protected` after you
+ask for it. Your OK is required every time.
+
+Before it pushes, Claude always shows you the target, like this: `branch -> remote`.
 
 ## Models used during development
 
@@ -163,7 +168,8 @@ auto-detect from installed models.
 | `tasks.<task>.num_ctx` | per task | context window size; only `summarize` sets one by default (2048) |
 
 Exit codes: `0` ok · `2` bad usage / over budget · `3` Ollama unreachable ·
-`4` model missing · `5` stall/timeout · `6` output failed validation.
+`4` model missing · `5` stall/timeout · `6` output failed validation ·
+`7` protected branch refused · `8` git command failed.
 Skills use these to fall back: **if the local model fails, Claude does the task
 itself and says so** — a failed delegation never blocks work.
 
