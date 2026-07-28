@@ -31,4 +31,6 @@ RUN_OLLAMA_E2E=1 python tests/e2e_local.py
 2. Keep the three shared rules section ("Rules (do not skip)") word for word.
 3. `description` must say what the skill does **and** when to use it ("Use when ...").
 4. Run the validator.
-5. Follow the extension steps in [docs/PLAN.md](docs/PLAN.md), task R4.
+5. If the skill adds a deny-list or any other safety wording, pin it with a test in
+   `tests/test_ollama_ask.py` (copy a `test_denylist_covers_*` case). Those tests exist
+   so a later reword cannot silently drop a guardrail.

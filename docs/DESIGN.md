@@ -3,7 +3,8 @@
 Status: approved (2026-07-18)
 Method: SPARC (Specification, Pseudocode, Architecture, Refinement, Completion)
 
-This document is the **Specification and Architecture**. The build steps live in [PLAN.md](PLAN.md).
+This document is the **Specification and Architecture**. The step-by-step build plan it was
+executed from is kept local and is not part of this repo.
 
 ## 1. Goal
 

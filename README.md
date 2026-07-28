@@ -193,8 +193,7 @@ scripts/           ollama_ask.py (the one runtime file) + validate_repo.py
 config/            example config
 templates/         CLAUDE.md routing snippet
 tests/             unit tests (fake Ollama server) + opt-in real e2e
-docs/              DESIGN, PLAN (for simpler-model agents), RESEARCH, ADVANCED,
-                   SECURITY, skill-tests
+docs/              DESIGN, RESEARCH, ADVANCED, SECURITY, skill-tests
 .github/workflows  CI: unit tests (Ubuntu+Windows), validation, opt-in e2e
 ```
 
@@ -206,7 +205,8 @@ python scripts/validate_repo.py           # manifest + frontmatter checks
 RUN_OLLAMA_E2E=1 python tests/e2e_local.py  # real e2e (needs local Ollama)
 ```
 
-The step-by-step build/extension plan — written so agents on simpler models
-(Opus/Sonnet/Haiku) can execute it — is in [docs/PLAN.md](docs/PLAN.md).
+Both commands above are what CI runs. The design and the measurements behind the
+default budgets are in [docs/DESIGN.md](docs/DESIGN.md); how to add a skill is in
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 License: [MIT](LICENSE). Contributions: [CONTRIBUTING.md](CONTRIBUTING.md).
