@@ -203,6 +203,8 @@ class OllamaAskTests(unittest.TestCase):
         self.assertEqual(code, 0, msg=err)
         return json.loads(out)
 
+    DEVSTRAL = "devstral-small-2:latest"
+
     # -- model resolution ---------------------------------------------------
 
     def test_resolve_model_flag_wins(self):
@@ -277,6 +279,73 @@ class OllamaAskTests(unittest.TestCase):
             "summarize", cfg, None,
             {"models": ["qwen2.5-coder:1.5b", "gemma2:2b"]})
         self.assertEqual(model, "gemma2:2b")
+
+    def test_ram_gate_skips_oversized_auto(self):
+        """An oversized model earlier in preference is skipped; the scan
+        continues to a model that fits."""
+        cfg = {"tasks": {}, "host": os.environ["OLLAMA_HOST"]}
+        cache = {
+            "models": [self.DEVSTRAL, "gemma2:2b"],
+            "sizes": {self.DEVSTRAL: 15_177_374_099,
+                      "gemma2:2b": 1_629_518_495},
+            "free_ram": 8_000_000_000,
+        }
+        model, source = ollama_ask.resolve_model("code", cfg, None, cache)
+        self.assertEqual(model, "gemma2:2b")
+        self.assertEqual(source, "auto")
+
+    def test_ram_gate_all_gated_exits_4(self):
+        cfg = {"tasks": {}, "host": os.environ["OLLAMA_HOST"]}
+        cache = {
+            "models": [self.DEVSTRAL],
+            "sizes": {self.DEVSTRAL: 15_177_374_099},
+            "free_ram": 8_000_000_000,
+        }
+        with self.assertRaises(ollama_ask.CliError) as ctx:
+            ollama_ask.resolve_model("code", cfg, None, cache)
+        self.assertEqual(ctx.exception.code, ollama_ask.EXIT_NO_MODEL)
+        message = str(ctx.exception)
+        self.assertIn(self.DEVSTRAL, message)
+        self.assertIn("15.2 GB", message)
+        self.assertIn("8.0 GB", message)
+        self.assertIn("--model", message)
+
+    def test_ram_gate_pinned_model_bypasses(self):
+        """Explicit picks are never gated: pinning is the informed override."""
+        cfg = {"tasks": {}, "host": os.environ["OLLAMA_HOST"]}
+        cache = {
+            "models": [self.DEVSTRAL],
+            "sizes": {self.DEVSTRAL: 15_177_374_099},
+            "free_ram": 8_000_000_000,
+        }
+        model, source = ollama_ask.resolve_model(
+            "code", cfg, self.DEVSTRAL, cache)
+        self.assertEqual((model, source), (self.DEVSTRAL, "flag"))
+
+    def test_ram_gate_no_sizes_no_gate(self):
+        """A cache seeded without sizes (how other tests seed it) never
+        gates — the gate stands down without data."""
+        cfg = {"tasks": {}, "host": os.environ["OLLAMA_HOST"]}
+        model, source = ollama_ask.resolve_model(
+            "code", cfg, None, {"models": [self.DEVSTRAL]})
+        self.assertEqual(model, self.DEVSTRAL)
+        self.assertEqual(source, "auto")
+
+    def test_models_reports_skips(self):
+        FakeOllamaHandler.models_response = FAKE_MODELS + [
+            {"name": self.DEVSTRAL, "size": 15_177_374_099},
+        ]
+        code, out, err = self.run_cli("models")
+        self.assertEqual(code, 0, msg=err)
+        self.assertIn(
+            "skipped devstral-small-2:latest for code "
+            "(15.2 GB > 8.0 GB free RAM)", out)
+        code, out, err = self.run_cli("models", "--json")
+        self.assertEqual(code, 0, msg=err)
+        data = json.loads(out)
+        self.assertEqual(data["skipped"], [{
+            "model": self.DEVSTRAL, "size": 15_177_374_099,
+            "free_ram": 8_000_000_000, "tasks": ["code"]}])
 
     # -- ask ----------------------------------------------------------------
 

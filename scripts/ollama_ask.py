@@ -198,7 +198,11 @@ def warn_if_remote(host: str) -> None:
 
 
 def resolve_model(task: str, cfg: dict, flag_model, installed_cache: dict):
-    """Return (model, source). source: flag | env | config | auto."""
+    """Return (model, source). source: flag | env | config | auto.
+
+    Auto-detect skips models bigger than free RAM (it stands down when sizes
+    or free RAM are unknown); flag/env/config picks are never gated.
+    """
     if flag_model:
         return flag_model, "flag"
     env_task = os.environ.get(f"OLLAMA_SKILLS_MODEL_{task.upper()}")
@@ -212,12 +216,35 @@ def resolve_model(task: str, cfg: dict, flag_model, installed_cache: dict):
         return config_model, "config"
 
     if "models" not in installed_cache:
-        installed_cache["models"] = [m.get("name", "") for m in installed_models(cfg["host"])]
+        tags = installed_models(cfg["host"])
+        installed_cache["models"] = [m.get("name", "") for m in tags]
+        installed_cache["sizes"] = {
+            m.get("name", ""): int(m.get("size", 0)) for m in tags}
+    if "free_ram" not in installed_cache:
+        installed_cache["free_ram"] = free_ram_bytes()
     names = installed_cache["models"]
+    sizes = installed_cache.get("sizes") or {}
+    free = installed_cache["free_ram"]
+    gated = []  # (name, size) matches skipped because they exceed free RAM
     for prefix in PREFERENCES.get(task, []):
         for name in names:
-            if name.startswith(prefix):
-                return name, "auto"
+            if not name.startswith(prefix):
+                continue
+            size = sizes.get(name)
+            if free is not None and size and size > free:
+                debug(f"auto-detect skipped {name} for {task}: "
+                      f"{gb(size)} > {gb(free)} free")
+                gated.append((name, size))
+                continue
+            return name, "auto"
+    if gated:
+        name, size = gated[0]
+        raise CliError(
+            EXIT_NO_MODEL,
+            f"{name} matches the '{task}' preference list but is {gb(size)} "
+            f"with only {gb(free)} free RAM. Free memory, or pin a smaller "
+            f"model with --model or tasks.{task}.model in .ollama-skills.json.",
+        )
     if not names:
         raise CliError(EXIT_NO_MODEL,
                        "No Ollama models installed. Try: ollama pull gemma2:2b")
@@ -517,6 +544,26 @@ def cmd_health(args, cfg: dict) -> int:
     return EXIT_OK
 
 
+def _oversized_report(cache: dict) -> list:
+    """Installed models auto-detect will never pick because they exceed free
+    RAM, with the tasks whose preference lists they would otherwise serve."""
+    free = cache.get("free_ram")
+    sizes = cache.get("sizes") or {}
+    if free is None:
+        return []
+    report = []
+    for name in cache.get("models", []):
+        size = sizes.get(name)
+        if not size or size <= free:
+            continue
+        tasks = [t for t in TASKS
+                 if any(name.startswith(p) for p in PREFERENCES.get(t, []))]
+        if tasks:
+            report.append({"model": name, "size": size,
+                           "free_ram": free, "tasks": tasks})
+    return report
+
+
 def cmd_models(args, cfg: dict) -> int:
     cache: dict = {}
     resolved = {}
@@ -527,13 +574,18 @@ def cmd_models(args, cfg: dict) -> int:
         except CliError as exc:
             # models is a diagnostic command: report the gap, don't die on it.
             resolved[task] = {"model": None, "source": "none", "error": str(exc)}
+    skipped = _oversized_report(cache)
     if args.json:
-        print(json.dumps({"tasks": resolved, "installed": cache.get("models", [])}, indent=2))
+        print(json.dumps({"tasks": resolved, "installed": cache.get("models", []),
+                          "skipped": skipped}, indent=2))
         return EXIT_OK
     print(f"{'task':<10} {'model':<28} source")
     for task, info in resolved.items():
         model = info["model"] or "(no match — set it in config)"
         print(f"{task:<10} {model:<28} {info['source']}")
+    for rec in skipped:
+        print(f"skipped {rec['model']} for {', '.join(rec['tasks'])} "
+              f"({gb(rec['size'])} > {gb(rec['free_ram'])} free RAM)")
     return EXIT_OK
 
 
