@@ -44,6 +44,7 @@ class FakeOllamaHandler(BaseHTTPRequestHandler):
     last_payload: dict = {}
     generate_calls: int = 0
     prompts: list = []
+    models_response: list = FAKE_MODELS
 
     def log_message(self, *args):  # silence
         pass
@@ -58,7 +59,7 @@ class FakeOllamaHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/api/tags":
-            self._send_json(200, {"models": FAKE_MODELS})
+            self._send_json(200, {"models": FakeOllamaHandler.models_response})
         elif self.path == "/api/version":
             self._send_json(200, {"version": "0.0-test"})
         else:
@@ -160,6 +161,10 @@ class OllamaAskTests(unittest.TestCase):
 
     def setUp(self):
         FakeOllamaHandler.counters.clear()
+        FakeOllamaHandler.models_response = FAKE_MODELS
+        ollama_ask._TAGS_CACHE.clear()
+        self._orig_free_ram = ollama_ask.free_ram_bytes
+        ollama_ask.free_ram_bytes = lambda: 8_000_000_000
         self._saved_env = dict(os.environ)
         for key in list(os.environ):
             if key.startswith("OLLAMA"):
@@ -172,6 +177,7 @@ class OllamaAskTests(unittest.TestCase):
 
     def tearDown(self):
         os.chdir(self._saved_cwd)
+        ollama_ask.free_ram_bytes = self._orig_free_ram
         os.environ.clear()
         os.environ.update(self._saved_env)
         rmtree_force(self._tmp)

@@ -16,3 +16,4 @@ Raw data for the doc refresh (plan Task 5) and the dogfood evidence (spec §10.7
 ## Dogfood tally
 
 - 7eb0c29 task0: draft replaced (model failed exit code 6)
+- 786e72f task1: draft edited (model focused only on docs, needed to highlight preferences + tests)
