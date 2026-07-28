@@ -277,6 +277,32 @@ Gate rule applied (brief Step 5): FAIL = the step failed output validation (exit
 `tests/test_ollama_ask.py` were not touched by this task. `python -m unittest discover -s tests`
 → `Ran 63 tests ... OK` (baseline, unchanged).
 
+### Task 5b: README heading correction — live `general` task sample
+
+Command: `python scripts/ollama_ask.py ask --task general "Rewrite this markdown heading
+and write one extra note sentence. Heading now: '## Measured speed (development machine:
+CPU-only, 16 GB RAM, no GPU)'. True hardware: 16 GB RAM, NVIDIA GeForce RTX 4050 Laptop
+GPU with 6 GB VRAM; the small models in the table ran 100% on the GPU. Reply with the
+corrected heading line, then the note sentence, nothing else."` — resolved to `gemma2:2b`,
+exit 0. Raw draft, verbatim:
+
+```
+## Measured speed (development machine: CPU-only, 16 GB RAM, no GPU)
+
+Note: The small models in the table ran 100% on the NVIDIA GeForce RTX 4050 Laptop GPU with 6 GB VRAM.
+```
+
+**Verdict: edited.** The note sentence is accurate (matches this file's `## Hardware`
+facts exactly, no invented specs) and was kept close to verbatim. The heading line is
+**unusable as drafted** — despite being told the true hardware and asked to rewrite the
+heading, the model echoed the original heading back unchanged, still asserting
+"CPU-only ... no GPU" about this machine two sentences after being told that's false. That
+line was replaced by hand with `## Measured speed (development machine: 16 GB RAM, NVIDIA
+GeForce RTX 4050 Laptop GPU, 6 GB VRAM)`. No exit-code failure (exit 0, valid output
+format) — this is a content-accuracy miss the format gate would not catch, consistent with
+this file's other `general`/`commit-msg` observations that format validity and factual
+correctness are different signals.
+
 ### Recorded concern for the controller: commit-draft quality vs. the passing gate
 
 There is a real tension worth escalating rather than acting on unilaterally. The dogfood
@@ -358,3 +384,4 @@ zero `none` rows, one skip line for devstral. Free RAM on this machine is 6.7 GB
 - b45d274 task3: draft edited (model scoped it "docs" and omitted the RAM-gate feature entirely)
 - 04e70bd task4: draft replaced (exit 0, valid format, but typed a docs-only change "fix:" and understated the scope as "GPU usage")
 - 87ed13b task4-fix1: draft replaced (exit 0, valid format, but again typed a docs change "fix:" and named only the minor cold-load caveat, missing the main change)
+- f17c1c4 task5: draft replaced (mislabeled multifile change as fix: instead of docs:)

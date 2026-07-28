@@ -129,10 +129,12 @@ With no config at all, the script picks a model per task from a tested preferenc
 list — or tells you clearly when nothing installed fits, instead of guessing
 (`python scripts/ollama_ask.py models` shows the result and why).
 
-## Measured speed (development machine: CPU-only, 16 GB RAM, no GPU)
+## Measured speed (development machine: 16 GB RAM, NVIDIA GeForce RTX 4050 Laptop GPU, 6 GB VRAM)
 
 Real numbers from `tests/e2e_local.py` and the design-phase measurements — so you
-can set expectations before you wait:
+can set expectations before you wait. The small models in the table (qwen2.5-coder:1.5b,
+gemma2:2b) ran 100% on the GPU; devstral-small-2 (15.2 GB) does not fit in 6 GB VRAM
+and is split across CPU/GPU (see its row below).
 
 | Operation | qwen2.5-coder:1.5b | gemma2:2b |
 |---|---|---|
