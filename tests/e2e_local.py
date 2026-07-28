@@ -2,7 +2,7 @@
 """Opt-in end-to-end test against a REAL local Ollama.
 
 Run: RUN_OLLAMA_E2E=1 python tests/e2e_local.py
-Optional: OLLAMA_SKILLS_MODEL=llama3.2:1b to pick the model for every task.
+Optional: OLLAMA_SKILLS_MODEL=qwen2.5-coder:1.5b to pick the model for every task.
 
 Prints one `E2E <name> <seconds>s` line per step. Exits 1 on any failure.
 Skips politely (exit 0) when RUN_OLLAMA_E2E is not set.

@@ -3,7 +3,7 @@
 
 Run: RUN_K8S_E2E=1 python tests/e2e_k8s.py
 Requires: a running kind cluster with a crashlooping pod (see scripts/kind-up.sh),
-kubectl with a current context, and llama3.2:1b pulled. Runs ALONE — never with a
+kubectl with a current context, and gemma2:2b pulled. Runs ALONE — never with a
 second model loaded (RAM ceiling on the dev machine).
 
 Skips politely (exit 0) when RUN_K8S_E2E is not set.

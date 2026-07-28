@@ -116,10 +116,12 @@ Before it pushes, Claude always shows you the target, like this: `branch -> remo
 These are the models that were installed on the development machine and used while
 building and testing this project:
 
-- `qwen3:8b` — default quality pick for shell/code/general tasks
-- `llama3.2:1b` — fast lane, pulled during development for quick tasks and tests
-- `devstral:latest` — present on the machine but **disabled by default here**: at
-  14 GB it does not fit in 16 GB RAM and timed out in every test
+- `qwen2.5-coder:1.5b` — coder pick: commit messages, shell drafts, small code
+- `gemma2:2b` — general + summarize pick (the one small model that satisfies
+  every task's preference list by itself)
+- `devstral-small-2:latest` — 15 GB; auto-detect **skips it on this machine**
+  (bigger than free RAM — the `models` command shows the skip and why). On a
+  machine where it fits, it is auto-picked for code tasks.
 
 **If you clone this, model choice is yours.** Set models in `.ollama-skills.json`
 (copy `config/.ollama-skills.example.json`) or env vars — any Ollama model works.
@@ -132,15 +134,14 @@ list — or tells you clearly when nothing installed fits, instead of guessing
 Real numbers from `tests/e2e_local.py` and the design-phase measurements — so you
 can set expectations before you wait:
 
-| Operation | llama3.2:1b | qwen3:8b |
+| Operation | qwen2.5-coder:1.5b | gemma2:2b |
 |---|---|---|
-| Model load (cold start) | ~6 s | ~27–34 s |
-| `ask` (tiny prompt, warm) | 3.0 s | ~9 s |
-| `commit-msg` (small staged change) | 5.4 s | ~30 s |
-| `draft-command` | 7.2 s | ~30–60 s |
-| `summarize` (single-shot, ~3k chars) | ~20 s | not advised on CPU (prefill ~7 tok/s) |
-| Large prompt (~2,700 tokens) | not advised | **7–10+ minutes** (CPU prefill ~7 tok/s) |
-| `devstral:latest` (14 GB) | — | timed out (larger than free RAM) |
+| Model load (cold start) | 6.4 s | 6.2 s |
+| `ask` (tiny prompt, warm) | 2.4–2.6 s | 2.5–2.8 s |
+| `commit-msg` (small staged change) | 2.6–2.8 s | — |
+| `draft-command` | 3.4 s | — |
+| `summarize` (single-shot, ~3k chars) | — | 8.0–8.3 s |
+| `devstral-small-2:latest` (15.2 GB) | slow but works, with cold-stall risk (64–68 s cold, 5.2 s warm; one cold attempt stalled > 120 s) | |
 
 That last row is why the input budget defaults to 2,500 chars and why `commit-msg`
 sends a compact diff summary instead of full hunks. GPU owners can raise budgets in

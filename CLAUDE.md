@@ -76,7 +76,7 @@ skill's Troubleshooting/Fallback section. Never renumber one alone.
 `--model` flag → `OLLAMA_SKILLS_MODEL_<TASK>` → `OLLAMA_SKILLS_MODEL` →
 `./.ollama-skills.json` → `~/.ollama-skills.json` → auto-detect via `PREFERENCES`
 (first installed model whose name starts with a listed prefix). Auto-detect never falls
-back to an arbitrary installed model — embedding models must lose. In `PREFERENCES`,
+back to an arbitrary installed model — embedding models must lose. Auto-detect also skips any candidate whose file size exceeds free RAM (best-effort — it stands down when either number is unknown; explicit pins bypass the gate, and `models` prints what was skipped and why). In `PREFERENCES`,
 `summarize` deliberately lists `qwen3` **last** because a digest makes many calls and a
 slow 8B model would be unusable; don't "fix" that ordering. `python scripts/ollama_ask.py
 models --json` prints the resolved model and its source for every task.

@@ -23,7 +23,7 @@ jobs:
             curl -sf http://localhost:11434/api/version && break
             sleep 1
           done
-          ollama pull llama3.2:1b
+          ollama pull qwen2.5-coder:1.5b
       - name: Configure git identity for test repos
         run: |
           git config --global user.email "ci@example.com"
@@ -31,5 +31,5 @@ jobs:
       - name: Run e2e against real Ollama
         env:
           RUN_OLLAMA_E2E: "1"
-          OLLAMA_SKILLS_MODEL: "llama3.2:1b"
+          OLLAMA_SKILLS_MODEL: "qwen2.5-coder:1.5b"
         run: python tests/e2e_local.py

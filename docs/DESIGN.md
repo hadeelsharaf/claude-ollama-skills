@@ -154,14 +154,13 @@ Per-task auto-detect preference lists (first installed match wins), based on res
 and sized for common machines:
 
 - `code`: qwen3-coder, qwen2.5-coder (any), devstral, deepseek-coder, codegemma,
-  then the general list as a curated fallback (never an arbitrary installed model)
-- `commit`: qwen2.5-coder, llama3.1, llama3.2, qwen3, gemma3
-- `shell`: qwen3, llama3.1, llama3.2, qwen2.5
-- `general`: qwen3, llama3.1, gemma3, llama3.2, mistral
+  qwen3, llama3.1, gemma3, gemma2, llama3.2, mistral
+- `commit`: qwen2.5-coder, llama3.1, llama3.2, qwen3, gemma3, gemma2
+- `shell`: qwen3, llama3.1, llama3.2, qwen2.5, gemma3, gemma2
+- `general`: qwen3, llama3.1, gemma3, gemma2, llama3.2, mistral, qwen2.5-coder (floor)
+- `summarize`: llama3.2, gemma3, gemma2, qwen2.5, llama3.1, mistral, qwen3 (last resort)
 
-**Models used during development** (this machine): `qwen3:8b`, `llama3.2:1b`, and
-`devstral:latest` (present but too big for 16 GB RAM; disabled by default here).
-The README states this and tells cloners to set their own models in config.
+**Models used during development** (this machine, since 2026-07-28): qwen2.5-coder:1.5b, gemma2:2b, and devstral-small-2:latest (15 GB — auto-detect skips it; larger than free RAM). The original fleet is recorded in §3.
 
 ### 5.5 Config file
 

@@ -53,7 +53,7 @@ not an upgrade.
 ```powershell
 $env:ANTHROPIC_BASE_URL = "http://localhost:11434"
 $env:ANTHROPIC_AUTH_TOKEN = "ollama"
-$env:ANTHROPIC_DEFAULT_SONNET_MODEL = "qwen3:8b"   # your pick
+$env:ANTHROPIC_DEFAULT_SONNET_MODEL = "qwen2.5-coder:1.5b"   # your pick
 claude
 ```
 
@@ -101,7 +101,7 @@ it ships disabled. If you want it, add to your `settings.json`:
 
 | Machine | Advice |
 |---|---|
-| No GPU, 16 GB RAM | Use a 1–4 B model (`llama3.2:1b`, `llama3.2:3b`, `qwen3:4b`). Keep `max_input_chars` at 2500. An 8 B model works but costs 30 s load + slow prefill; 14 B+ will thrash or time out. |
+| No GPU, 16 GB RAM | Use a 1–4 B model (`qwen2.5-coder:1.5b`, `gemma2:2b`, `llama3.2:3b`). Keep `max_input_chars` at 2500. An 8 B model works but costs 30 s load + slow prefill; 14 B+ will thrash or time out. |
 | No GPU, 32 GB RAM | 7–8 B models are the sweet spot (`qwen2.5-coder:7b`, `llama3.1:8b`). |
 | GPU ≥ 8 GB VRAM | 7–14 B models fly. Raise `max_input_chars` (8000+) and `max_tokens`. |
 | GPU ≥ 16 GB VRAM | `qwen2.5-coder:14b` or MoE coders; you can raise budgets a lot. |
