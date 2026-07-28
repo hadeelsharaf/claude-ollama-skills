@@ -386,3 +386,165 @@ zero `none` rows, one skip line for devstral. Free RAM on this machine is 6.7 GB
 - 87ed13b task4-fix1: draft replaced (exit 0, valid format, but again typed a docs change "fix:" and named only the minor cold-load caveat, missing the main change)
 - f17c1c4 task5: draft replaced (mislabeled multifile change as fix: instead of docs:)
 - 0d3d5bb task5b: draft replaced (exit 0, valid format, but typed a docs-only hardware-claim correction "fix(README.md):" instead of "docs:", and scoped it to a filename)
+- 5116f86 task6: draft replaced (exit 0, valid format, but typed a docs-only DESIGN/CHANGELOG append "fix(CHANGELOG.md):" instead of "docs:", and scoped it to a filename)
+
+## Final verification (Task 7)
+
+All commands run live on this machine, verbatim output trimmed to the relevant lines.
+
+### Step 1: Suite + validator
+
+`python -m unittest discover -s tests -v` (tail):
+
+```
+----------------------------------------------------------------------
+Ran 63 tests in 10.178s
+
+OK
+```
+
+`python scripts/validate_repo.py`:
+
+```
+OK   .claude-plugin\plugin.json
+OK   .claude-plugin\marketplace.json
+OK   config\.ollama-skills.example.json
+OK   skills\ollama-ask\SKILL.md - skill 'ollama-ask'
+OK   skills\ollama-code\SKILL.md - skill 'ollama-code'
+OK   skills\ollama-commit\SKILL.md - skill 'ollama-commit'
+OK   skills\ollama-docker\SKILL.md - skill 'ollama-docker'
+OK   skills\ollama-git-history\SKILL.md - skill 'ollama-git-history'
+OK   skills\ollama-k8s\SKILL.md - skill 'ollama-k8s'
+OK   skills\ollama-precommit\SKILL.md - skill 'ollama-precommit'
+OK   skills\ollama-shell\SKILL.md - skill 'ollama-shell'
+OK   agents\ollama-coder.md - agent 'ollama-coder'
+OK   agents\ollama-git.md - agent 'ollama-git'
+OK   agents\ollama-ops.md - agent 'ollama-ops'
+OK   scripts\ollama_ask.py - compiles
+
+All checks passed.
+```
+
+**Verdict: PASS.**
+
+### Step 2: Live resolution
+
+`python scripts/ollama_ask.py models`:
+
+```
+task       model                        source
+commit     qwen2.5-coder:1.5b           auto
+shell      qwen2.5-coder:1.5b           auto
+code       qwen2.5-coder:1.5b           auto
+general    gemma2:2b                    auto
+summarize  gemma2:2b                    auto
+skipped devstral-small-2:latest for code (15.2 GB > 5.9 GB free RAM)
+```
+
+Exit 0. Five resolved rows, zero `none`, `general` = `gemma2:2b`, `summarize` = `gemma2:2b`,
+skip line present for devstral (free RAM at this moment: 5.9 GB — lower than the 6.7 GB
+recorded in the Task 3 smoke earlier in this file; free RAM moved during the session as
+noted in Hardware above, consistent with that caveat).
+
+**Verdict: PASS.**
+
+### Step 3: The previously broken path
+
+`python scripts/ollama_ask.py warmup --task general`:
+
+```
+warmed gemma2:2b in 2.7s (keep_alive 30m)
+EXIT=0
+```
+
+Was exit 4 before this work (task chain resolved `general` to nothing installed); now
+resolves to `gemma2:2b` and exits 0.
+
+**Verdict: PASS.**
+
+### Step 4: Grep sweep
+
+```
+git grep -n -e "qwen3:8b" -e "llama3.2:1b" -e "devstral:latest" -- README.md config docs/ADVANCED.md .github/workflows/e2e.yml tests/e2e_local.py tests/e2e_k8s.py CLAUDE.md
+EXIT=1 (no matches)
+```
+
+`git grep` exits 1 when no lines match — this is the expected/passing result (empty output).
+
+**Verdict: PASS.**
+
+### Step 5: E2E evidence
+
+Confirmed present above in this file: full `E2E` step lists for both
+`qwen2.5-coder:1.5b` (## E2E qwen2.5-coder:1.5b, two runs, all 6 steps `E2E all green`,
+exit 0 both times) and `gemma2:2b` (## E2E gemma2:2b, two runs, all 6 steps `E2E all green`,
+exit 0 both times); the `## devstral-small-2 probe` section records all 5 attempts in the
+table plus the verbatim exit-5 failure line and health evidence; the
+`## Quality-gate verdicts` section records **all pass, lists unchanged** for both models
+across 2 runs each (12 step-checks total, 0 exit-6 results).
+
+**Verdict: PASS.**
+
+### Step 6: Dogfood evidence (spec §10.7)
+
+`git log --format="%h %s" 7eb0c29~1..HEAD`:
+
+```
+5116f86 docs: append D16 RAM-gate decision and fleet measurement facts
+0d3d5bb docs: correct README hardware claim (CPU-only to RTX 4050 GPU)
+f17c1c4 docs: refresh model docs and config for the 2026-07 GPU-measured fleet
+87ed13b docs: add captured health evidence for devstral RAM starvation
+04e70bd docs: record GPU benchmarks, devstral probe, quality-gate verdicts
+b45d274 feat: gate resolve_model on free RAM and report skips in models
+7a87635 test: pin free RAM and clear tags cache for deterministic fake server
+786e72f feat: add gemma2 to preference lists and update pull hints
+7eb0c29 chore: land plugin 0.2.0 bump, dead-link fixes, CLAUDE.md, fleet notes skeleton
+```
+
+All 9 subject lines use a valid Conventional Commits type (`chore`, `feat`, `feat`, `test`,
+`docs` x5) with a `type: description` or `type(scope): description` shape — **PASS**, all
+Conventional Commits.
+
+`git log --oneline origin/draft..HEAD` → empty output. Everything on `draft` is pushed to
+`origin/draft`. Current branch confirmed via `git branch --show-current` → `draft` (not
+`main`/`master`), so the deny-list on protected branches was never at stake for these
+commits; there is no direct way to inspect whether `--allow-protected` was passed on any
+call from history alone, but every commit here landed on `draft`, and the loop transcripts
+in each task's brief/report describe plain `commit-push` invocations, not
+`--allow-protected` ones.
+
+The `## Dogfood tally` section above (this file) has exactly 9 lines, one per commit
+(task0, task1, task2, task3, task4, task4-fix1, task5, task5b, task6), each marked with an
+outcome (replaced / edited / model-failed as a qualifier on replaced — see tally stats
+below).
+
+**Verdict: PASS.**
+
+### Dogfood tally stats (Steps 6–7)
+
+Categorizing the 9 tally lines into the four buckets (used-as-is / edited / replaced /
+model-failed), reading "model-failed" as the reason a draft was replaced when the model
+did not produce a valid Conventional Commit line at all (exit 6), versus "replaced" for
+drafts that were exit-0/format-valid but semantically wrong (wrong type or scope) and so
+were replaced by hand:
+
+| bucket | count | commits |
+|---|---|---|
+| used-as-is | 0 | — |
+| edited | 2 | task1, task3 |
+| replaced (exit 0, semantically wrong) | 5 | task4, task4-fix1, task5, task5b, task6 |
+| model-failed (exit 6, no valid line at all) | 2 | task0, task2 |
+
+**0 of 9 (0%) commit-msg drafts were used as-is.** 2 of 9 (22%) were edited. 7 of 9 (78%)
+were replaced outright, of which 2 (task0, task2) failed the format gate (exit 6) and 5
+(task4, task4-fix1, task5, task5b, task6) passed the format gate but were semantically
+wrong (habitually mislabeling docs-only changes as `fix:`). This matches the "Recorded
+concern for the controller" note earlier in this file: the e2e `commit-msg` step's 4/4
+pass rate measures format validity on a simple single-file fixture, not the semantic
+scope judgment the real multi-file dogfood diffs require.
+
+### Overall Task 7 verdict
+
+All 6 verification steps (1–6) PASS. No fixes were required. Convention note: the tally
+line for this task's own commit (task7) is recorded below but is **not** included in the
+committed section above — see the note at the end of this file for why.
