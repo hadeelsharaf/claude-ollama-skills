@@ -175,6 +175,33 @@ task's preference list before any docs are written**. The published speed table 
 only models that passed. Raw timings and pass/fail results are written to a scratch
 notes file so the doc-refresh task can run mechanically from them.
 
+### 5.1 Dogfooding — the plugin commits its own implementation
+
+Every implementation task (T1–T6) finishes by committing its changes **through the
+plugin's own pipeline**, exactly per the `ollama-commit` skill:
+
+1. Stage only that task's files (never `git add -A`).
+2. `python scripts/ollama_ask.py commit-msg` — the local model (`commit` task, so
+   `qwen2.5-coder:1.5b` under the new lists) drafts the message; the diff never enters
+   cloud context.
+3. Review the draft per the skill's rules: Conventional-Commit format, truth against
+   `git diff --cached --stat` only. Edit or replace a bad draft — the reviewer owns it.
+4. `python scripts/ollama_ask.py commit-push --message "<reviewed message>"` — the
+   gated one-step commit + push to `origin/draft` (not protected; `--allow-protected`
+   must not appear).
+5. On local-model failure (exit 3/4/5/6): write the message manually, note the skip,
+   and proceed — the fallback path is itself part of what's being dogfooded.
+
+Each executor records the outcome per commit — draft **used as-is / edited /
+replaced / model failed** — in the same scratch notes file as the benchmarks. This
+tally is a live quality sample for the `commit` task that complements T4's e2e runs,
+and every push exercises `commit-push`'s born-attached branch path against a real
+remote.
+
+Scope guard: **unit tests stay on the fake server** — do not convert any
+`tests/test_ollama_ask.py` case to a real model; CI must remain hermetic. Real-model
+testing lives in the e2e runs (T4) and this dogfooding loop.
+
 ## 6. Documentation refresh
 
 Rewrite (current-claims files):
@@ -255,6 +282,12 @@ for any task.** Assignments are by complexity: haiku for mechanical edits with e
 content given in this spec, sonnet for logic/tests/judged writing, opus where results
 must be interpreted and decisions made.
 
+Every task T1–T6 ends with the dogfooding commit-and-push loop of §5.1 for its own
+changes, at that task's assigned tier (the loop is the `ollama-commit` skill workflow,
+which ships on haiku agents — every tier here can run it). Exception: T1 and T2 land
+before their own changes are benchmarked, which is fine — the reviewer gate in §5.1
+step 3 is what guarantees message quality, not the model.
+
 | # | Task | Model | Depends on | Why this tier |
 |---|---|---|---|---|
 | T1 | `PREFERENCES` edit + two pull-hint strings (§4.1, §4.4) | **haiku** | — | exact replacement content is in this spec |
@@ -281,3 +314,6 @@ T4 can run in parallel with T3 (e2e pins models via env, bypassing resolution).
 6. Grep sweep: `qwen3:8b`, `llama3.2:1b`, `devstral:latest` appear in **no** rewrite-list
    file from §6 (CHANGELOG, RESEARCH, skill-tests, and DESIGN's historical sections
    exempt as records).
+7. Dogfooding evidence: every T1–T6 commit on `origin/draft` was made via
+   `commit-push` (exit 0, no `--allow-protected`), and the scratch notes file contains
+   the per-commit tally (used as-is / edited / replaced / model failed).
