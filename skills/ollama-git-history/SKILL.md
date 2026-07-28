@@ -67,9 +67,12 @@ each author," "draft short release notes."
    "Context: write 3 short release notes from the commits below." This is still just text
    sent over stdin; no new flag is needed.
 5. Pipe it to summarize over stdin:
-   `{ git shortlog -sn <range>; git log --pretty=format:"%h %ad %an %s" --date=short <range>; } | python "$SCRIPT" summarize --kind git`.
+   `{ git shortlog -sn <range>; git log --pretty=format:"%h %ad %an %s" --date=short <range>; } | python "$SCRIPT" summarize --kind git --no-verdict`.
    `summarize` reads stdin, single-shots small ranges and map-reduces large ones. The big
    log text never enters your context; only the small digest on stdout does.
+   Always pass `--no-verdict` here: the VERDICT line asks for error/warning/restart counts,
+   which do not exist in a commit list — on git input small models invent them (observed
+   live, 2026-07-29). Plain fact bullets have nothing to invent.
 
 ## Input budget rule
 
@@ -86,16 +89,16 @@ The list path has its own separate cap: latest 50 commits by default, as stated 
 **List path:** the raw `git log --oneline` lines, unchanged. You may add one short header
 line above them, like "Latest 20 commits on draft:". Do not edit the lines themselves.
 
-**Summarize path:** plain text — one VERDICT line first, then short fact bullets (capped by
-the `summarize` profile at 200 tokens; raise with `--max-tokens` if needed). Every bullet
-must point at something really in the input — a real commit hash, author, or date. If a
-bullet names a person, date, or count not in the fed text, the model is guessing; fix it or
-drop it.
+**Summarize path:** plain text — short fact bullets only, no VERDICT line (`--no-verdict`
+is always passed; capped by the `summarize` profile at 200 tokens; raise with
+`--max-tokens` if needed). Every bullet must point at something really in the input — a
+real commit hash, author, or date. If a bullet names a person, date, or count not in the
+fed text, the model is guessing; fix it or drop it.
 
 ## Privacy: history data must not leave the machine (same rule as commit-msg)
 
 **Summarize path:** the compact log text is fed only to the local Ollama model, over stdin.
-It is never shown to you directly. Only the small digest — verdict plus bullets — comes back
+It is never shown to you directly. Only the small digest — the fact bullets — comes back
 into your context. Same design as `ollama-commit`: the raw stays local, only the result
 crosses over.
 

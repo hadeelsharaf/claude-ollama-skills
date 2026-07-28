@@ -20,6 +20,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 - Example config, README fleet + measured-speed tables, e2e default model, and the
   two pull hints now match the 2026-07 development fleet (`qwen2.5-coder:1.5b`,
   `gemma2:2b`, `devstral-small-2:latest`).
+- `ollama-git-history` now always passes `--no-verdict` to `summarize`: on commit-log
+  input the VERDICT line invites invented error/warning counts (observed live); plain
+  fact bullets have nothing to invent.
 
 ## [0.2.0] - 2026-07-18
 

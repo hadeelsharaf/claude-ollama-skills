@@ -834,6 +834,9 @@ class OllamaAskTests(unittest.TestCase):
         needles = [
             "git log -p", "--patch", "--word-diff", "--full-diff",
             "never shows patch content",
+            # digest accuracy: on git input the VERDICT line invites invented
+            # error/warning counts (observed live 2026-07-29) — pin the flag.
+            "--no-verdict",
         ]
         rel = "skills/ollama-git-history/SKILL.md"
         body = (ROOT / rel).read_text(encoding="utf-8")
