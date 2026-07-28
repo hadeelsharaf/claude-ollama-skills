@@ -3,6 +3,24 @@
 All notable changes to this project are recorded here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Free-RAM gate in model auto-detect: candidates larger than free RAM are skipped;
+  `models` reports each skip (`skipped <model> for <tasks> (<size> > <free> free RAM)`)
+  and `--json` gains a `skipped` array. Explicit `--model` / env / config picks are
+  never gated. When every matching candidate is gated, the task fails with exit 4
+  naming the model, its size, and free RAM.
+
+### Changed
+
+- Preference lists: `gemma2` joins every task list directly after `gemma3`; the gemma
+  family joins `shell`; `qwen2.5-coder` becomes the last-resort floor for `general`.
+- Example config, README fleet + measured-speed tables, e2e default model, and the
+  two pull hints now match the 2026-07 development fleet (`qwen2.5-coder:1.5b`,
+  `gemma2:2b`, `devstral-small-2:latest`).
+
 ## [0.2.0] - 2026-07-18
 
 ### Added

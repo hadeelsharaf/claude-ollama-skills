@@ -385,3 +385,4 @@ zero `none` rows, one skip line for devstral. Free RAM on this machine is 6.7 GB
 - 04e70bd task4: draft replaced (exit 0, valid format, but typed a docs-only change "fix:" and understated the scope as "GPU usage")
 - 87ed13b task4-fix1: draft replaced (exit 0, valid format, but again typed a docs change "fix:" and named only the minor cold-load caveat, missing the main change)
 - f17c1c4 task5: draft replaced (mislabeled multifile change as fix: instead of docs:)
+- 0d3d5bb task5b: draft replaced (exit 0, valid format, but typed a docs-only hardware-claim correction "fix(README.md):" instead of "docs:", and scoped it to a filename)

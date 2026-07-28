@@ -444,6 +444,10 @@ Expected: five resolved rows — commit/shell/code = `qwen2.5-coder:1.5b`, gener
 - Consumes: Task 3's working resolution (e2e also pins via `OLLAMA_SKILLS_MODEL`, so it can run even if resolution had a bug — but Task 3 must be merged first so the dogfood loop works).
 - Produces: the notes file's `Cold load`, `E2E <model>`, `devstral-small-2 probe`, and `Quality-gate verdicts` sections — Task 5 fills every doc number from these, mechanically.
 
+- [ ] **Step 0: Record hardware evidence (amendment 2026-07-29 — the machine has a GPU)**
+
+Run `nvidia-smi` (header block) and, during any generation below, `ollama ps` (PROCESSOR column). Record both verbatim under a new `## Hardware` section in the notes file, and correct the notes header line `no GPU` to the real hardware (`NVIDIA GeForce RTX 4050 Laptop, 6 GB VRAM; small models run 100% GPU`). Every number this task produces is GPU-accelerated — say so explicitly in the notes, because the repo's older measurements were CPU-only and the two sets must never be compared as like-for-like.
+
 - [ ] **Step 1: Unload everything, then measure qwen2.5-coder:1.5b**
 
 Run (PowerShell):
@@ -562,7 +566,7 @@ Replace `config/.ollama-skills.example.json` wholesale with:
 
 - [ ] **Step 5: ADVANCED hardware row**
 
-In `docs/ADVANCED.md`'s per-hardware table, "No GPU, 16 GB RAM" row: replace ``(`llama3.2:1b`, `llama3.2:3b`, `qwen3:4b`)`` with ``(`qwen2.5-coder:1.5b` and `gemma2:2b` — both measured here — or `llama3.2:3b`)``. Rest of the row unchanged.
+In `docs/ADVANCED.md`'s per-hardware table, "No GPU, 16 GB RAM" row: replace ``(`llama3.2:1b`, `llama3.2:3b`, `qwen3:4b`)`` with ``(`qwen2.5-coder:1.5b`, `gemma2:2b`, `llama3.2:3b`)``. Rest of the row unchanged. Do NOT write "measured here" in this row — this machine's measurements are GPU-accelerated (amendment 2026-07-29); the README section states where the numbers come from.
 
 - [ ] **Step 6: DESIGN §11 lists + dev-models line (current claims only — touch nothing else in DESIGN)**
 
@@ -595,6 +599,39 @@ Expected: validator all OK; grep returns **no matches**.
 
 ---
 
+### Task 5b: README hardware correction, drafted by the local model (amendment 2026-07-29, user-requested)
+
+**Executor model: sonnet** (explicit — do not inherit; it must judge a local model's prose draft). **Local models exercised:** `gemma2:2b` (drafts the README text via `ask --task general` — this is the user-requested live test of the general task) and `qwen2.5-coder:1.5b` (dogfood commit draft).
+
+**Files:**
+- Modify: `README.md` only (separate commit — that is the point), plus the notes file's pending tally line and a draft-quality note.
+
+**Interfaces:**
+- Consumes: Task 5's refreshed README (this task edits the heading of the section Task 5 filled) and Task 4's `## Hardware` notes section.
+- Produces: a README whose hardware description matches the verified machine (RTX 4050 Laptop, 6 GB VRAM, models 100% GPU when they fit).
+
+- [ ] **Step 1: Have the local model draft the correction**
+
+The README "Measured speed" heading still claims `(development machine: CPU-only, 16 GB RAM, no GPU)` — verified false on 2026-07-29 (`nvidia-smi`: RTX 4050 Laptop 6 GB VRAM; `ollama ps`: 100% GPU). Run, with the facts from the notes `## Hardware` section substituted in:
+
+```bash
+python scripts/ollama_ask.py ask --task general "Rewrite this markdown heading and write one extra note sentence. Heading now: '## Measured speed (development machine: CPU-only, 16 GB RAM, no GPU)'. True hardware: 16 GB RAM, NVIDIA GeForce RTX 4050 Laptop GPU with 6 GB VRAM; the small models in the table ran 100% on the GPU. Reply with the corrected heading line, then the note sentence, nothing else."
+```
+
+- [ ] **Step 2: Review the draft as an UNTRUSTED DRAFT**
+
+It must state only the facts given (no invented clock speeds, model names, or benchmark claims). Edit or replace a bad draft; record used-as-is / edited / replaced in the notes `## Quality-gate verdicts` section as a live sample of the `general` task.
+
+- [ ] **Step 3: Apply to README**
+
+Replace the heading line and add the note sentence directly under the section's intro line. If the intro or the paragraph after the table still says CPU-only/no-GPU about THIS machine, fix those clauses too (leave genuinely historical statements alone). Check: `grep -n "CPU-only\|no GPU" README.md` afterward should return nothing that describes the current machine.
+
+- [ ] **Step 4: DOGFOOD LOOP (the user-requested end-to-end test)**
+
+`<paths>` = `README.md docs/superpowers/notes/2026-07-29-fleet-benchmarks.md`. Tally label `task5b`. Local model drafts the content (Step 1) AND the commit message; the gated `commit-push` publishes it — record the full chain outcome in the tally.
+
+---
+
 ### Task 6: History-preserving DESIGN append + CHANGELOG (spec §6 append list)
 
 **Executor model: sonnet** (explicit — do not inherit; extends records without falsifying them). **Local models exercised:** `qwen2.5-coder:1.5b` in the dogfood loop.
@@ -605,14 +642,14 @@ Expected: validator all OK; grep returns **no matches**.
 
 **Interfaces:**
 - Consumes: Task 4's notes numbers; Task 5 must be done (so DESIGN's current-claims lines are already updated and this task only appends).
-- Produces: DESIGN decision D14 + dated measurement subsection; CHANGELOG `[Unreleased]`.
+- Produces: DESIGN decision D16 + dated measurement subsection; CHANGELOG `[Unreleased]`.
 
 - [ ] **Step 1: Label the original measured table and append the new one**
 
 In DESIGN §3, change the line `Machine: Windows 11, 16 GB RAM (~6 GB free), **no GPU**, Ollama 0.32.1.` to `Machine: Windows 11, 16 GB RAM (~6 GB free), **no GPU**, Ollama 0.32.1 — measured 2026-07-18; kept as the record behind D3/D10/D12.` Then append AFTER the existing table and its design-rules list (do not touch either):
 
 ```markdown
-### 3.1 Measured facts — fleet of 2026-07-28 (Ollama 0.32.4, ~7.5 GB free)
+### 3.1 Measured facts — fleet of 2026-07-28 (Ollama 0.32.4, NVIDIA RTX 4050 Laptop 6 GB VRAM, ~7.5 GB free system RAM)
 
 The machine's fleet changed; the table above stays as the original record. New
 measurements (raw data: benchmark notes, 2026-07-29):
@@ -626,12 +663,12 @@ measurements (raw data: benchmark notes, 2026-07-29):
 | `devstral-small-2:latest` (15.2 GB) probe, 120 s cap | <from notes §probe> |
 ```
 
-- [ ] **Step 2: Append decision D14**
+- [ ] **Step 2: Append decision D16** (corrected 2026-07-29: the table already ends at D15 — D14/D15 are pre-existing v0.2 decisions; the original plan text wrongly said D13 was last)
 
-Add one row to the end of DESIGN's decision table (D13 is last today):
+Add one row to the end of DESIGN's decision table (D15 is last today):
 
 ```markdown
-| D14 | Auto-detect skips models larger than free RAM; flag/env/config picks bypass the gate; the gate stands down when sizes or free RAM are unknown. The size>free test is a deliberately lenient proxy (no KV-cache estimate) — same basis as the `health` warning | devstral-small-2 (15.2 GB) matched the code list on a ~7.5 GB-free machine and would burn up to 480 s before exit 5; `health` warned but resolution was blind (2026-07-28) |
+| D16 | Auto-detect skips models larger than free RAM; flag/env/config picks bypass the gate; the gate stands down when sizes or free RAM are unknown. The size>free test is a deliberately lenient proxy (no KV-cache estimate) — same basis as the `health` warning | devstral-small-2 (15.2 GB) matched the code list on a ~7.5 GB-free machine and would burn up to 480 s before exit 5; `health` warned but resolution was blind (2026-07-28) |
 ```
 
 - [ ] **Step 3: CHANGELOG `[Unreleased]`**

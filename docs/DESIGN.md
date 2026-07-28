@@ -31,7 +31,7 @@ Wins we aim for:
 
 ## 3. Measured facts (development machine)
 
-Machine: Windows 11, 16 GB RAM (~6 GB free), **no GPU**, Ollama 0.32.1.
+Machine: Windows 11, 16 GB RAM (~6 GB free), **no GPU**, Ollama 0.32.1 — measured 2026-07-18; kept as the record behind D3/D10/D12.
 
 | Test | Result |
 |---|---|
@@ -49,6 +49,19 @@ Design rules that follow from these numbers:
 5. `health` checks free RAM against model size and warns before you wait 10 minutes for nothing.
 6. Thinking mode is **off** by default (`think: false`); `<think>` blocks are stripped anyway.
 7. Streaming is on internally, with a stall detector (no token for N seconds = abort with a clear error).
+
+### 3.1 Measured facts — fleet of 2026-07-28 (Ollama 0.32.4, NVIDIA RTX 4050 Laptop 6 GB VRAM, ~7.5 GB free system RAM)
+
+The machine's fleet changed; the table above stays as the original record. New
+measurements (raw data: benchmark notes, 2026-07-29):
+
+| Test | Result |
+|---|---|
+| `qwen2.5-coder:1.5b` cold load | 6.4 s |
+| `gemma2:2b` cold load | 6.2 s |
+| `qwen2.5-coder:1.5b` commit-msg (e2e) | 2.6–2.8 s |
+| `gemma2:2b` summarize single-shot (e2e) | 8.0–8.3 s |
+| `devstral-small-2:latest` (15.2 GB) probe, 120 s cap | 3 of 4 cold attempts succeeded slowly (~64–68 s) via partial CPU/GPU offload; 5.2 s warm; one cold attempt fell back to 100% CPU and stalled past the 120 s cap |
 
 ## 4. Architecture
 
@@ -249,6 +262,7 @@ because research shows explicit routing rules are what make delegation actually 
 | D13 | Budgets: 3,000-char chunks, 80-token map cap, 200-token reduce cap, `num_ctx` 2048, 100,000-char ceiling | fresh llama3.2:1b calibration (a 3,759-char chunk = 24.4 s); fits `num_ctx` 2048 with headroom; bounded worst case (~12 min) with visible per-chunk progress and drop markers |
 | D14 | New skills are read-free, mutate-gated, destructive-and-cluster-scoped-denied | small models must not self-certify safety; Claude is the gate and the permission prompt is the second gate; k8s adds a context+namespace echo and a clean no-context stop |
 | D15 | k8s tested with fixtures + fake-server units + RED→GREEN probes in CI; kind e2e opt-in only | the script never calls kubectl (kubectl output is INPUT to summarize); the no-context stop is the dev machine's default state; a mandatory cluster breaks CI and blows the RAM ceiling |
+| D16 | Auto-detect skips models larger than free RAM; flag/env/config picks bypass the gate; the gate stands down when sizes or free RAM are unknown. The size>free test is a deliberately lenient proxy (no KV-cache estimate) — same basis as the `health` warning | devstral-small-2 (15.2 GB) matched the code list on a ~7.5 GB-free machine and would burn up to 480 s before exit 5; `health` warned but resolution was blind (2026-07-28) |
 
 ## 11. Out of scope (v0.1)
 
