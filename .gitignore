@@ -5,6 +5,8 @@ wayfinder/
 # internal build plans - kept local, not shipped to GitHub
 docs/PLAN.md
 docs/PLAN-v0.2.md
+# superpowers planning docs (specs/plans/notes) - kept local, never shipped
+docs/superpowers/
 *.pyc
 .pytest_cache/
 .venv/

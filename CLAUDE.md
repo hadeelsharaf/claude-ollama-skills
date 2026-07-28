@@ -140,4 +140,5 @@ reasoning outcomes, only F was run live).
 
 `docs/PLAN.md` and `docs/PLAN-v0.2.md` are **gitignored internal planning docs** — they may
 exist on a given machine but are not part of the repo, so never link to them from shipped
-docs. Keep `plugin.json`'s `version` in step with the newest CHANGELOG entry when releasing.
+docs. `docs/superpowers/` (specs, plans, benchmark notes) is likewise local-only — gitignored, kept on disk, never linked from shipped docs.
+Keep `plugin.json`'s `version` in step with the newest CHANGELOG entry when releasing.
