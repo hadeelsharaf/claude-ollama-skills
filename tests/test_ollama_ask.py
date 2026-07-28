@@ -32,6 +32,8 @@ FAKE_MODELS = [
 ]
 CANNED_TEXT = "feat: add upload retry loop"
 CANNED_JSON = '{"command": "ls -la", "explanation": "lists files", "caution": "none"}'
+CANNED_PR_JSON = ('{"title": "feat: add retry logic", '
+                  '"body": "- adds a retry loop to uploads"}')
 SUGGESTION_TEXT = (
     "SUGGESTION\n<<<<<<< SEARCH\nimport os\n=======\n\n>>>>>>> REPLACE\n"
     "WHY: the import is unused\n"
@@ -108,6 +110,10 @@ class FakeOllamaHandler(BaseHTTPRequestHandler):
                 text = "not json at all"
             else:
                 text = CANNED_JSON
+        elif "INVALID_JSON_PLEASE" in prompt:
+            text = "this is not json at all"
+        elif "pull request descriptions" in prompt:
+            text = CANNED_PR_JSON
         elif payload.get("format") == "json":
             text = CANNED_JSON
         else:
@@ -722,6 +728,40 @@ class OllamaAskTests(unittest.TestCase):
             capture_output=True, text=True)
         return int(result.stdout.strip()) if result.returncode == 0 else 0
 
+    def _make_pr_repo(self, url="https://github.com/example/repo.git",
+                      upstream=True):
+        """Local repo with a fake origin, a main base, and a feature branch.
+        No network: the remote URL is never fetched; upstream is wired with
+        update-ref + branch config, exactly what @{u} resolution needs."""
+        work = Path(self._tmp) / "prrepo"
+        work.mkdir()
+
+        def g(*a):
+            subprocess.run(["git", *a], cwd=work, check=True,
+                           capture_output=True, text=True)
+
+        g("init", "-q")
+        g("config", "user.email", "t@example.com")
+        g("config", "user.name", "T")
+        (work / "one.txt").write_text("one\n", encoding="utf-8")
+        g("add", ".")
+        g("commit", "-q", "-m", "chore: seed")
+        g("branch", "-m", "main")
+        g("update-ref", "refs/remotes/origin/main", "HEAD")
+        g("symbolic-ref", "refs/remotes/origin/HEAD",
+          "refs/remotes/origin/main")
+        g("checkout", "-q", "-b", "feature")
+        (work / "two.txt").write_text("SECRET_FILE_CONTENT\n", encoding="utf-8")
+        g("add", ".")
+        g("commit", "-q", "-m", "feat: add two")
+        g("remote", "add", "origin", url)
+        if upstream:
+            g("update-ref", "refs/remotes/origin/feature", "HEAD")
+            g("config", "branch.feature.remote", "origin")
+            g("config", "branch.feature.merge", "refs/heads/feature")
+        os.chdir(work)
+        return work
+
     def test_commit_push_non_protected_branch_succeeds(self):
         work, bare = self._make_push_repo()
         subprocess.run(["git", "branch", "-m", "work"], cwd=work, check=True)
@@ -870,6 +910,43 @@ class OllamaAskTests(unittest.TestCase):
             body = (ROOT / rel).read_text(encoding="utf-8")
             for needle in needles:
                 self.assertIn(needle, body, msg=f"{needle!r} missing from {rel}")
+
+    # -- pr-desc --------------------------------------------------------------
+
+    def test_pr_desc_returns_valid_json(self):
+        self._make_pr_repo()
+        code, out, err = self.run_cli("pr-desc")
+        self.assertEqual(code, 0, msg=err)
+        data = json.loads(out)
+        self.assertEqual(data["title"], "feat: add retry logic")
+        self.assertTrue(data["body"])
+
+    def test_pr_desc_prompt_has_no_patch_content(self):
+        self._make_pr_repo()
+        FakeOllamaHandler.prompts = []
+        code, out, err = self.run_cli("pr-desc")
+        self.assertEqual(code, 0, msg=err)
+        sent = "\n".join(FakeOllamaHandler.prompts)
+        self.assertIn("feat: add two", sent)            # subjects reach the model
+        self.assertNotIn("SECRET_FILE_CONTENT", sent)   # file bodies never do
+        self.assertNotIn("+++", sent)
+        self.assertNotIn("@@", sent)
+
+    def test_pr_desc_empty_range_exits_2(self):
+        work = self._make_pr_repo()
+        subprocess.run(["git", "checkout", "-q", "main"], cwd=work, check=True)
+        code, out, err = self.run_cli("pr-desc")
+        self.assertEqual(code, 2, msg=err)
+        self.assertIn("No commits", err)
+
+    def test_pr_desc_invalid_twice_exits_6(self):
+        work = self._make_pr_repo()
+        (work / "three.txt").write_text("three\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=work, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "INVALID_JSON_PLEASE"],
+                       cwd=work, check=True)
+        code, out, err = self.run_cli("pr-desc")
+        self.assertEqual(code, 6, msg=err)
 
 
 if __name__ == "__main__":
