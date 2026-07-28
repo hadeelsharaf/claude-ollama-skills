@@ -52,7 +52,7 @@ Order: `--model` flag → `OLLAMA_SKILLS_MODEL_<TASK>` env → `OLLAMA_SKILLS_MO
 |---|---|---|
 | 2 | bad usage or input over budget | shrink input, or raise `max_input_chars`, or `--force` |
 | 3 | Ollama not reachable | ask the user to start Ollama (`ollama serve`), then fallback rule |
-| 4 | model not installed | suggest `ollama pull <model>`, then fallback rule |
+| 4 | model not installed, or none that fits free RAM | read the script's error: pull a model, free memory, or pin a smaller one with --model; then fallback rule |
 | 5 | stall/timeout | one `warmup` + one retry max, then fallback rule |
 | 6 | output failed validation | do the task yourself (fallback rule) |
 | other (e.g. 1) | unexpected error | do the task yourself (fallback rule) |

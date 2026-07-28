@@ -119,7 +119,7 @@ building and testing this project:
 - `qwen2.5-coder:1.5b` — coder pick: commit messages, shell drafts, small code
 - `gemma2:2b` — general + summarize pick (the one small model that satisfies
   every task's preference list by itself)
-- `devstral-small-2:latest` — 15 GB; auto-detect **skips it on this machine**
+- `devstral-small-2:latest` — 15.2 GB; auto-detect **skips it on this machine**
   (bigger than free RAM — the `models` command shows the skip and why). On a
   machine where it fits, it is auto-picked for code tasks.
 
@@ -145,9 +145,11 @@ and is split across CPU/GPU (see its row below).
 | `summarize` (single-shot, ~3k chars) | — | 8.0–8.3 s |
 | `devstral-small-2:latest` (15.2 GB) | slow but works, with cold-stall risk (64–68 s cold, 5.2 s warm; one cold attempt stalled > 120 s) | |
 
-That last row is why the input budget defaults to 2,500 chars and why `commit-msg`
-sends a compact diff summary instead of full hunks. GPU owners can raise budgets in
-config ([docs/ADVANCED.md](docs/ADVANCED.md) §6 has per-hardware advice).
+The 2,500-char input budget, and `commit-msg` sending a compact diff summary instead
+of full hunks, both trace back to the original CPU-only prefill measurements in
+[docs/DESIGN.md](docs/DESIGN.md) §3 (~7 tok/s prefill on a ~2,758-token prompt) — not
+to the devstral row above. GPU owners can raise budgets in config
+([docs/ADVANCED.md](docs/ADVANCED.md) §6 has per-hardware advice).
 
 ## Configuration
 
@@ -171,7 +173,7 @@ auto-detect from installed models.
 | `tasks.<task>.num_ctx` | per task | context window size; only `summarize` sets one by default (2048) |
 
 Exit codes: `0` ok · `2` bad usage / over budget · `3` Ollama unreachable ·
-`4` model missing · `5` stall/timeout · `6` output failed validation ·
+`4` model missing / none fits free RAM · `5` stall/timeout · `6` output failed validation ·
 `7` protected branch refused · `8` git command failed.
 Skills use these to fall back: **if the local model fails, Claude does the task
 itself and says so** — a failed delegation never blocks work.

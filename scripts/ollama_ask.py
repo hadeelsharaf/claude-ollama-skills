@@ -1149,6 +1149,9 @@ def cmd_summarize(args, cfg: dict) -> int:
     final_tmpl = FINAL_PROMPT if args.verdict else FINAL_PROMPT_NO_VERDICT
     final_system = final_tmpl.format(kind=kind_words, max_tokens=final_cap)
 
+    cache: dict = {}
+    args.model, _ = resolve_model("summarize", cfg, args.model, cache)
+
     if len(body) <= args.chunk_chars:
         digest = generate("summarize", body, args, cfg, system=final_system).strip()
         if not digest:

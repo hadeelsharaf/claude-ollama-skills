@@ -44,6 +44,8 @@ class FakeOllamaHandler(BaseHTTPRequestHandler):
     last_payload: dict = {}
     generate_calls: int = 0
     prompts: list = []
+    models_seen: list = []
+    tags_calls: int = 0
     models_response: list = FAKE_MODELS
 
     def log_message(self, *args):  # silence
@@ -59,6 +61,7 @@ class FakeOllamaHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/api/tags":
+            FakeOllamaHandler.tags_calls += 1
             self._send_json(200, {"models": FakeOllamaHandler.models_response})
         elif self.path == "/api/version":
             self._send_json(200, {"version": "0.0-test"})
@@ -72,6 +75,7 @@ class FakeOllamaHandler(BaseHTTPRequestHandler):
         if self.path == "/api/generate":
             FakeOllamaHandler.generate_calls += 1
             FakeOllamaHandler.prompts.append(payload.get("prompt", ""))
+            FakeOllamaHandler.models_seen.append(payload.get("model", ""))
         if self.path != "/api/generate":
             self._send_json(404, {"error": "unknown path"})
             return
@@ -191,6 +195,8 @@ class OllamaAskTests(unittest.TestCase):
     def run_stdin(self, text: str, *argv: str) -> tuple[int, str, str]:
         FakeOllamaHandler.generate_calls = 0
         FakeOllamaHandler.prompts = []
+        FakeOllamaHandler.models_seen = []
+        FakeOllamaHandler.tags_calls = 0
         saved = sys.stdin
         sys.stdin = io.StringIO(text)
         try:
@@ -557,6 +563,34 @@ class OllamaAskTests(unittest.TestCase):
         code, out, err = self.run_stdin(big, "summarize", "--kind", "events", "--no-dedupe")
         self.assertEqual(code, 0, msg=err)
         self.assertGreater(FakeOllamaHandler.generate_calls, 1)  # map + reduce
+
+    def test_summarize_pins_model_once_for_whole_map_reduce_run(self):
+        """Model resolution must happen once per summarize run, not once per
+        generate() call. Regression: free RAM sampled fresh on every chunk
+        meant a mid-run drop (e.g. the picked model loading) could gate out
+        every candidate at chunk K and abort the whole run with exit 4,
+        losing the K-1 completed chunk digests. cmd_summarize now resolves
+        and pins the model before the map loop, so later chunks reuse the
+        pin instead of re-sampling free RAM."""
+        calls = {"n": 0}
+
+        def flaky_free_ram():
+            # Plenty of free RAM for the first (and, post-fix, only)
+            # resolution; a crash to 0 thereafter would gate out every
+            # installed model if resolve_model were re-entered per chunk.
+            calls["n"] += 1
+            return 8_000_000_000 if calls["n"] == 1 else 0
+
+        ollama_ask.free_ram_bytes = flaky_free_ram
+
+        big = "\n".join(f"event number {i} happened on host node-{i}" for i in range(400))
+        code, out, err = self.run_stdin(big, "summarize", "--kind", "events", "--no-dedupe")
+
+        self.assertEqual(code, 0, msg=err)  # would be 4 if re-gated mid-run
+        self.assertGreater(FakeOllamaHandler.generate_calls, 1)  # map + reduce ran
+        self.assertEqual(len(set(FakeOllamaHandler.models_seen)), 1)  # one model, pinned
+        self.assertLessEqual(FakeOllamaHandler.tags_calls, 1)  # resolved at most once
+        self.assertEqual(calls["n"], 1)  # free RAM sampled exactly once for the run
 
     def test_summarize_dedupe_collapses_repeats(self):
         repeated = "\n".join("ERROR connection refused to db" for _ in range(500))

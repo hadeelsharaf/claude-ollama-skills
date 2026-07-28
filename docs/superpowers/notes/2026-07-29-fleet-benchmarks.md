@@ -387,6 +387,7 @@ zero `none` rows, one skip line for devstral. Free RAM on this machine is 6.7 GB
 - f17c1c4 task5: draft replaced (mislabeled multifile change as fix: instead of docs:)
 - 0d3d5bb task5b: draft replaced (exit 0, valid format, but typed a docs-only hardware-claim correction "fix(README.md):" instead of "docs:", and scoped it to a filename)
 - 5116f86 task6: draft replaced (exit 0, valid format, but typed a docs-only DESIGN/CHANGELOG append "fix(CHANGELOG.md):" instead of "docs:", and scoped it to a filename)
+- 3a6bd62 task7: draft replaced (exit 0, valid format, but typed a docs-only verification-notes append "fix: update fleet benchmarks notes" instead of "docs:") — **this line is intentionally left uncommitted in the working tree; it documents the commit that carries it, so it cannot be part of that same commit. The convention of a committed tally-per-commit ends here for that reason, not because the loop stopped.**
 
 ## Final verification (Task 7)
 

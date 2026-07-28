@@ -31,7 +31,7 @@ Wins we aim for:
 
 ## 3. Measured facts (development machine)
 
-Machine: Windows 11, 16 GB RAM (~6 GB free), **no GPU**, Ollama 0.32.1 — measured 2026-07-18; kept as the record behind D3/D10/D12.
+Machine: Windows 11, 16 GB RAM (~6 GB free), **no GPU**, Ollama 0.32.1 — measured 2026-07-18; the "no GPU" label was later found to be wrong (the machine has an NVIDIA RTX 4050 Laptop GPU — those 2026-07-18 runs were nonetheless CPU-bound; see §3.1 for GPU-accelerated measurements). Kept as the record behind D3/D10/D12.
 
 | Test | Result |
 |---|---|
@@ -262,7 +262,7 @@ because research shows explicit routing rules are what make delegation actually 
 | D13 | Budgets: 3,000-char chunks, 80-token map cap, 200-token reduce cap, `num_ctx` 2048, 100,000-char ceiling | fresh llama3.2:1b calibration (a 3,759-char chunk = 24.4 s); fits `num_ctx` 2048 with headroom; bounded worst case (~12 min) with visible per-chunk progress and drop markers |
 | D14 | New skills are read-free, mutate-gated, destructive-and-cluster-scoped-denied | small models must not self-certify safety; Claude is the gate and the permission prompt is the second gate; k8s adds a context+namespace echo and a clean no-context stop |
 | D15 | k8s tested with fixtures + fake-server units + RED→GREEN probes in CI; kind e2e opt-in only | the script never calls kubectl (kubectl output is INPUT to summarize); the no-context stop is the dev machine's default state; a mandatory cluster breaks CI and blows the RAM ceiling |
-| D16 | Auto-detect skips models larger than free RAM; flag/env/config picks bypass the gate; the gate stands down when sizes or free RAM are unknown. The size>free test is a deliberately lenient proxy (no KV-cache estimate) — same basis as the `health` warning | devstral-small-2 (15.2 GB) matched the code list on a ~7.5 GB-free machine and would burn up to 480 s before exit 5; `health` warned but resolution was blind (2026-07-28) |
+| D16 | Auto-detect skips models larger than free RAM; flag/env/config picks bypass the gate; the gate stands down when sizes or free RAM are unknown. The size>free test is a deliberately lenient proxy (no KV-cache estimate) — same basis as the `health` warning. Known limitation: free RAM is volatile within a run — a warm resident model can be gated out when free RAM is low, and the auto-pick can differ between calls; commands that call generate() repeatedly should resolve once and pin (summarize does). | devstral-small-2 (15.2 GB) matched the code list on a ~7.5 GB-free machine and would burn up to 480 s before exit 5; `health` warned but resolution was blind (2026-07-28) |
 
 ## 11. Out of scope (v0.1)
 
