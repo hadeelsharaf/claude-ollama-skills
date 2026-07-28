@@ -178,6 +178,27 @@ models** each task exercises. Executors are dispatched with that tier explicitly
 subagents never inherit the session's default model (user standing instruction,
 2026-07-29).
 
+### 8.1 Pre-flight step — untrack `docs/superpowers/` (user instruction, 2026-07-29; assigned to the local model)
+
+Before implementation tasks start, stop tracking the superpowers planning folders,
+matching the repo's existing convention (`docs/PLAN.md`, `wayfinder/` — untracked,
+kept on disk):
+
+1. Check `.gitignore`; add `docs/superpowers/` only if not already present (it is
+   not, as of `01a81eb` — `.superpowers/` is ignored, `docs/superpowers/` is not).
+2. Untrack without deleting: `git rm -r --cached docs/superpowers` — files stay on
+   disk and in history; they just stop shipping from the next commit on.
+3. Record the policy where the final review asked for it: one line in CLAUDE.md next
+   to the existing `docs/PLAN*.md` local-only note.
+4. Commit via the dogfood loop.
+
+**Local-model assignment:** this chore is executed through the plugin itself as a
+live test — the shell commands are drafted by `draft-command` (the `shell` task →
+`qwen2.5-coder:1.5b`) and reviewed against the `ollama-shell` skill's rules (scope
+check: touches only `.gitignore` + the git index, deletes nothing on disk) before
+running; the commit message comes from `commit-msg` as usual. The executor tier for
+this task in the plan is haiku.
+
 ## 9. Queued sub-projects (not this spec)
 
 - **A — Publish 0.3.0 publicly:** version bump + `ollama-skills--v*` tags
@@ -199,3 +220,6 @@ subagents never inherit the session's default model (user standing instruction,
    `creating draft PR: … -> …`.
 4. Grep gate: `--draft` appears in the fixed argv construction and
    `test_pr_skill_safety_wording_present` passes.
+5. Untracking check (§8.1): `git ls-files docs/superpowers` returns nothing,
+   `.gitignore` contains `docs/superpowers/`, and the spec/plan/notes files still
+   exist on disk.
