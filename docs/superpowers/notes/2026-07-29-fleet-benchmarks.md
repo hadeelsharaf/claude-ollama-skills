@@ -14,3 +14,5 @@ Raw data for the doc refresh (plan Task 5) and the dogfood evidence (spec §10.7
 ## Quality-gate verdicts
 
 ## Dogfood tally
+
+- 7eb0c29 task0: draft replaced (model failed exit code 6)

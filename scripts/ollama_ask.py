@@ -64,15 +64,21 @@ TASK_DEFAULTS = {
 # First installed model whose name starts with a prefix wins (top first).
 # Code prefers coder-specialized models, then falls back to curated general
 # models — never to an arbitrary installed model (embedding models must lose).
+# gemma2 rides directly after gemma3 everywhere: same family, same role.
 PREFERENCES = {
     "code": ["qwen3-coder", "qwen2.5-coder", "devstral", "deepseek-coder",
-             "codegemma", "qwen3", "llama3.1", "gemma3", "llama3.2", "mistral"],
-    "commit": ["qwen2.5-coder", "llama3.1", "llama3.2", "qwen3", "gemma3"],
-    "shell": ["qwen3", "llama3.1", "llama3.2", "qwen2.5"],
-    "general": ["qwen3", "llama3.1", "gemma3", "llama3.2", "mistral"],
+             "codegemma", "qwen3", "llama3.1", "gemma3", "gemma2", "llama3.2",
+             "mistral"],
+    "commit": ["qwen2.5-coder", "llama3.1", "llama3.2", "qwen3", "gemma3",
+               "gemma2"],
+    "shell": ["qwen3", "llama3.1", "llama3.2", "qwen2.5", "gemma3", "gemma2"],
+    # general wants an instruct model; the coder is a floor, not a preference.
+    "general": ["qwen3", "llama3.1", "gemma3", "gemma2", "llama3.2", "mistral",
+                "qwen2.5-coder"],
     # summarize runs many times per digest (map + reduce), so a fast model must
     # auto-win; qwen3 sits LAST -> the slow qwen3:8b is a last resort (prefer --model).
-    "summarize": ["llama3.2", "gemma3", "qwen2.5", "llama3.1", "mistral", "qwen3"],
+    "summarize": ["llama3.2", "gemma3", "gemma2", "qwen2.5", "llama3.1",
+                  "mistral", "qwen3"],
 }
 
 RUNTIME_DEFAULTS = {
@@ -214,7 +220,7 @@ def resolve_model(task: str, cfg: dict, flag_model, installed_cache: dict):
                 return name, "auto"
     if not names:
         raise CliError(EXIT_NO_MODEL,
-                       "No Ollama models installed. Try: ollama pull llama3.2:1b")
+                       "No Ollama models installed. Try: ollama pull gemma2:2b")
     wanted = ", ".join(PREFERENCES.get(task, []))
     raise CliError(
         EXIT_NO_MODEL,
@@ -497,7 +503,7 @@ def cmd_health(args, cfg: dict) -> int:
         return EXIT_OK
     print(f"Ollama {version} at {cfg['host']} — OK")
     if not models:
-        print("No models installed. Try: ollama pull llama3.2:1b")
+        print("No models installed. Try: ollama pull gemma2:2b")
         return EXIT_OK
     print(f"Installed models ({len(models)}):")
     for model in models:

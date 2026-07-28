@@ -250,6 +250,28 @@ class OllamaAskTests(unittest.TestCase):
             "summarize", cfg, None, {"models": ["qwen3:8b"]})
         self.assertEqual(model, "qwen3:8b")
 
+    def test_resolve_model_general_matches_gemma2(self):
+        """Regression: a coder+gemma2 fleet must not dead-end 'general'
+        (it did before gemma2 joined PREFERENCES), and a coder-only fleet
+        must still resolve via the qwen2.5-coder floor."""
+        cfg = {"tasks": {}, "host": os.environ["OLLAMA_HOST"]}
+        model, source = ollama_ask.resolve_model(
+            "general", cfg, None,
+            {"models": ["qwen2.5-coder:1.5b", "gemma2:2b"]})
+        self.assertEqual(model, "gemma2:2b")
+        self.assertEqual(source, "auto")
+        model, _ = ollama_ask.resolve_model(
+            "general", cfg, None, {"models": ["qwen2.5-coder:1.5b"]})
+        self.assertEqual(model, "qwen2.5-coder:1.5b")
+
+    def test_resolve_model_summarize_prefers_gemma2_over_coder(self):
+        """summarize digests logs; the general model must beat the coder."""
+        cfg = {"tasks": {}, "host": os.environ["OLLAMA_HOST"]}
+        model, _ = ollama_ask.resolve_model(
+            "summarize", cfg, None,
+            {"models": ["qwen2.5-coder:1.5b", "gemma2:2b"]})
+        self.assertEqual(model, "gemma2:2b")
+
     # -- ask ----------------------------------------------------------------
 
     def test_ask_returns_text_and_exit_0(self):
