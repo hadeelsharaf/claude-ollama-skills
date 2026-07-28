@@ -63,6 +63,9 @@ warmed gemma2:2b in 6.2s (keep_alive 30m)
 Free RAM at the qwen cold load: 7.3 GB. Both are GPU loads (`100% GPU` in `ollama ps`
 immediately afterwards).
 
+**Caveat for Task 5 — quote 6.4s / 6.2s as the cold load, never an `E2E warmup` line.** The
+in-suite warmup numbers are noisy for the reason below and are not cold loads.
+
 Cold-load caveat for Task 5: the `E2E warmup` step inside each suite run below is **not** a
 cold load — the model is already resident from this step, and the numbers there (3.2–7.0s)
 are dominated by Ollama re-loading the model when the requested context size differs from
@@ -188,6 +191,11 @@ Raw results — **the outcome is not deterministic**, so all five attempts are r
 | 4 | cold (`ollama stop` first) | 0 (answered `OK`) | 64.1s | 77%/23% CPU/GPU |
 | 5 | cold (`ollama stop` first) | 0 (answered `OK`) | 67.7s | 77%/23% CPU/GPU |
 
+Attempt 1's wall time was lost to a missing timer utility, so **attempt 1 is qualitative
+only** — it establishes "answered `OK` from cold, comfortably inside the 120 s guard" and
+nothing more. Task 5 must take its cold latency figure from attempts 4 and 5 (64.1s / 67.7s),
+never from attempt 1.
+
 Verbatim failure line from attempt 3:
 
 ```
@@ -217,10 +225,25 @@ auto-select a model larger than free RAM because ~65 s per call (and a real chan
 120 s stall) is the wrong default for an interactive skill; `--model devstral-small-2:latest`
 remains the informed override for a user who accepts that cost, and it works.
 
-Second-order evidence that the gate is right: with devstral resident, `health` reported
-**Free RAM: 0.4 GB** — the machine is starved and the *small* models then also trip the
-oversize warning. After `ollama stop devstral-small-2:latest`, free RAM recovered to
-**11.5 GB**. Note that even at 11.5 GB free, devstral (15.2 GB) is still correctly gated.
+Second-order evidence that the gate is right — verbatim `python scripts/ollama_ask.py health`
+captured in the same command as cold attempt 5, with devstral still resident:
+
+```
+Ollama 0.32.4 at http://localhost:11434 — OK
+Installed models (3):
+  qwen2.5-coder:1.5b       1.0 GB   WARNING: bigger than free RAM (0.4 GB) — will be slow or fail
+  gemma2:2b                1.6 GB   WARNING: bigger than free RAM (0.4 GB) — will be slow or fail
+  devstral-small-2:latest  15.2 GB   WARNING: bigger than free RAM (0.4 GB) — will be slow or fail
+Free RAM: 0.4 GB
+```
+
+So holding devstral resident starves the machine to **0.4 GB free**, and at that point all
+three models — including the 1.0 GB and 1.6 GB small ones — trip the oversize warning. That
+is observed output above, not an inference from the size>free rule.
+
+After `ollama stop devstral-small-2:latest`, `health` reported **Free RAM: 11.5 GB** and the
+two small models no longer warn; devstral alone still does, and is still correctly gated
+(15.2 GB > 11.5 GB free).
 
 ## Quality-gate verdicts
 
@@ -333,3 +356,4 @@ zero `none` rows, one skip line for devstral. Free RAM on this machine is 6.7 GB
 - 786e72f task1: draft edited (model focused only on docs, needed to highlight preferences + tests)
 - 7a87635 task2: draft replaced (model-failed, exit 6: no valid Conventional Commit line)
 - b45d274 task3: draft edited (model scoped it "docs" and omitted the RAM-gate feature entirely)
+- 04e70bd task4: draft replaced (exit 0, valid format, but typed a docs-only change "fix:" and understated the scope as "GPU usage")
