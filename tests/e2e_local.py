@@ -79,6 +79,29 @@ def main() -> int:
     finally:
         rmtree_force(tmp)
 
+    docs_tmp = tempfile.mkdtemp(prefix="ollama_e2e_docs_")
+    try:
+        docs_repo = Path(docs_tmp) / "repo"
+        docs_repo.mkdir()
+        subprocess.run(["git", "init", "-q"], cwd=docs_repo, check=True, capture_output=True)
+        (docs_repo / "README.md").write_text(
+            "# Sample project\n\nThis is a small sample project used for e2e testing.\n",
+            encoding="utf-8",
+        )
+        (docs_repo / "docs").mkdir()
+        (docs_repo / "docs" / "note.md").write_text(
+            "# Note\n\nSome documentation notes about how this works.\n",
+            encoding="utf-8",
+        )
+        subprocess.run(["git", "add", "."], cwd=docs_repo, check=True)
+        out = run_step("commit-msg-docs", ["commit-msg"], cwd=docs_repo)
+        if not out.strip().startswith("docs:"):
+            print(f"E2E commit-msg-docs FAILED: expected a docs: draft, got {out.strip()!r}")
+            sys.exit(1)
+        print(f"  commit-msg-docs said: {out!r}")
+    finally:
+        rmtree_force(docs_tmp)
+
     out = run_step("draft-command", ["draft-command", "show the five newest files in this folder"])
     print(f"  draft-command said: {out[:100]!r}...")
 

@@ -5,6 +5,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ## [Unreleased]
 
+### Added
+
+- Commit drafts get deterministic context: the staged file mix is classified
+  (docs / tests / CI / config) into the prompt with a suggested type, excerpts
+  are demoted to reference-only, and wrong-type or filename-scoped drafts are
+  rejected with corrective feedback before Claude reviews them.
+
 ## [0.3.0] - 2026-07-29
 
 ### Added
