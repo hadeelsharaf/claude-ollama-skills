@@ -18,6 +18,7 @@ Subcommands:
   fix-lint       Lint error + code window -> SEARCH/REPLACE suggestion (never applies).
   pr-create      Create a draft PR/MR via gh/glab with a reviewed title/body (gated).
   pr-desc        Branch commits vs base -> JSON {title, body} for a PR (local).
+  stats          Show recorded local usage and estimated cloud-token savings.
   summarize      Log/events/describe/git text -> short digest (map-reduce, local).
 
 Exit codes: 0 ok · 2 bad usage/over budget · 3 Ollama unreachable ·
@@ -42,7 +43,7 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 EXIT_OK = 0
@@ -613,6 +614,106 @@ def _flush_usage(cfg: dict, code: int) -> None:
             _ensure_excluded(repo_root)
     except (OSError, TypeError, ValueError) as exc:
         debug(f"usage ledger skipped: {exc}")
+
+
+STATS_FOOTER = (
+    "Local token counts are real (reported by Ollama). Cloud figures are chars/4\n"
+    'estimates; "avoided" is a counterfactual and review overhead is not counted.'
+)
+
+
+def cmd_stats(args, cfg: dict) -> int:
+    path, _root = _usage_path(cfg)
+    if not path.is_file():
+        print("No usage recorded yet.")
+        return EXIT_OK
+    cutoff = None
+    if args.since is not None:
+        if args.since <= 0:
+            raise CliError(EXIT_USAGE, "--since must be a positive number of days")
+        cutoff = datetime.now(timezone.utc) - timedelta(days=args.since)
+    records, skipped = [], 0
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            rec = json.loads(line)
+            if not isinstance(rec, dict):
+                raise ValueError("not an object")
+        except (json.JSONDecodeError, ValueError):
+            skipped += 1
+            continue
+        if cutoff is not None:
+            try:
+                ts = datetime.fromisoformat(str(rec.get("ts", "")))
+            except ValueError:
+                skipped += 1
+                continue
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+            if ts < cutoff:
+                continue
+        records.append(rec)
+
+    per_cmd: dict = {}
+    for rec in records:
+        row = per_cmd.setdefault(str(rec.get("cmd")), {
+            "calls": 0, "delivered": 0, "local_tokens": 0,
+            "avoided_chars": 0, "returned_chars": 0})
+        row["calls"] += 1
+        row["local_tokens"] += (int(rec.get("prompt_tokens") or 0)
+                                + int(rec.get("output_tokens") or 0))
+        if rec.get("delivered"):
+            row["delivered"] += 1
+            row["avoided_chars"] += int(rec.get("avoided_chars") or 0)
+            row["returned_chars"] += int(rec.get("returned_chars") or 0)
+
+    def finish(row: dict) -> dict:
+        est_avoided = row["avoided_chars"] // 4
+        est_returned = row["returned_chars"] // 4
+        return {**row, "est_avoided_tokens": est_avoided,
+                "est_returned_tokens": est_returned,
+                "net_est_saved_tokens": est_avoided - est_returned}
+
+    per_cmd = {cmd: finish(row) for cmd, row in sorted(per_cmd.items())}
+    total = {"calls": 0, "delivered": 0, "local_tokens": 0,
+             "avoided_chars": 0, "returned_chars": 0}
+    for row in per_cmd.values():
+        for key in total:
+            total[key] += row[key]
+    total = finish(total)
+
+    if args.json:
+        print(json.dumps({"path": str(path), "skipped_lines": skipped,
+                          "per_cmd": per_cmd, "total": total}, indent=2))
+    else:
+        headers = ["cmd", "calls", "delivered", "local tokens",
+                   "est. avoided", "est. returned", "net est. saved"]
+        body = [[cmd, row["calls"], row["delivered"], f"{row['local_tokens']:,}",
+                 f"~{row['est_avoided_tokens']:,}",
+                 f"~{row['est_returned_tokens']:,}",
+                 f"~{row['net_est_saved_tokens']:,}"]
+                for cmd, row in per_cmd.items()]
+        body.append(["TOTAL", total["calls"], total["delivered"],
+                     f"{total['local_tokens']:,}",
+                     f"~{total['est_avoided_tokens']:,}",
+                     f"~{total['est_returned_tokens']:,}",
+                     f"~{total['net_est_saved_tokens']:,}"])
+        widths = [max(len(str(row[i])) for row in [headers] + body)
+                  for i in range(len(headers))]
+        print("  ".join(str(h).ljust(widths[i]) for i, h in enumerate(headers)))
+        for row in body:
+            print("  ".join(str(c).ljust(widths[i]) for i, c in enumerate(row)))
+        if skipped:
+            print(f"({skipped} malformed line(s) skipped)")
+        print()
+        print(STATS_FOOTER)
+
+    if args.reset:
+        backup = str(path) + ".bak"
+        os.replace(path, backup)
+        print(f"Ledger reset; previous data in {backup}")
+    return EXIT_OK
 
 
 # --------------------------------------------------------------------------
@@ -1660,6 +1761,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_models = sub.add_parser("models", parents=[common], help="show model per task")
     p_models.add_argument("--json", action="store_true")
 
+    p_stats = sub.add_parser("stats", parents=[common],
+                             help="show recorded local usage and estimated savings")
+    p_stats.add_argument("--json", action="store_true")
+    p_stats.add_argument("--since", type=float, metavar="DAYS",
+                         help="only count records from the last DAYS days")
+    p_stats.add_argument("--reset", action="store_true",
+                         help="rename the ledger to .bak after printing")
+
     p_warm = sub.add_parser("warmup", parents=[common], help="load a model now")
     p_warm.add_argument("--task", choices=TASKS, default="general",
                         help="task profile for model choice and budgets")
@@ -1758,6 +1867,7 @@ def build_parser() -> argparse.ArgumentParser:
 HANDLERS = {
     "health": cmd_health,
     "models": cmd_models,
+    "stats": cmd_stats,
     "warmup": cmd_warmup,
     "ask": cmd_ask,
     "commit-msg": cmd_commit_msg,

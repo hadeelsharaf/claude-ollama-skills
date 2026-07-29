@@ -1446,6 +1446,87 @@ class OllamaAskTests(unittest.TestCase):
         self.assertEqual(code, 8, msg=err)
         self.assertIn("timed out", err.lower())
 
+    # -- stats ---------------------------------------------------------------
+
+    def _write_stats_fixture(self) -> Path:
+        """Ledger fixture + cwd config pointing usage_log_path at it."""
+        os.chdir(self._tmp)
+        path = Path(self._tmp) / "fixture-usage.jsonl"
+        now = ollama_ask.datetime.now(ollama_ask.timezone.utc)
+        recent = now.isoformat(timespec="seconds")
+        old = (now - ollama_ask.timedelta(days=30)).isoformat(timespec="seconds")
+        rows = [
+            {"v": 1, "ts": recent, "cmd": "commit-msg", "task": "commit",
+             "model": "m", "prompt_tokens": 400, "output_tokens": 20,
+             "duration_s": 2.0, "returned_chars": 40, "avoided_chars": 8000,
+             "delivered": True},
+            {"v": 1, "ts": recent, "cmd": "commit-msg", "task": "commit",
+             "model": "m", "prompt_tokens": 400, "output_tokens": 20,
+             "duration_s": 2.0, "returned_chars": 40, "avoided_chars": 0,
+             "delivered": False},
+            {"v": 1, "ts": old, "cmd": "summarize", "task": "summarize",
+             "model": "m", "prompt_tokens": 900, "output_tokens": 100,
+             "duration_s": 5.0, "returned_chars": 400, "avoided_chars": 20000,
+             "delivered": True},
+        ]
+        with open(path, "w", encoding="utf-8") as fh:
+            for row in rows:
+                fh.write(json.dumps(row) + "\n")
+            fh.write("not json at all\n")
+        (Path(self._tmp) / ".ollama-skills.json").write_text(
+            json.dumps({"usage_log_path": str(path)}), encoding="utf-8")
+        return path
+
+    def test_stats_table_totals_and_footer(self):
+        self._write_stats_fixture()
+        code, out, err = self.run_cli("stats")
+        self.assertEqual(code, 0, msg=err)
+        self.assertIn("commit-msg", out)
+        self.assertIn("TOTAL", out)
+        self.assertIn("1 malformed line(s) skipped", out)
+        self.assertIn('"avoided" is a counterfactual', out)
+        self.assertIn("review overhead is not counted", out)
+
+    def test_stats_json_math(self):
+        self._write_stats_fixture()
+        code, out, err = self.run_cli("stats", "--json")
+        self.assertEqual(code, 0, msg=err)
+        data = json.loads(out)
+        self.assertEqual(data["skipped_lines"], 1)
+        cm = data["per_cmd"]["commit-msg"]
+        self.assertEqual(cm["calls"], 2)
+        self.assertEqual(cm["delivered"], 1)
+        self.assertEqual(cm["local_tokens"], 840)          # all calls, real counts
+        self.assertEqual(cm["est_avoided_tokens"], 2000)   # 8000 // 4, delivered only
+        self.assertEqual(cm["est_returned_tokens"], 10)    # 40 // 4, delivered only
+        self.assertEqual(cm["net_est_saved_tokens"], 1990)
+        self.assertEqual(data["total"]["calls"], 3)
+        self.assertEqual(data["total"]["local_tokens"], 1840)
+
+    def test_stats_since_filters_old_records(self):
+        self._write_stats_fixture()
+        code, out, err = self.run_cli("stats", "--json", "--since", "7")
+        self.assertEqual(code, 0, msg=err)
+        data = json.loads(out)
+        self.assertNotIn("summarize", data["per_cmd"])   # 30 days old
+        self.assertEqual(data["total"]["calls"], 2)
+
+    def test_stats_reset_renames_ledger(self):
+        path = self._write_stats_fixture()
+        code, out, err = self.run_cli("stats", "--reset")
+        self.assertEqual(code, 0, msg=err)
+        self.assertIn("Ledger reset", out)
+        self.assertFalse(path.exists())
+        self.assertTrue(Path(str(path) + ".bak").is_file())
+        code, out, _ = self.run_cli("stats")
+        self.assertIn("No usage recorded yet", out)
+
+    def test_stats_missing_ledger_friendly(self):
+        os.chdir(self._tmp)   # no repo, no config; HOME ledger absent
+        code, out, err = self.run_cli("stats")
+        self.assertEqual(code, 0, msg=err)
+        self.assertIn("No usage recorded yet", out)
+
     def test_pr_skill_safety_wording_present(self):
         # A silent reword dropping draft-by-default or the deny-list would
         # defeat ollama-pr's safety story - pin the load-bearing wording as
