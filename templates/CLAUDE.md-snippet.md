@@ -17,6 +17,8 @@ Delegate to the local Ollama model when the task is SMALL and MECHANICAL:
   → use the ollama-shell skill, or the ollama-ops agent for batches.
 - Small self-contained code (one function, one small file, boilerplate, a test)
   → use the ollama-code skill, or the ollama-coder agent in the background.
+- Opening a PR/MR for the current branch → use the ollama-pr skill (drafted
+  description, draft PR by default).
 - Other small private text work → use the ollama-ask skill.
 
 Do NOT delegate: multi-file changes, debugging, design decisions, security-relevant

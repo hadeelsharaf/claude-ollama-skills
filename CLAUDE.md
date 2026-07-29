@@ -47,7 +47,7 @@ Three layers, coupled by an **exit-code contract** rather than by imports:
    (`POST /api/generate`, `stream: true`, `think: false`); the socket read timeout *is* the
    stall detector. Task profiles (`TASK_DEFAULTS` for `commit|shell|code|general|summarize`)
    set max tokens, temperature, and `num_ctx`.
-2. **`skills/*/SKILL.md`** — eight skills. Each is a prompt contract telling Claude which
+2. **`skills/*/SKILL.md`** — nine skills. Each is a prompt contract telling Claude which
    subcommand to run, how to review the draft, which commands are deny-listed, and what to
    do on each exit code. Skills are the safety layer; the script only enforces what a
    script can (branch gating, input budgets, syntax checks).
@@ -91,7 +91,8 @@ models --json` prints the resolved model and its source for every task.
 - **Frontmatter stays single-line `key: value` pairs.** `validate_repo.py` ships a
   hand-rolled stdlib parser with no YAML support; lists or multi-line strings fail it.
 - **Skill prose is unit-tested.** `test_denylist_covers_*`,
-  `test_git_history_skill_bans_patches`, and `test_push_safety_wording_present` assert on
+  `test_git_history_skill_bans_patches`, `test_push_safety_wording_present`, and
+  `test_pr_skill_safety_wording_present` assert on
   exact substrings inside markdown files (`docker system prune`, `--privileged`,
   `kubectl drain`, `--force-with-lease`, `never the model`, `never shows patch content`,
   …). Rewording a skill's safety section is a test-touching change, by design — the tests
@@ -103,6 +104,9 @@ models --json` prints the resolved model and its source for every task.
   literals plus `--message`/`--remote`/`--allow-protected`; there is no flag that can
   smuggle in `--force` or a refspec. `main`/`master` require `--allow-protected`, which
   Claude may add only after the user explicitly insists. Keep it that way.
+- **`pr-create` is draft-by-default.** Its argv is fixed literals plus
+  `--title`/`--body`/`--base`/`--remote`/`--ready`; `--ready` is the only escalation and
+  the head branch can never be main/master. Keep it that way.
 - Nothing may bypass Claude Code's permission prompts.
 - Conventional Commits for this repo's own history; every behavior change gets a test.
 

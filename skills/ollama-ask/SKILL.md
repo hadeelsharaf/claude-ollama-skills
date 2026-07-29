@@ -55,5 +55,6 @@ Order: `--model` flag → `OLLAMA_SKILLS_MODEL_<TASK>` env → `OLLAMA_SKILLS_MO
 | 4 | model not installed, or none that fits free RAM | read the script's error: pull a model, free memory, or pin a smaller one with --model; then fallback rule |
 | 5 | stall/timeout | one `warmup` + one retry max, then fallback rule |
 | 6 | output failed validation | do the task yourself (fallback rule) |
-| 8 | git/gh/glab command failed | do the task yourself (fallback rule) |
+| 7 | protected branch refused | stop and ask the user |
+| 8 | git/gh/glab command failed | report the command's stderr and stop; never re-run the write yourself |
 | other (e.g. 1) | unexpected error | do the task yourself (fallback rule) |

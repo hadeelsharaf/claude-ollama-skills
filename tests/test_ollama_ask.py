@@ -762,19 +762,21 @@ class OllamaAskTests(unittest.TestCase):
         os.chdir(work)
         return work
 
-    def _install_fake_cli(self, name: str, create_exit: int = 0) -> Path:
-        """Put a fake gh/glab first on PATH. It answers `auth status` with 0,
-        records the argv of any other call to a capture file, and either
-        prints a fake URL or fails with `create_exit`. Found via shutil.which
-        (which honours .bat through PATHEXT on Windows). setUp/tearDown's
-        os.environ save/restore undoes the PATH change."""
+    def _install_fake_cli(self, name: str, create_exit: int = 0,
+                          auth_exit: int = 0) -> Path:
+        """Put a fake gh/glab first on PATH. It answers `auth status` with
+        `auth_exit` (0 = authenticated), records the argv of any other call to
+        a capture file, and either prints a fake URL or fails with
+        `create_exit`. Found via shutil.which (which honours .bat through
+        PATHEXT on Windows). setUp/tearDown's os.environ save/restore undoes
+        the PATH change."""
         bin_dir = Path(self._tmp) / "fakebin"
         bin_dir.mkdir(exist_ok=True)
         capture = bin_dir / f"{name}-argv.txt"
         if os.name == "nt":
             script = bin_dir / f"{name}.bat"
             lines = ["@echo off",
-                     'if "%1"=="auth" exit /b 0',
+                     f'if "%1"=="auth" exit /b {auth_exit}',
                      f'echo %* >> "{capture}"']
             if create_exit:
                 lines += ["echo boom 1>&2", f"exit /b {create_exit}"]
@@ -784,7 +786,7 @@ class OllamaAskTests(unittest.TestCase):
         else:
             script = bin_dir / name
             lines = ["#!/bin/sh",
-                     '[ "$1" = "auth" ] && exit 0',
+                     f'[ "$1" = "auth" ] && exit {auth_exit}',
                      f'printf \'%s \' "$@" >> "{capture}"',
                      f'printf \'\\n\' >> "{capture}"']
             if create_exit:
@@ -1057,6 +1059,33 @@ class OllamaAskTests(unittest.TestCase):
         self.assertEqual(code, 2, msg=err)
         self.assertIn("no upstream", err.lower())
 
+    def test_pr_create_deleted_tracking_ref_exits_2(self):
+        # branch.<x>.remote/merge configured but the remote-tracking ref
+        # itself is gone: `@{u}` prints the literal "@{u}" on stdout and
+        # exits non-zero. The guard must key off returncode, not stdout.
+        work = self._make_pr_repo()
+        subprocess.run(["git", "update-ref", "-d", "refs/remotes/origin/feature"],
+                       cwd=work, check=True)
+        self._install_fake_cli("gh")
+        code, out, err = self.run_cli("pr-create", "--title", "t",
+                                      "--body", "b")
+        self.assertEqual(code, 2, msg=err)
+        self.assertIn("no upstream", err.lower())
+
+    def test_pr_create_unpushed_commits_exits_2(self):
+        # An extra local commit made after the fixture wires upstream leaves
+        # the remote branch stale; the PR must not be opened from it.
+        work = self._make_pr_repo()
+        (work / "three.txt").write_text("three\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=work, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "feat: add three"],
+                       cwd=work, check=True)
+        self._install_fake_cli("gh")
+        code, out, err = self.run_cli("pr-create", "--title", "t",
+                                      "--body", "b")
+        self.assertEqual(code, 2, msg=err)
+        self.assertIn("unpushed", err.lower())
+
     def test_pr_create_cli_failure_exits_8(self):
         self._make_pr_repo()
         self._install_fake_cli("gh", create_exit=1)
@@ -1065,17 +1094,75 @@ class OllamaAskTests(unittest.TestCase):
         self.assertEqual(code, 8, msg=err)
         self.assertIn("boom", err)
 
+    def test_pr_create_protected_head_exits_2(self):
+        # Protected-head is checked before base/upstream resolution, so a
+        # plain checkout to main (no upstream wiring needed) is enough.
+        work = self._make_pr_repo()
+        subprocess.run(["git", "checkout", "-q", "main"], cwd=work, check=True)
+        code, out, err = self.run_cli("pr-create", "--title", "t",
+                                      "--body", "b")
+        self.assertEqual(code, 2, msg=err)
+        self.assertIn("Refusing to open a PR from 'main'", err)
+
+    def test_pr_create_head_equals_base_exits_2(self):
+        self._make_pr_repo()
+        code, out, err = self.run_cli("pr-create", "--title", "t",
+                                      "--body", "b", "--base", "feature")
+        self.assertEqual(code, 2, msg=err)
+        self.assertIn("Head and base are both 'feature'", err)
+
+    def test_pr_create_unauthenticated_exits_2(self):
+        self._make_pr_repo()
+        self._install_fake_cli("gh", auth_exit=1)
+        code, out, err = self.run_cli("pr-create", "--title", "t",
+                                      "--body", "b")
+        self.assertEqual(code, 2, msg=err)
+        self.assertIn("not authenticated", err)
+
+    def test_pr_create_cli_timeout_exits_8(self):
+        # Hermetic timeout test: the sleeping-shim approach (a real shim that
+        # sleeps longer than a monkeypatched-small PR_CLI_*_TIMEOUT) risks
+        # flakiness under Windows process-spawn/scheduling jitter, so this
+        # instead patches ollama_ask.subprocess.run to raise TimeoutExpired
+        # only for calls to the fake CLI binary (auth status and/or create),
+        # leaving every git subprocess call untouched.
+        self._make_pr_repo()
+        self._install_fake_cli("gh")
+        fake_cli = shutil.which("gh")
+        orig_run = ollama_ask.subprocess.run
+
+        def fake_run(argv, *a, **k):
+            if argv and argv[0] == fake_cli:
+                raise subprocess.TimeoutExpired(cmd=argv, timeout=1)
+            return orig_run(argv, *a, **k)
+
+        ollama_ask.subprocess.run = fake_run
+        try:
+            code, out, err = self.run_cli("pr-create", "--title", "t",
+                                          "--body", "b")
+        finally:
+            ollama_ask.subprocess.run = orig_run
+        self.assertEqual(code, 8, msg=err)
+        self.assertIn("timed out", err.lower())
+
     def test_pr_skill_safety_wording_present(self):
         # A silent reword dropping draft-by-default or the deny-list would
-        # defeat ollama-pr's safety story - pin the load-bearing wording.
+        # defeat ollama-pr's safety story - pin the load-bearing wording as
+        # normalized-whitespace PHRASES (not loose single-word needles that
+        # "drafted"/"remains" would also satisfy).
         needles = [
-            "UNTRUSTED DRAFT", "--ready", "explicitly", "never force-push",
-            "draft", "--web", "main",
+            "UNTRUSTED DRAFT",
+            "never pass `--ready` unless the user explicitly asked",
+            "never force-push",
+            "never `--web`",
+            "head branch is main or master",
+            "as a **draft** by default",
         ]
         rel = "skills/ollama-pr/SKILL.md"
         body = (ROOT / rel).read_text(encoding="utf-8")
+        normalized = " ".join(body.split())
         for needle in needles:
-            self.assertIn(needle, body, msg=f"{needle!r} missing from {rel}")
+            self.assertIn(needle, normalized, msg=f"{needle!r} missing from {rel}")
 
 
 if __name__ == "__main__":

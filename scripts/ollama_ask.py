@@ -704,6 +704,11 @@ def _clean_commit(text: str, args) -> str:
 
 PROTECTED_BRANCHES = ("main", "master")
 
+# Timeouts for the two outward-facing gh/glab calls in cmd_pr_create -- these
+# talk to a real CLI that can itself hang on network or an interactive prompt.
+PR_CLI_AUTH_TIMEOUT = 60
+PR_CLI_CREATE_TIMEOUT = 120
+
 
 def cmd_commit_push(args, cfg: dict) -> int:
     """Commit staged changes with an already-reviewed message, then push.
@@ -1009,7 +1014,7 @@ def _remote_host(url: str) -> str:
     first = bare.split("/", 1)[0]
     if "@" in first:
         bare = bare.split("@", 1)[1]
-    return re.split(r"[/:]", bare, 1)[0].lower()
+    return re.split(r"[/:]", bare, maxsplit=1)[0].lower()
 
 
 def cmd_pr_create(args, cfg: dict) -> int:
@@ -1036,12 +1041,31 @@ def cmd_pr_create(args, cfg: dict) -> int:
         raise CliError(EXIT_USAGE,
                        f"Head and base are both '{branch}'. Checkout the "
                        "feature branch or pass a different --base.")
-    upstream = run_git(["rev-parse", "--abbrev-ref", "--symbolic-full-name",
-                        "@{u}"], check=False).strip()
-    if not upstream:
+    upstream_result = _run_git(["rev-parse", "--abbrev-ref",
+                               "--symbolic-full-name", "@{u}"])
+    if upstream_result.returncode != 0:
+        # branch.<x>.remote/merge can be configured while the remote-tracking
+        # ref itself is gone (deleted, never fetched) -- git then prints the
+        # literal "@{u}" on stdout and exits non-zero. Testing stdout truthiness
+        # alone would miss that; the returncode is the real signal.
         raise CliError(EXIT_USAGE,
                        "The current branch has no upstream. Push the branch "
                        "first (use the gated push).")
+    upstream = upstream_result.stdout.strip()
+
+    unpushed = run_git(["rev-list", "--count", "@{u}..HEAD"], check=False).strip()
+    try:
+        unpushed_count = int(unpushed)
+    except ValueError:
+        unpushed_count = 0
+    if unpushed_count > 0:
+        raise CliError(
+            EXIT_USAGE,
+            f"The branch has {unpushed_count} unpushed commit(s); the PR "
+            "would not match pr-desc's description. Push the branch first "
+            "(use the gated push).",
+        )
+
     remote = args.remote or (upstream.split("/", 1)[0] if "/" in upstream
                              else "origin")
     remote_url = run_git(["remote", "get-url", remote], check=False).strip()
@@ -1063,8 +1087,14 @@ def cmd_pr_create(args, cfg: dict) -> int:
         raise CliError(EXIT_USAGE,
                        f"The '{cli}' CLI is not installed ({hint}). Install "
                        "it, authenticate, and retry.")
-    auth = subprocess.run([cli_path, "auth", "status"], capture_output=True,
-                          text=True, encoding="utf-8", errors="replace")
+    try:
+        auth = subprocess.run([cli_path, "auth", "status"], capture_output=True,
+                              text=True, encoding="utf-8", errors="replace",
+                              stdin=subprocess.DEVNULL,
+                              timeout=PR_CLI_AUTH_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        raise CliError(EXIT_GIT,
+                       f"{cli} timed out after {PR_CLI_AUTH_TIMEOUT}s.")
     if auth.returncode != 0:
         raise CliError(EXIT_USAGE,
                        f"'{cli}' is not authenticated. Run: {cli} auth login")
@@ -1087,8 +1117,14 @@ def cmd_pr_create(args, cfg: dict) -> int:
                 "--source-branch", branch]
     if not args.ready:
         argv.append("--draft")
-    result = subprocess.run(argv, capture_output=True, text=True,
-                            encoding="utf-8", errors="replace")
+    try:
+        result = subprocess.run(argv, capture_output=True, text=True,
+                                encoding="utf-8", errors="replace",
+                                stdin=subprocess.DEVNULL,
+                                timeout=PR_CLI_CREATE_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        raise CliError(EXIT_GIT,
+                       f"{cli} timed out after {PR_CLI_CREATE_TIMEOUT}s.")
     if result.returncode != 0:
         eprint(result.stderr.strip())
         raise CliError(EXIT_GIT, f"{cli} failed to create the PR/MR.")

@@ -8,6 +8,12 @@ read by `scripts/ollama_ask.py` ON YOUR MACHINE and sent only to your local Olla
 skills. Only the small drafted RESULT (a commit message, a command JSON, a code
 draft) enters Claude's context.
 
+The `pr-desc`/`pr-create` path is the one exception to "the result stays local":
+the reviewed PR title and body leave the machine — uploaded to the forge (GitHub
+or GitLab, via `gh`/`glab`) that the user targets, at the user's request. `pr-desc`
+itself still only feeds the local model commit subjects and a `--shortstat` line,
+never patch content.
+
 Claude Code itself still talks to Anthropic's API for its own reasoning — that is
 outside this project's control and is stated plainly in the README.
 
@@ -22,6 +28,7 @@ outside this project's control and is stated plainly in the README.
 | Permission bypass creep | Nothing in this repo uses or recommends `bypassPermissions` or `--no-verify`. Drafted commands still go through Claude Code's normal permission prompts. |
 | A hostile PROJECT config redirects data off the machine (a cloned repo ships `.ollama-skills.json` with a remote `host`) | The script prints a loud warning on stderr whenever the resolved host is not loopback: "prompts and diffs will LEAVE this machine". Check for that warning after cloning anything. |
 | Supply chain | The runtime is one readable stdlib-only Python file — no pip packages, no server processes. Pin a commit SHA when you consume this repo in an organization. |
+| Prompt injection via commit subjects reaching a PUBLISHED PR title/body (the pr path uploads reviewed text to GitHub/GitLab with the user's credentials) | `pr-desc` feeds subjects+shortstat only; Claude reviews the draft as untrusted; `pr-create` is draft-by-default with a fixed argv; `--ready` requires the user's explicit words. |
 
 ## Permissions posture
 
