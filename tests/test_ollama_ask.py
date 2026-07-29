@@ -441,6 +441,39 @@ class OllamaAskTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertNotIn("SECRETMARKER123", out)
 
+    def test_change_kind_uniform_kinds(self):
+        line, t = ollama_ask._change_kind(["docs/a.md", "README.md"])
+        self.assertEqual(t, "docs")
+        self.assertIn("2 markdown docs", line)
+        self.assertIn("suggested type: docs", line)
+        _line, t = ollama_ask._change_kind([".github/workflows/ci.yml"])
+        self.assertEqual(t, "ci")
+        _line, t = ollama_ask._change_kind(["tests/test_x.py"])
+        self.assertEqual(t, "test")
+        _line, t = ollama_ask._change_kind(
+            [".claude-plugin/plugin.json", "config/x.json"])
+        self.assertEqual(t, "chore")
+
+    def test_change_kind_mixed_and_behavior_none(self):
+        _line, t = ollama_ask._change_kind(["skills/ollama-pr/SKILL.md"])
+        self.assertIsNone(t)   # prompt contracts are behavior, NOT docs
+        _line, t = ollama_ask._change_kind(["scripts/ollama_ask.py"])
+        self.assertIsNone(t)   # code: the model and Claude decide
+        line, t = ollama_ask._change_kind(["docs/a.md", "scripts/x.py"])
+        self.assertIsNone(t)   # mixed kinds -> no suggestion
+        self.assertNotIn("suggested type", line)
+
+    def test_semantic_problem_cases(self):
+        self.assertIsNone(ollama_ask._semantic_problem("docs: update x", "docs"))
+        self.assertIn("contradicts",
+                      ollama_ask._semantic_problem("fix: update x", "docs"))
+        self.assertIn("filename",
+                      ollama_ask._semantic_problem("docs(readme.md): x", None))
+        self.assertIn("filename",
+                      ollama_ask._semantic_problem("fix(scripts/a.py): x", None))
+        self.assertIsNone(ollama_ask._semantic_problem("feat(parser): x", None))
+        self.assertIsNone(ollama_ask._semantic_problem("not a commit line", "docs"))
+
     # -- draft-code ---------------------------------------------------------
 
     def test_draft_code_strips_fences(self):

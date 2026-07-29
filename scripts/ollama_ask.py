@@ -631,6 +631,67 @@ def cmd_ask(args, cfg: dict) -> int:
     return EXIT_OK
 
 
+def _change_kind(names):
+    """Classify staged paths -> (summary line, suggested type or None).
+
+    A type is suggested ONLY when every staged file maps to one non-None
+    kind (docs / tests / CI / config). Code, skill/agent prompt contracts,
+    and mixed changes return None: that judgment stays with the model and
+    Claude's review - no false confidence.
+    """
+    def kind_of(name):
+        path = name.replace("\\", "/")
+        base = path.rsplit("/", 1)[-1].lower()
+        if path.startswith(".github/workflows/"):
+            return ("CI config", "ci")
+        if path.startswith("tests/"):
+            return ("tests", "test")
+        if path.startswith(("skills/", "agents/")):
+            return ("prompt contracts", None)
+        if path.startswith(("docs/", "templates/")) or (
+                "/" not in path and base.endswith(".md")):
+            return ("markdown docs", "docs")
+        if path.startswith((".claude-plugin/", "config/")) or (
+                "/" not in path and base.endswith((".json", ".yml", ".yaml"))):
+            return ("project config", "chore")
+        if base.endswith(".py"):
+            return ("code", None)
+        return ("other files", None)
+
+    counts = {}
+    for name in names:
+        key = kind_of(name)
+        counts[key] = counts.get(key, 0) + 1
+    summary = "File kinds: " + ", ".join(
+        f"{n} {label}" for (label, _t), n in counts.items())
+    types = {t for (_label, t) in counts}
+    suggested = types.pop() if len(types) == 1 and None not in types else None
+    if suggested:
+        summary += f" -> suggested type: {suggested}"
+    return summary, suggested
+
+
+def _semantic_problem(message, suggested):
+    """Deterministic complaint about a format-valid draft, or None.
+
+    Format problems are NOT this function's job - _valid_commit_line owns
+    those, so a non-matching line returns None here.
+    """
+    first = message.splitlines()[0] if message.strip() else ""
+    match = CONVENTIONAL_RE.match(first)
+    if not match:
+        return None
+    scope = (match.group(2) or "").strip("()")
+    if scope and ("/" in scope or re.search(r"\.\w+$", scope)):
+        return (f"the scope ({scope}) looks like a filename - use a bare "
+                "type with no parentheses")
+    drafted = match.group(1)
+    if suggested and drafted != suggested:
+        return (f"the type '{drafted}:' contradicts the staged files, which "
+                f"are all one kind - use '{suggested}:'")
+    return None
+
+
 COMMIT_SYSTEM = (
     "You write git commit messages. Reply with ONE line in Conventional Commit "
     f"format: <type>: <summary>. Allowed types: {COMMIT_TYPES}. Use present "
