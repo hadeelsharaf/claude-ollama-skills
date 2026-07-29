@@ -6,6 +6,11 @@
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-PY=python3
-command -v python3 >/dev/null 2>&1 || PY=python
+# Probe by EXECUTION, not command -v: on Windows, python3 can resolve to a
+# pymanager/Store shim that exists on PATH but has no runtime installed.
+PY=""
+for cand in python python3; do
+  if "$cand" -c "import sys" >/dev/null 2>&1; then PY="$cand"; break; fi
+done
+[ -n "$PY" ] || { echo "no working python interpreter found" >&2; exit 1; }
 "$PY" "$REPO_ROOT/benchmarks/fixtures.py" commit .

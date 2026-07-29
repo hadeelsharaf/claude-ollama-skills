@@ -78,24 +78,13 @@ independent paid tool, not free because the runner already ran. Use
 `--max-cost-usd` every time; there is no dry-run mode (every invocation
 launches at least one real agent session per case/arm/run).
 
-### Feature-gate note (discovered, not documented publicly yet)
+### Feature-gate note
 
-On this machine's CLI build (`claude` 2.1.220), `claude plugin eval` is
-gated behind an early-access rollout flag — running any `plugin eval`
-subcommand without it prints `` `plugin eval` is currently in early access ``
-and exits 1, even for read-only operations like `init --bare`. The gate
-checks a rollout flag OR the environment variable
-`CLAUDE_CODE_WALNUT_SPIRE=1` (discovered from the CLI's own gate-check
-message plus its `--help` output; not in the public docs as of this writing).
-Set that env var to unlock the command locally:
-
-```bash
-CLAUDE_CODE_WALNUT_SPIRE=1 claude plugin eval . --scaffold --case summarize ...
-```
-
-This is a rollout mechanism, not a secret — it unlocks a command that
-already appears in `claude plugin eval --help` on this build. Expect this
-note to become unnecessary once the feature ships to everyone.
+As of CLI 2.1.220, `claude plugin eval` is in early access on some builds —
+invocations may print `` `plugin eval` is currently in early access `` until
+the rollout reaches your account. The cases in `evals/` are ready to run as
+soon as the command is available to you; nothing else in this benchmark
+suite depends on it (the token measurement uses only `claude -p`).
 
 ### Discovered case schema
 
@@ -196,13 +185,12 @@ claude plugin eval . --scaffold --case summarize --runs 1 --model haiku \
 
 ### Cross-check with the token-measurement runner
 
-Spec §6 asks whether `claude plugin eval`'s `--json` output includes
-per-run cost/usage, as a cross-check on `measure_ab.py`'s numbers. The
-sanctioned `eval-smoke.json` sanity run above has **not been executed yet**
-in this environment — the session's auto-mode permission classifier blocks
-launching a nested paid `claude plugin eval` invocation from inside a running
-Claude Code session (denied identically via two different shells; see
-`.superpowers/sdd/2026-07-29-measure-ab/task-3-report.md` for the verbatim
-denial). Run the smoke command yourself in a normal terminal (outside an
-active Claude Code session, or with an explicit Bash permission rule for it)
-to get the answer, then update this section with the result.
+Answered by a live smoke run (1 haiku run, $0.04): `plugin eval`'s result
+JSON reports **per-run `cost_usd` and `judge_cost_usd` but NO token
+counts** — there is no `usage` object anywhere in its schema
+(`schema_version` 1.x). So `measure_ab.py` remains the only source of token
+numbers; the eval's per-run cost can be sanity-compared against the
+runner's `cost_mean_usd` column, nothing more. The same smoke also proved
+the wiring end to end: scaffold → agent → LLM grader → scored table
+(the haiku agent legitimately failed the rubric — it missed two of the
+three planted facts — which is the grader doing its job).

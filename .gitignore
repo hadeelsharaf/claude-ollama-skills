@@ -23,3 +23,5 @@ Thumbs.db
 # A/B benchmark outputs - only explicitly published aggregates are tracked
 benchmarks/results/*
 !benchmarks/results/ab-published-*.json
+# claude plugin eval default output dir (timestamped run artifacts)
+evals/results/
