@@ -709,6 +709,39 @@ class OllamaAskTests(unittest.TestCase):
         self.assertFalse(any(r["delivered"] for r in records))
         self.assertTrue(all(r["avoided_chars"] == 0 for r in records))
 
+    def test_usage_commit_msg_avoided_positive(self):
+        repo = self._make_repo(staged=True)
+        os.environ.pop("OLLAMA_SKILLS_NO_USAGE", None)
+        code, _, err = self.run_cli("commit-msg")
+        self.assertEqual(code, 0, msg=err)
+        rec = self._read_ledger(repo)[0]
+        self.assertGreater(rec["avoided_chars"], 0)
+        # counterfactual is the FULL staged diff, bigger than the model's input
+        self.assertGreater(rec["avoided_chars"], rec["returned_chars"])
+
+    def test_usage_summarize_avoided_is_raw_input(self):
+        os.chdir(self._tmp)   # not a repo -> ledger falls back to HOME (= _tmp)
+        os.environ.pop("OLLAMA_SKILLS_NO_USAGE", None)
+        sample = "\n".join(f"2026-07-14T09:30:00Z ERROR db refused attempt {i}"
+                           for i in range(40))
+        code, _, err = self.run_stdin(sample, "summarize", "--kind", "log")
+        self.assertEqual(code, 0, msg=err)
+        ledger = Path(self._tmp) / ".ollama-skills-usage.jsonl"
+        records = [json.loads(line) for line in
+                   ledger.read_text(encoding="utf-8").splitlines() if line.strip()]
+        final = records[-1]
+        self.assertTrue(final["delivered"])
+        self.assertEqual(final["cmd"], "summarize")
+        self.assertGreaterEqual(final["avoided_chars"], len(sample) - 2)
+
+    def test_usage_ask_avoided_is_zero(self):
+        repo = self._make_repo(staged=True)
+        os.environ.pop("OLLAMA_SKILLS_NO_USAGE", None)
+        code, _, err = self.run_cli("ask", "say hi")
+        self.assertEqual(code, 0, msg=err)
+        rec = self._read_ledger(repo)[0]
+        self.assertEqual(rec["avoided_chars"], 0)   # honest zero by design
+
     # -- draft-code ---------------------------------------------------------
 
     def test_draft_code_strips_fences(self):

@@ -874,6 +874,9 @@ def _staged_context(cfg: dict, args) -> tuple[str, str | None]:
 
 def cmd_commit_msg(args, cfg: dict) -> int:
     context, suggested = _staged_context(cfg, args)
+    # Counterfactual for the ledger: without delegation Claude reads the full
+    # staged diff. Local measurement, count only - the text goes nowhere.
+    _USAGE_CTX["avoided_chars"] = len(run_git(["diff", "--cached"], check=False))
     style_note = "" if args.body else " Reply with one single line."
     prompt = f"Write the commit message for this staged change:\n\n{context}"
     text = generate("commit", prompt, args, cfg, system=COMMIT_SYSTEM + style_note)
@@ -1125,13 +1128,15 @@ def cmd_fix_lint(args, cfg: dict) -> int:
     source = Path(args.file)
     if not source.is_file():
         raise CliError(EXIT_USAGE, f"No such file: {source}")
-    lines = source.read_text(encoding="utf-8", errors="replace").splitlines()
+    raw = source.read_text(encoding="utf-8", errors="replace")
+    lines = raw.splitlines()
     if not lines:
         raise CliError(EXIT_USAGE, f"{source} is empty — nothing to fix.")
     center = min(max(1, args.line), len(lines))
     start = max(0, center - 1 - 15)
     end = min(len(lines), center + 15)
     window = "\n".join(lines[start:end])
+    _USAGE_CTX["avoided_chars"] = len(raw) + len(error_text)
     prompt = (f"Lint finding:\n{error_text}\n\n"
               f"Flagged line {center}: {lines[center - 1]}\n\n"
               f"File {source.name}, lines {start + 1}-{end} "
@@ -1196,6 +1201,7 @@ def cmd_pr_desc(args, cfg: dict) -> int:
     shortstat = run_git(["diff", "--shortstat", f"{base}...HEAD"],
                         check=False).strip()
     text = f"Commits:\n{subjects}\nChange size: {shortstat or 'unknown'}"
+    _USAGE_CTX["avoided_chars"] = len(text)   # what Claude would read instead
     check_budget(text, cfg, args)
 
     def attempt(extra: str = "") -> dict:
@@ -1555,6 +1561,7 @@ def _reduce(notes, args, cfg, final_system, chunk_chars) -> str:
 
 def cmd_summarize(args, cfg: dict) -> int:
     text = _summarize_read(args)
+    _USAGE_CTX["avoided_chars"] = len(text)   # raw input, before pre-filter
     lines = text.splitlines()
     if args.tail and len(lines) > args.tail:
         lines = lines[-args.tail:]
