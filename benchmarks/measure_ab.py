@@ -76,16 +76,19 @@ def usage_row(data: dict) -> dict:
     }
 
 
+def _git_out(repo: Path, *args: str) -> str:
+    # Explicit UTF-8: a non-ASCII model-drafted subject must fail validation,
+    # not crash the matrix mid-paid-run on the ANSI codepage.
+    return subprocess.run(["git"] + list(args), cwd=repo, capture_output=True,
+                          text=True, encoding="utf-8",
+                          errors="replace").stdout.strip()
+
+
 def validate_commit(repo: Path) -> bool:
-    count = subprocess.run(["git", "rev-list", "--count", "HEAD"], cwd=repo,
-                           capture_output=True, text=True).stdout.strip()
-    if count != "2":
+    if _git_out(repo, "rev-list", "--count", "HEAD") != "2":
         return False
-    subject = subprocess.run(["git", "log", "-1", "--format=%s"], cwd=repo,
-                             capture_output=True, text=True).stdout.strip()
-    staged = subprocess.run(["git", "diff", "--cached", "--name-only"],
-                            cwd=repo, capture_output=True,
-                            text=True).stdout.strip()
+    subject = _git_out(repo, "log", "-1", "--format=%s")
+    staged = _git_out(repo, "diff", "--cached", "--name-only")
     return bool(CONVENTIONAL_RE.match(subject)) and staged == ""
 
 
