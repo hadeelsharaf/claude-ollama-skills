@@ -127,6 +127,12 @@ class FakeOllamaHandler(BaseHTTPRequestHandler):
             text = ("docs(readme.md): update the guides"
                     if FakeOllamaHandler.counters[key] == 1
                     else "docs: update the guides")
+        elif "SCOPEDWRONGONCE" in prompt:
+            key = "scopedwrong"
+            FakeOllamaHandler.counters[key] = FakeOllamaHandler.counters.get(key, 0) + 1
+            text = ("fix(readme.md): tweak"
+                    if FakeOllamaHandler.counters[key] == 1
+                    else "docs: update the guides")
         elif "LONGLINEONCE" in prompt:
             key = "longline"
             FakeOllamaHandler.counters[key] = FakeOllamaHandler.counters.get(key, 0) + 1
@@ -531,6 +537,22 @@ class OllamaAskTests(unittest.TestCase):
         self.assertIsNone(
             ollama_ask._semantic_problem("build: bump deps", "chore", final=True))
 
+        # -- both scope AND type wrong at once: joined into one complaint,
+        # type first, so the single corrective retry can fix both --
+        combined = ollama_ask._semantic_problem("fix(readme.md): x", "docs")
+        self.assertIn("contradicts", combined)
+        self.assertIn("filename", combined)
+        self.assertLess(combined.index("contradicts"), combined.index("filename"))
+
+        # -- stated=True: truthful wording when the type came from --type,
+        # not from classifying the staged files --
+        stated_complaint = ollama_ask._semantic_problem(
+            "fix: update x", "docs", stated=True)
+        self.assertIn("stated type", stated_complaint)
+        # scope-only defects stay non-fatal regardless of stated=
+        self.assertIn("drop the scope",
+                      ollama_ask._semantic_problem("feat(parser): x", None, stated=True))
+
     def _make_docs_repo(self):
         repo = Path(self._tmp) / "docsrepo"
         repo.mkdir()
@@ -574,6 +596,25 @@ class OllamaAskTests(unittest.TestCase):
         self.assertEqual(code, 0, msg=err)
         self.assertEqual(out.strip(), "docs: update the guides")
 
+    def test_commit_msg_combined_type_and_scope_retry_feedback(self):
+        """A draft with BOTH a filename scope and a type that contradicts the
+        caller's stated --type must get ONE retry whose feedback mentions
+        both defects, not just the scope - otherwise the retry can fix the
+        scope alone and still land on exit 6 for the type."""
+        repo = Path(self._tmp) / "combinedrepo"
+        repo.mkdir()
+        subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+        (repo / "a.py").write_text("print('x')\n", encoding="utf-8")
+        (repo / "notes.md").write_text("SCOPEDWRONGONCE\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=repo, check=True)
+        os.chdir(repo)
+        code, out, err = self.run_cli("commit-msg", "--type", "docs")
+        self.assertEqual(code, 0, msg=err)
+        self.assertEqual(out.strip(), "docs: update the guides")
+        system = FakeOllamaHandler.last_payload.get("system", "")
+        self.assertIn("stated type", system)
+        self.assertIn("scope (readme.md)", system)
+
     def test_commit_msg_persistent_wrong_type_exits_6(self):
         repo = self._make_docs_repo()
         (repo / "docs" / "extra.md").write_text("ALWAYSWRONGTYPE\n", encoding="utf-8")
@@ -599,6 +640,57 @@ class OllamaAskTests(unittest.TestCase):
         code, out, err = self.run_cli("commit-msg")
         self.assertEqual(code, 0, msg=err)
         self.assertEqual(out.strip(), "docs(readme.md): update the guides")
+
+    def test_staged_context_renames_sort_by_real_churn(self):
+        """A renamed+edited file must not fall to churn 0 (and sort last):
+        --numstat with default rename detection prints "old => new", which
+        never matches a --name-only path. --no-renames forces an add+delete
+        pair instead, so the new path gets credited with its real churn."""
+        repo = Path(self._tmp) / "renamerepo"
+        repo.mkdir()
+        subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+        subprocess.run(["git", "config", "user.email", "t@e.st"], cwd=repo, check=True)
+        subprocess.run(["git", "config", "user.name", "T"], cwd=repo, check=True)
+        core_lines = "\n".join(f"line{i}" for i in range(30)) + "\n"
+        (repo / "core.py").write_text(core_lines, encoding="utf-8")
+        (repo / "tiny.txt").write_text("hello\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=repo, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=repo, check=True)
+        subprocess.run(["git", "mv", "core.py", "engine.py"], cwd=repo, check=True)
+        (repo / "engine.py").write_text(
+            core_lines + "extra = 1  # ENGINE_MARKER\n", encoding="utf-8")
+        (repo / "tiny.txt").write_text("hello\nasdf  # TINY_MARKER\n", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+        os.chdir(repo)
+        FakeOllamaHandler.prompts = []
+        code, out, err = self.run_cli("commit-msg")
+        self.assertEqual(code, 0, msg=err)
+        prompt = FakeOllamaHandler.prompts[0]
+        self.assertIn("ENGINE_MARKER", prompt)
+        self.assertIn("TINY_MARKER", prompt)
+        self.assertLess(prompt.index("ENGINE_MARKER"), prompt.index("TINY_MARKER"))
+
+    def test_staged_context_oversized_lead_file_still_yields_excerpt(self):
+        """A single oversized lead file must not zero out every excerpt: the
+        truncate-then-mark branch fits what it can before the "not shown"
+        marker instead of appending only the marker and breaking empty."""
+        repo = Path(self._tmp) / "bigrepo"
+        repo.mkdir()
+        subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+        big_lines = "\n".join(
+            f"x = {i}  # BIGFILEMARKER filler filler filler filler"
+            for i in range(60))
+        (repo / "big.py").write_text(big_lines + "\n", encoding="utf-8")
+        (repo / "small.py").write_text("y = 1\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=repo, check=True)
+        os.chdir(repo)
+        FakeOllamaHandler.prompts = []
+        code, out, err = self.run_cli(
+            "commit-msg", "--max-input-chars", "800")
+        self.assertEqual(code, 0, msg=err)
+        prompt = FakeOllamaHandler.prompts[0]
+        self.assertIn("BIGFILEMARKER", prompt)
+        self.assertIn("(more changes in", prompt)
 
     # -- usage ledger --------------------------------------------------------
 
@@ -686,10 +778,12 @@ class OllamaAskTests(unittest.TestCase):
     def test_usage_ledger_never_contains_content(self):
         repo = self._make_repo(staged=True)   # stages SECRETMARKER123 in upload.py
         os.environ.pop("OLLAMA_SKILLS_NO_USAGE", None)
-        self.assertEqual(self.run_cli("commit-msg")[0], 0)
+        self.assertEqual(
+            self.run_cli("commit-msg", "--hint", "SECRETHINT456")[0], 0)
         text = (repo / ".ollama-skills-usage.jsonl").read_text(encoding="utf-8")
         self.assertNotIn("SECRETMARKER123", text)
         self.assertNotIn("upload.py", text)
+        self.assertNotIn("SECRETHINT456", text)
 
     def test_usage_log_path_override(self):
         repo = self._make_repo(staged=True)

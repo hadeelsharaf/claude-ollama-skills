@@ -1,7 +1,7 @@
 ---
 name: ollama-commit
 description: Write a git commit message with a local Ollama model — the staged diff stays on the machine and never enters Claude's context. Use when the user wants to commit staged changes, asks for a commit message, or says "commit with the local model". Requires local Ollama, git, and Python 3.9+.
-argument-hint: "[--body]"
+argument-hint: "[--body] [--type <t>] [--hint \"one line\"]"
 ---
 
 # ollama-commit — private commit messages

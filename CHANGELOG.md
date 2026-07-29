@@ -25,9 +25,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ### Changed
 
-- `commit-msg` now exits 6 when a draft still has the wrong type for a uniform
-  staged mix after one corrective retry, instead of printing it; scope-only
-  defects are retried once, then the draft is printed for Claude to edit.
+- `commit-msg` now exits 6 when a draft still contradicts the stated or
+  suggested type after one corrective retry, instead of printing it;
+  scope-only defects are retried once, then the draft is printed for Claude
+  to edit.
 
 ## [0.3.0] - 2026-07-29
 

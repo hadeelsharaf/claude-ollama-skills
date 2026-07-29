@@ -905,19 +905,24 @@ _TYPE_EQUIV = {
 }
 
 
-def _semantic_problem(message, suggested, final=False):
+def _semantic_problem(message, suggested, final=False, stated=False):
     """Deterministic complaint about a format-valid draft, or None.
 
     Format problems are NOT this function's job - _valid_commit_line owns
     those, so a non-matching line returns None here.
 
-    final=False (the first-attempt retry-feedback check): any scope, or a
-    type outside the suggestion's equivalence set, is a complaint that earns
-    the model one corrective retry.
+    final=False (the first-attempt retry-feedback check): the scope
+    complaint and the type complaint are evaluated independently; if both
+    exist they are joined into one message (type first - it's the fatal
+    one) so the single corrective retry can fix both at once.
     final=True (the gate consulted after that retry): a scope-only defect is
     NOT reported here - the draft is printed and Claude owns editing it. Only
     a type that still contradicts a non-None suggestion beyond its
     equivalence set is fatal.
+
+    stated=True means `suggested` came from the caller's explicit --type,
+    not from classifying the staged files - the wording must say so rather
+    than claiming anything about what kind of files are staged.
     """
     first = message.splitlines()[0] if message.strip() else ""
     match = CONVENTIONAL_RE.match(first)
@@ -927,19 +932,32 @@ def _semantic_problem(message, suggested, final=False):
     drafted = match.group(1)
     equiv = _TYPE_EQUIV.get(suggested, {suggested} if suggested else set())
     type_mismatch = bool(suggested) and drafted not in equiv
-    if final:
-        if type_mismatch:
-            return (f"the type '{drafted}:' contradicts the staged files, which "
-                    f"are all one kind - use '{suggested}:'")
-        return None
-    if scope:
-        if "/" in scope or re.search(r"\.\w+$", scope):
-            return (f"the scope ({scope}) looks like a filename - use a bare "
-                    "type with no parentheses")
-        return "drop the scope - use '<type>: <summary>' with no parentheses"
-    if type_mismatch:
+
+    def type_complaint():
+        if stated:
+            return (f"the type '{drafted}:' contradicts the caller's stated "
+                    f"type - use '{suggested}:'")
         return (f"the type '{drafted}:' contradicts the staged files, which "
                 f"are all one kind - use '{suggested}:'")
+
+    if final:
+        if type_mismatch:
+            return type_complaint()
+        return None
+    scope_complaint = None
+    if scope:
+        if "/" in scope or re.search(r"\.\w+$", scope):
+            scope_complaint = (f"the scope ({scope}) looks like a filename - "
+                                "use a bare type with no parentheses")
+        else:
+            scope_complaint = ("drop the scope - use '<type>: <summary>' "
+                                "with no parentheses")
+    if type_mismatch and scope_complaint:
+        return f"{type_complaint()}; also {scope_complaint}"
+    if type_mismatch:
+        return type_complaint()
+    if scope_complaint:
+        return scope_complaint
     return None
 
 
@@ -973,11 +991,13 @@ def _staged_context(cfg: dict, args) -> tuple[str, str | None]:
     kept = [n for n in names
             if not any(fnmatch.fnmatch(Path(n).name, p) for p in LOCKFILE_PATTERNS)]
     # Highest-churn file first: a 2-line .gitignore must never hijack the
-    # excerpt budget from the file that IS the change. Renames fall back to
-    # git order (numstat prints them as "old => new", which misses the map).
+    # excerpt budget from the file that IS the change. --no-renames forces
+    # numstat to print renames as an add+delete pair (instead of "old =>
+    # new", which never matches a --name-only path) so the new path still
+    # gets its real churn number.
     churn = {}
     for line in run_git(["-c", "core.quotepath=off", "diff", "--cached",
-                         "--numstat"]).splitlines():
+                         "--no-renames", "--numstat"]).splitlines():
         cols = line.split("\t")
         if len(cols) == 3:
             try:
@@ -997,7 +1017,15 @@ def _staged_context(cfg: dict, args) -> tuple[str, str | None]:
         excerpt_lines = diff.splitlines()[:40]
         excerpt = "\n".join(excerpt_lines)
         if used + len(excerpt) > limit:
-            parts.append(f"(more changes in {name} not shown)")
+            marker = f"(more changes in {name} not shown)"
+            # Reserve room for the marker (plus its join newline) so the
+            # final [:limit] clamp below truncates the excerpt, never the
+            # marker itself - otherwise a lead file that fills the whole
+            # remaining budget silently swallows the "not shown" notice.
+            room = excerpt[:max(0, limit - used - len(marker) - 1)]
+            if room:
+                parts.append(room)
+            parts.append(marker)
             break
         parts.append(excerpt)
         used += len(excerpt)
@@ -1032,6 +1060,7 @@ def cmd_commit_msg(args, cfg: dict) -> int:
     text = generate("commit", prompt, args, cfg, system=COMMIT_SYSTEM + style_note)
     message = _clean_commit(text, args)
 
+    stated = bool(args.ctype)
     if args.style == "conventional":
         problem = None
         if not _valid_commit_line(message):
@@ -1040,7 +1069,7 @@ def cmd_commit_msg(args, cfg: dict) -> int:
                        f"{len(first)} chars; it must match <type>: <summary> "
                        "with an allowed type and stay under 72 chars total.")
         else:
-            semantic = _semantic_problem(message, suggested)
+            semantic = _semantic_problem(message, suggested, stated=stated)
             if semantic:
                 problem = (f"Your last answer was rejected: {message!r} - "
                            f"{semantic}.")
@@ -1053,8 +1082,12 @@ def cmd_commit_msg(args, cfg: dict) -> int:
                 raise CliError(EXIT_BAD_OUTPUT,
                                "Model could not produce a valid Conventional "
                                "Commit line.")
-            if _semantic_problem(message, suggested, final=True):
+            if _semantic_problem(message, suggested, final=True, stated=stated):
                 eprint(f"raw output:\n{text[:300]}")
+                if stated:
+                    raise CliError(EXIT_BAD_OUTPUT,
+                                   "Model still contradicts the caller's "
+                                   "stated type after one corrective retry.")
                 raise CliError(EXIT_BAD_OUTPUT,
                                "Model still contradicts the staged files' type "
                                "after one corrective retry.")
