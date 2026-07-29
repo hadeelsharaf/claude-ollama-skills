@@ -1,6 +1,7 @@
 {
   "name": "claude-ollama-skills",
   "owner": { "name": "Hadeel Sharaf" },
+  "description": "Local-model delegation for Claude Code: the ollama-skills plugin keeps diffs, logs, and code on your machine and hands Claude reviewed drafts.",
   "plugins": [
     {
       "name": "ollama-skills",

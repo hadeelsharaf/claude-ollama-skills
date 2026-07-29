@@ -5,6 +5,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-29
+
 ### Added
 
 - Free-RAM gate in model auto-detect: candidates larger than free RAM are skipped;
