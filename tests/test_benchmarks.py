@@ -16,6 +16,17 @@ sys.path.insert(0, str(ROOT / "benchmarks"))
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import fixtures  # noqa: E402
+import measure_ab  # noqa: E402
+
+
+def fake_usage(consumed=1000, cache_read=0, cost=0.5):
+    return {"usage": {"input_tokens": consumed - 100,
+                      "cache_creation_input_tokens": 50,
+                      "output_tokens": 50,
+                      "cache_read_input_tokens": cache_read},
+            "total_cost_usd": cost, "duration_ms": 1234,
+            "result": "db-primary connection refused repeatedly; "
+                      "worker-3 OOM killed; KeyError shard_map"}
 
 
 def rmtree_force(path: str) -> None:
@@ -75,3 +86,58 @@ class FixtureTests(unittest.TestCase):
         self.assertIn("KeyError: 'shard_map'", text)
         self.assertIn("worker-3 killed: Out of memory", text)
         self.assertGreaterEqual(text.count("connection refused"), 100)
+
+
+class RunnerTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.mkdtemp(prefix="ab_runner_")
+        self._orig = measure_ab.run_claude
+
+    def tearDown(self):
+        measure_ab.run_claude = self._orig
+        rmtree_force(self._tmp)
+
+    def test_tokens_consumed_metric(self):
+        row = measure_ab.usage_row(fake_usage())
+        self.assertEqual(row["tokens_consumed"], 1000)
+        self.assertEqual(row["cache_read"], 0)
+        self.assertEqual(row["cost_usd"], 0.5)
+
+    def test_usage_row_missing_keys_is_zero_not_crash(self):
+        row = measure_ab.usage_row({"result": "x"})
+        self.assertEqual(row["tokens_consumed"], 0)
+
+    def test_validate_summarize(self):
+        good = "db-primary refused connections; worker-3 out of memory"
+        self.assertTrue(measure_ab.validate_summarize(good))
+        self.assertFalse(measure_ab.validate_summarize("all fine, no issues"))
+
+    def test_validate_commit_detects_new_commit(self):
+        repo = fixtures.make_commit_fixture(Path(self._tmp) / "r")
+        self.assertFalse(measure_ab.validate_commit(repo))   # still staged
+        subprocess.run(["git", "-c", "user.name=T", "-c", "user.email=t@e.st",
+                        "commit", "-q", "-m", "feat: add json output"],
+                       cwd=repo, check=True, capture_output=True)
+        self.assertTrue(measure_ab.validate_commit(repo))
+
+    def test_matrix_uses_boundary_and_aggregates(self):
+        calls = []
+
+        def stub(prompt, cwd, with_plugin):
+            calls.append((prompt[:20], with_plugin))
+            return fake_usage(consumed=2000 if not with_plugin else 800)
+
+        measure_ab.run_claude = stub
+        agg = measure_ab.run_matrix(runs=1, tasks=["summarize"],
+                                    arms=["without", "with"],
+                                    out_dir=Path(self._tmp) / "out")
+        self.assertEqual(len(calls), 2)
+        cells = agg["cells"]
+        self.assertEqual(cells["summarize"]["without"]["tokens_mean"], 2000)
+        self.assertEqual(cells["summarize"]["with"]["tokens_mean"], 800)
+        self.assertAlmostEqual(cells["summarize"]["savings_pct"], 60.0)
+        table = measure_ab.render_table(agg)
+        self.assertIn("summarize", table)
+        self.assertIn("savings", table)
+        out_files = list((Path(self._tmp) / "out").glob("ab-*.json"))
+        self.assertEqual(len(out_files), 1)
