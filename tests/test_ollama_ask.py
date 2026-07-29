@@ -127,6 +127,8 @@ class FakeOllamaHandler(BaseHTTPRequestHandler):
             text = ("docs(readme.md): update the guides"
                     if FakeOllamaHandler.counters[key] == 1
                     else "docs: update the guides")
+        elif "ALWAYSSCOPED" in prompt:
+            text = "docs(readme.md): update the guides"
         elif "suggested type: docs" in prompt:
             text = "docs: update the guides"
         elif payload.get("format") == "json":
@@ -477,8 +479,17 @@ class OllamaAskTests(unittest.TestCase):
         line, t = ollama_ask._change_kind(["docs/a.md", "scripts/x.py"])
         self.assertIsNone(t)   # mixed kinds -> no suggestion
         self.assertNotIn("suggested type", line)
+        line, t = ollama_ask._change_kind(["docs/gen.py"])
+        self.assertIsNone(t)   # docs/ arm requires a .md base; .py falls to code
+        self.assertIn("code", line)
+
+    def test_change_kind_all_lockfiles_excluded(self):
+        line, t = ollama_ask._change_kind([])
+        self.assertEqual(line, "File kinds: lockfiles only (excluded from excerpts)")
+        self.assertIsNone(t)
 
     def test_semantic_problem_cases(self):
+        # -- first-attempt (retry-feedback) checks: final=False (default) --
         self.assertIsNone(ollama_ask._semantic_problem("docs: update x", "docs"))
         self.assertIn("contradicts",
                       ollama_ask._semantic_problem("fix: update x", "docs"))
@@ -486,8 +497,28 @@ class OllamaAskTests(unittest.TestCase):
                       ollama_ask._semantic_problem("docs(readme.md): x", None))
         self.assertIn("filename",
                       ollama_ask._semantic_problem("fix(scripts/a.py): x", None))
-        self.assertIsNone(ollama_ask._semantic_problem("feat(parser): x", None))
+        # a non-path-shaped scope is now also a (non-fatal) retry complaint,
+        # just with different wording than the filename accusation.
+        self.assertIn("drop the scope",
+                      ollama_ask._semantic_problem("feat(parser): x", None))
         self.assertIsNone(ollama_ask._semantic_problem("not a commit line", "docs"))
+
+        # -- equivalence sets: build satisfies chore/ci on the FIRST attempt too --
+        self.assertIsNone(ollama_ask._semantic_problem("build: bump deps", "chore"))
+        self.assertIsNone(ollama_ask._semantic_problem("build: update pipeline", "ci"))
+        self.assertIn("contradicts",
+                      ollama_ask._semantic_problem("chore: bump deps", "ci"))
+
+        # -- final gate: scope-only defects are never fatal --
+        self.assertIsNone(
+            ollama_ask._semantic_problem("docs(readme.md): x", "docs", final=True))
+        self.assertIsNone(
+            ollama_ask._semantic_problem("feat(parser): x", None, final=True))
+        # -- final gate: a true type contradiction beyond equivalence stays fatal --
+        self.assertIn("contradicts",
+                      ollama_ask._semantic_problem("fix: update x", "docs", final=True))
+        self.assertIsNone(
+            ollama_ask._semantic_problem("build: bump deps", "chore", final=True))
 
     def _make_docs_repo(self):
         repo = Path(self._tmp) / "docsrepo"
@@ -508,9 +539,13 @@ class OllamaAskTests(unittest.TestCase):
         self.assertTrue(out.startswith("docs:"), msg=out)
         body = FakeOllamaHandler.prompts[0]
         lines = body.splitlines()
-        self.assertTrue(lines[2].startswith("File kinds:"), msg=lines[:4])
+        kind_line = lines[2]
+        self.assertTrue(kind_line.startswith("File kinds:"), msg=lines[:4])
         self.assertIn("suggested type: docs", body)
         self.assertIn("Excerpts (reference only", body)
+        # Privacy: the kind line itself is labels + counts only - no filenames.
+        self.assertNotIn("/", kind_line)
+        self.assertNotIn(".md", kind_line)
 
     def test_commit_msg_wrong_type_retried_and_corrected(self):
         repo = self._make_docs_repo()
@@ -534,6 +569,25 @@ class OllamaAskTests(unittest.TestCase):
         subprocess.run(["git", "add", "."], cwd=repo, check=True)
         code, out, err = self.run_cli("commit-msg")
         self.assertEqual(code, 6, msg=err)
+
+    def test_commit_msg_mixed_diff_scoped_draft_prints(self):
+        """New contract: for a mixed staged mix (suggested is None), a
+        scope-only defect that survives both attempts is PRINTED — Claude
+        owns editing it — instead of exiting 6."""
+        repo = Path(self._tmp) / "mixedrepo"
+        repo.mkdir()
+        subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+        (repo / "scripts").mkdir()
+        (repo / "docs").mkdir()
+        (repo / "scripts" / "x.py").write_text(
+            "print('ALWAYSSCOPED')\n", encoding="utf-8")
+        (repo / "docs" / "a.md").write_text(
+            "ALWAYSSCOPED notes\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=repo, check=True)
+        os.chdir(repo)
+        code, out, err = self.run_cli("commit-msg")
+        self.assertEqual(code, 0, msg=err)
+        self.assertEqual(out.strip(), "docs(readme.md): update the guides")
 
     # -- draft-code ---------------------------------------------------------
 

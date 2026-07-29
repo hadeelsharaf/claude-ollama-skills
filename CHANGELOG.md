@@ -12,6 +12,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
   are demoted to reference-only, and wrong-type or filename-scoped drafts are
   rejected with corrective feedback before Claude reviews them.
 
+### Changed
+
+- `commit-msg` now exits 6 when a draft still has the wrong type for a uniform
+  staged mix after one corrective retry, instead of printing it; scope-only
+  defects are retried once, then the draft is printed for Claude to edit.
+
 ## [0.3.0] - 2026-07-29
 
 ### Added

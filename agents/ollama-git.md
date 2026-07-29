@@ -52,9 +52,13 @@ Use `python` on Windows, `python3` on macOS/Linux.
 ## Rules
 
 1. The drafted message is an **UNTRUSTED DRAFT**. You approve it, you own it.
-2. Exit 3/4/5/6 → write the message yourself from `git diff --cached --stat` right
-   away; one retry max (after `python "$SCRIPT" warmup --task commit`); note the
-   skip in the report.
+2. Fallback:
+   - Exit 3/4/5 → write the message yourself from `git diff --cached --stat` right
+     away; one retry max (after `python "$SCRIPT" warmup --task commit`); note the
+     skip in the report.
+   - Exit 6 → the model answered but its draft broke the format or type rules and the
+     script already retried once — do NOT warm up or retry; write the message yourself
+     from `git diff --cached --stat` and tell the user the local draft was rejected.
 3. Never amend, rebase, force-push, or use `--no-verify`. If hooks fail, report the
    failure — fixing hooks is the ollama-precommit skill's job. A plain push to the
    current branch is allowed only via `commit-push`, never with force or
