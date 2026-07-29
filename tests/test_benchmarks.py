@@ -142,6 +142,22 @@ class RunnerTests(unittest.TestCase):
         out_files = list((Path(self._tmp) / "out").glob("ab-*.json"))
         self.assertEqual(len(out_files), 1)
 
+    def test_matrix_no_savings_claim_without_successes_on_both_sides(self):
+        def stub(prompt, cwd, with_plugin):
+            if with_plugin:
+                bad = fake_usage(consumed=800)
+                bad["result"] = "no planted facts here"   # fails validation
+                return bad
+            return fake_usage(consumed=2000)
+
+        measure_ab.run_claude = stub
+        agg = measure_ab.run_matrix(runs=1, tasks=["summarize"],
+                                    arms=["without", "with"],
+                                    out_dir=Path(self._tmp) / "out2")
+        cell = agg["cells"]["summarize"]
+        self.assertEqual(cell["with"]["ok"], 0)
+        self.assertNotIn("savings_pct", cell)   # never an absurd 100% claim
+
 
 class EvalCaseTests(unittest.TestCase):
     def test_eval_cases_reuse_shared_prompts(self):

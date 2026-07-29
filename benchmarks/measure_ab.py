@@ -175,7 +175,10 @@ def run_matrix(runs: int, tasks, arms, out_dir: Path) -> dict:
                                            / len(ok)) if ok else 0,
                 "delegated": sum(1 for r in ok if r.get("delegated")),
             }
+        # A savings claim needs at least one SUCCESSFUL run on each side -
+        # a zero-success cell would otherwise print an absurd 100%.
         if ("with" in cell and "without" in cell
+                and cell["with"]["ok"] and cell["without"]["ok"]
                 and cell["without"]["tokens_mean"]):
             cell["savings_pct"] = round(
                 100 * (1 - cell["with"]["tokens_mean"]
