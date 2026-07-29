@@ -690,7 +690,9 @@ class OllamaAskTests(unittest.TestCase):
         self.assertEqual(code, 0, msg=err)
         prompt = FakeOllamaHandler.prompts[0]
         self.assertIn("BIGFILEMARKER", prompt)
-        self.assertIn("(more changes in", prompt)
+        # The full marker must survive the [:limit] clamp - a clipped
+        # "(more changes in x n" is the regression this test pins.
+        self.assertIn("not shown)", prompt)
 
     # -- usage ledger --------------------------------------------------------
 

@@ -1011,7 +1011,10 @@ def _staged_context(cfg: dict, args) -> tuple[str, str | None]:
     parts = [kind_line, "", "File summary:", stat, "",
              "Excerpts (reference only - describe the change as a whole, not "
              "the text's topic):"]
-    used = sum(len(p) for p in parts)
+    # +1 per part counts the newline "\n".join() will insert; without it the
+    # marker reservation below undercounts and the final [:limit] clamp can
+    # still clip the marker's tail.
+    used = sum(len(p) + 1 for p in parts)
     for name in kept:
         diff = run_git(["-c", "core.quotepath=off", "diff", "--cached", "-U1", "--", name])
         excerpt_lines = diff.splitlines()[:40]
@@ -1028,7 +1031,7 @@ def _staged_context(cfg: dict, args) -> tuple[str, str | None]:
             parts.append(marker)
             break
         parts.append(excerpt)
-        used += len(excerpt)
+        used += len(excerpt) + 1
     return "\n".join(parts)[:limit], suggested
 
 
