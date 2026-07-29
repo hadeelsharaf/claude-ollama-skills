@@ -20,3 +20,6 @@ Thumbs.db
 *.log
 .idea/
 .vscode/
+# A/B benchmark outputs - only explicitly published aggregates are tracked
+benchmarks/results/*
+!benchmarks/results/ab-published-*.json
