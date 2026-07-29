@@ -14,10 +14,24 @@ execution:
   allowed_tools: [Read, Bash, Glob, Grep, Skill]
 runs: 3
 graders:
+  # Objective check: the discovered schema's regex grader can target
+  # "last_message" (same union used by the llm grader's "focus") — no LLM
+  # judgment needed to check whether the three planted facts are literally
+  # named. Uses zero-width lookaheads (?=[\s\S]*...) so all three substrings
+  # must appear somewhere in the reply, in any order, alongside the LLM
+  # grader that judges phrasing/root-cause quality and "no invented causes"
+  # (which a regex cannot judge).
+  - type: regex
+    name: summary_planted_facts
+    target: last_message
+    pattern: '^(?=[\s\S]*db-primary)(?=[\s\S]*worker-3)(?=[\s\S]*(?:oom|out of memory))(?=[\s\S]*shard_map)'
+    flags: "i"
+    match: contains
+    weight: 0.4
   - type: llm
     name: summary_accuracy
     focus: last_message
-    weight: 1
+    weight: 0.6
     criteria: >-
       Score 1 only if the summary names the db-primary:5432 connection
       refusals, the worker-3 out-of-memory kill, and the shard_map KeyError,

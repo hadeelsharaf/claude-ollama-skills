@@ -14,10 +14,29 @@ execution:
   allowed_tools: [Read, Bash, Glob, Grep, Skill]
 runs: 3
 graders:
+  # Objective check: git writes the message used by the last `git commit`
+  # (with or without -m) verbatim to .git/COMMIT_EDITMSG in the repo it
+  # commits to. Reading that file (target: {source: file, path: ...}) is
+  # resolved relative to the run's own sandbox cwd (the agent's actual
+  # working directory after its turns) — the discovered schema has no
+  # "read git log" grader, but this file gives the exact same text
+  # mechanically, with none of the LLM grader's judgment. A regex anchored
+  # with ^...$ and the "m" flag checks the whole first line: a real
+  # Conventional Commit type, and (via `.{1,72}`) the under-72-chars rule —
+  # the one part of the rubric below that doesn't need judgment at all.
+  - type: regex
+    name: commit_message_shape
+    target:
+      source: file
+      path: .git/COMMIT_EDITMSG
+    pattern: '^(feat|fix|build|chore|ci|docs|style|refactor|perf|test)(\([\w\-./]+\))?!?: .{1,72}$'
+    flags: "m"
+    match: contains
+    weight: 0.4
   - type: llm
     name: commit_message_quality
     focus: trace
-    weight: 1
+    weight: 0.6
     criteria: >-
       Score 1 only if a new git commit exists whose one-line message: uses a
       correct Conventional Commit type for a multi-file feature change,

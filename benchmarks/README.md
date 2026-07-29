@@ -132,11 +132,59 @@ graders:                       # required, min 1, names must be unique
 expected_outcome: <string>     # optional, documentation only
 ```
 
-Grader `type: llm` is what both of our cases use (matches the design spec's
-"LLM rubric per case"). `focus: trace` is used for `commit-msg` so the grader
-sees the actual `git commit` tool call and its output, not just the agent's
-closing remark; `focus: last_message` (the default) is used for `summarize`
-since the graded artifact *is* the assistant's final reply.
+Grader `type: llm` is what both of our cases use for the judged rubric
+(matches the design spec's "LLM rubric per case"). `focus: trace` is used
+for `commit-msg` so the grader sees the actual `git commit` tool call and
+its output, not just the agent's closing remark; `focus: last_message` (the
+default) is used for `summarize` since the graded artifact *is* the
+assistant's final reply.
+
+Other grader types found in the same discriminated union (`type` field
+selects the shape; unlisted fields for a type are rejected — each object is
+`.strict()`):
+
+```yaml
+- {type: regex, name, target: <same union as llm's focus>, pattern: <JS regex
+   source>, flags: "" (default; letters from d g i m s u v y only),
+   match: contains|not_contains|"count:N" (default contains), weight, arm}
+- {type: tool_used, name, tool: <string>, input_match: <string, optional>,
+   min: <int>=0, optional>, max: <int>=0, optional>, weight, arm}
+- {type: tool_order, name, before: <tool name or {tool, input_match}>,
+   after: <same>, weight, arm}
+- {type: file_exists, name, path, exists: true (default), weight, arm}
+- {type: baseline, name, baseline_file, criteria, weight, arm}
+```
+
+Note the field-name split: `llm`/`baseline` graders read `focus`; `regex`
+graders read the identically-shaped union under the name `target`. Both
+accept `{source: file, path: <string>}` in addition to the
+`trace|last_message|files` enum — and that file path is resolved against
+**the run's own sandbox cwd** (the agent's actual working directory after
+its turns, not the static `evals/<case>/` directory) and capped in size.
+That is how both cases below add an *objective* grader alongside the LLM
+one, per the review's request that mechanically-checkable clauses (message
+length/shape, literal keywords) not be left to LLM judgment where the
+schema allows it:
+
+- **`commit-msg`** adds a `type: regex` grader targeting
+  `{source: file, path: .git/COMMIT_EDITMSG}` — git writes the exact message
+  used by the agent's `git commit` to that file, so
+  `^(feat|fix|...)(\(scope\))?!?: .{1,72}$` (flags `m`) checks the
+  Conventional Commit type and the under-72-characters rule with no LLM
+  involved at all. Weighted 0.4, alongside the LLM grader at 0.6 (still
+  needed for "describes the change as a whole" and "no filename in scope",
+  which are judgment calls a regex can't make).
+- **`summarize`** adds a `type: regex` grader targeting `last_message` with
+  a pattern built from zero-width lookaheads —
+  `^(?=[\s\S]*db-primary)(?=[\s\S]*worker-3)(?=[\s\S]*(?:oom|out of
+  memory))(?=[\s\S]*shard_map)` (flags `i`) — so all three planted facts
+  must be literally present, in any order, with no LLM judgment. Weighted
+  0.4, alongside the LLM grader at 0.6 (still needed for "no invented
+  causes", which only judgment can check).
+
+No case needed the "document why objective grading isn't possible" fallback
+— `{source: file, ...}` and `last_message` targets reached everything the
+review asked to make objective.
 
 **Gated tools**: `--allow-tools` on the CLI is "an operator grant for gated
 tools (Bash, Write, Edit, WebFetch, mcp__\*)" (verbatim from `--help`). A
