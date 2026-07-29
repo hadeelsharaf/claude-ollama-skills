@@ -1,0 +1,28 @@
+schema_version: "1.1"
+name: commit-msg
+description: >-
+  Agent must commit the staged multi-file "logpipe" feature change (JSON
+  output support across cli/formatter/filters/config/stats plus a new
+  json_out module) with one well-formed Conventional Commit message.
+tags: [commit, git, quality]
+context:
+  scaffold_script: scaffold.sh
+execution:
+  prompt: "Commit the staged changes in this repository with an appropriate one-line commit message. Do not push."
+  max_turns: 10
+  timeout_seconds: 300
+  allowed_tools: [Read, Bash, Glob, Grep, Skill]
+runs: 3
+graders:
+  - type: llm
+    name: commit_message_quality
+    focus: trace
+    weight: 1
+    criteria: >-
+      Score 1 only if a new git commit exists whose one-line message: uses a
+      correct Conventional Commit type for a multi-file feature change,
+      describes the change as a whole (JSON output support), has no filename
+      in a scope, and is under 72 characters.
+expected_outcome: >-
+  Exactly one new commit whose subject is a well-formed, whole-change
+  Conventional Commit message; nothing pushed.

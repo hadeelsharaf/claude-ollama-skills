@@ -141,3 +141,13 @@ class RunnerTests(unittest.TestCase):
         self.assertIn("savings", table)
         out_files = list((Path(self._tmp) / "out").glob("ab-*.json"))
         self.assertEqual(len(out_files), 1)
+
+
+class EvalCaseTests(unittest.TestCase):
+    def test_eval_cases_reuse_shared_prompts(self):
+        eval_texts = "\n".join(
+            p.read_text(encoding="utf-8")
+            for p in (ROOT / "evals").rglob("*")
+            if p.is_file() and p.suffix in (".yaml", ".yml", ".md"))
+        self.assertIn(fixtures.PROMPT_COMMIT, eval_texts)
+        self.assertIn(fixtures.PROMPT_SUMMARIZE, eval_texts)

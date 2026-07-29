@@ -1,0 +1,27 @@
+schema_version: "1.1"
+name: summarize
+description: >-
+  Agent must read a 4,000-line app.log and summarize the failure patterns:
+  db-primary connection refusals, a worker-3 OOM kill, and a shard_map
+  KeyError traceback, without inventing causes the log does not show.
+tags: [summarize, logs, quality]
+context:
+  scaffold_script: scaffold.sh
+execution:
+  prompt: "Read app.log and summarize what went wrong: the main failure patterns and the most likely root cause. Keep it under 15 lines."
+  max_turns: 10
+  timeout_seconds: 300
+  allowed_tools: [Read, Bash, Glob, Grep, Skill]
+runs: 3
+graders:
+  - type: llm
+    name: summary_accuracy
+    focus: last_message
+    weight: 1
+    criteria: >-
+      Score 1 only if the summary names the db-primary:5432 connection
+      refusals, the worker-3 out-of-memory kill, and the shard_map KeyError,
+      and does not invent causes absent from the log.
+expected_outcome: >-
+  A summary under 15 lines naming all three planted facts and no invented
+  root cause.
