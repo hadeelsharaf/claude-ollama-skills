@@ -1515,11 +1515,20 @@ class OllamaAskTests(unittest.TestCase):
         path = self._write_stats_fixture()
         code, out, err = self.run_cli("stats", "--reset")
         self.assertEqual(code, 0, msg=err)
-        self.assertIn("Ledger reset", out)
+        self.assertIn("Ledger reset", err)   # stderr: stdout stays data-only
         self.assertFalse(path.exists())
         self.assertTrue(Path(str(path) + ".bak").is_file())
         code, out, _ = self.run_cli("stats")
         self.assertIn("No usage recorded yet", out)
+
+    def test_stats_json_reset_stdout_stays_json(self):
+        path = self._write_stats_fixture()
+        code, out, err = self.run_cli("stats", "--json", "--reset")
+        self.assertEqual(code, 0, msg=err)
+        data = json.loads(out)               # stdout must be pure JSON
+        self.assertEqual(data["total"]["calls"], 3)
+        self.assertIn("Ledger reset", err)
+        self.assertTrue(Path(str(path) + ".bak").is_file())
 
     def test_stats_missing_ledger_friendly(self):
         os.chdir(self._tmp)   # no repo, no config; HOME ledger absent

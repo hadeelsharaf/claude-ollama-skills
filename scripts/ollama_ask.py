@@ -712,7 +712,8 @@ def cmd_stats(args, cfg: dict) -> int:
     if args.reset:
         backup = str(path) + ".bak"
         os.replace(path, backup)
-        print(f"Ledger reset; previous data in {backup}")
+        # stderr, so `stats --json --reset` keeps stdout machine-readable
+        eprint(f"Ledger reset; previous data in {backup}")
     return EXIT_OK
 
 
