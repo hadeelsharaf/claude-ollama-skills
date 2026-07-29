@@ -695,13 +695,19 @@ def _semantic_problem(message, suggested):
 COMMIT_SYSTEM = (
     "You write git commit messages. Reply with ONE line in Conventional Commit "
     f"format: <type>: <summary>. Allowed types: {COMMIT_TYPES}. Use present "
-    "tense. Keep the whole line under 72 characters. Describe only what the "
-    "diff shows — never invent issue numbers or details. Your entire response "
-    "is passed directly into git commit, so reply with the message only."
+    "tense. Keep the whole line under 72 characters. Choosing the type: when "
+    "the input names a suggested type, use it unless the excerpts plainly "
+    "contradict it; docs: when only documentation changed; test: for test-only "
+    "changes; ci: for CI config; chore: for version or config housekeeping. "
+    "Describe what the commit DOES to the files (add, update, remove) - never "
+    "the topic discussed inside them. Use a bare type with no parentheses. "
+    "Describe only what the diff shows - never invent issue numbers or "
+    "details. Your entire response is passed directly into git commit, so "
+    "reply with the message only."
 )
 
 
-def _staged_context(cfg: dict, args) -> str:
+def _staged_context(cfg: dict, args) -> tuple[str, str | None]:
     inside = run_git(["rev-parse", "--is-inside-work-tree"], check=False).strip()
     if inside != "true":
         raise CliError(EXIT_USAGE, "Not inside a git repository.")
@@ -715,7 +721,10 @@ def _staged_context(cfg: dict, args) -> str:
             if not any(fnmatch.fnmatch(Path(n).name, p) for p in LOCKFILE_PATTERNS)]
     limit = (args.max_input_chars if args.max_input_chars is not None
              else _cfg_int(cfg, "max_input_chars", 2500))
-    parts = ["File summary:", stat, ""]
+    kind_line, suggested = _change_kind(kept)
+    parts = [kind_line, "", "File summary:", stat, "",
+             "Excerpts (reference only - describe the change as a whole, not "
+             "the text's topic):"]
     used = sum(len(p) for p in parts)
     for name in kept:
         diff = run_git(["-c", "core.quotepath=off", "diff", "--cached", "-U1", "--", name])
@@ -726,26 +735,37 @@ def _staged_context(cfg: dict, args) -> str:
             break
         parts.append(excerpt)
         used += len(excerpt)
-    return "\n".join(parts)[:limit]
+    return "\n".join(parts)[:limit], suggested
 
 
 def cmd_commit_msg(args, cfg: dict) -> int:
-    context = _staged_context(cfg, args)
+    context, suggested = _staged_context(cfg, args)
     style_note = "" if args.body else " Reply with one single line."
     prompt = f"Write the commit message for this staged change:\n\n{context}"
     text = generate("commit", prompt, args, cfg, system=COMMIT_SYSTEM + style_note)
     message = _clean_commit(text, args)
 
-    if args.style == "conventional" and not _valid_commit_line(message):
-        feedback = (COMMIT_SYSTEM + style_note +
-                    f" Your last answer was rejected: {message!r}. It must match "
-                    "<type>: <summary> with an allowed type and under 72 chars total.")
-        text = generate("commit", prompt, args, cfg, system=feedback)
-        message = _clean_commit(text, args)
+    if args.style == "conventional":
+        problem = None
         if not _valid_commit_line(message):
-            eprint(f"raw output:\n{text}")
-            raise CliError(EXIT_BAD_OUTPUT,
-                           "Model could not produce a valid Conventional Commit line.")
+            problem = (f"Your last answer was rejected: {message!r}. It must "
+                       "match <type>: <summary> with an allowed type and "
+                       "under 72 chars total.")
+        else:
+            semantic = _semantic_problem(message, suggested)
+            if semantic:
+                problem = (f"Your last answer was rejected: {message!r} - "
+                           f"{semantic}.")
+        if problem:
+            text = generate("commit", prompt, args, cfg,
+                            system=COMMIT_SYSTEM + style_note + " " + problem)
+            message = _clean_commit(text, args)
+            if (not _valid_commit_line(message)
+                    or _semantic_problem(message, suggested)):
+                eprint(f"raw output:\n{text}")
+                raise CliError(EXIT_BAD_OUTPUT,
+                               "Model could not produce a valid Conventional "
+                               "Commit line.")
     print(message)
     return EXIT_OK
 

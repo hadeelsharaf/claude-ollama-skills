@@ -114,6 +114,21 @@ class FakeOllamaHandler(BaseHTTPRequestHandler):
             text = "this is not json at all"
         elif "pull request descriptions" in prompt:
             text = CANNED_PR_JSON
+        elif "ALWAYSWRONGTYPE" in prompt:
+            text = "fix: update stuff"
+        elif "WRONGTYPEONCE" in prompt:
+            key = "wrongtype"
+            FakeOllamaHandler.counters[key] = FakeOllamaHandler.counters.get(key, 0) + 1
+            text = ("fix: update stuff" if FakeOllamaHandler.counters[key] == 1
+                    else "docs: update the guides")
+        elif "SCOPEDRAFTONCE" in prompt:
+            key = "scopedraft"
+            FakeOllamaHandler.counters[key] = FakeOllamaHandler.counters.get(key, 0) + 1
+            text = ("docs(readme.md): update the guides"
+                    if FakeOllamaHandler.counters[key] == 1
+                    else "docs: update the guides")
+        elif "suggested type: docs" in prompt:
+            text = "docs: update the guides"
         elif payload.get("format") == "json":
             text = CANNED_JSON
         else:
@@ -473,6 +488,52 @@ class OllamaAskTests(unittest.TestCase):
                       ollama_ask._semantic_problem("fix(scripts/a.py): x", None))
         self.assertIsNone(ollama_ask._semantic_problem("feat(parser): x", None))
         self.assertIsNone(ollama_ask._semantic_problem("not a commit line", "docs"))
+
+    def _make_docs_repo(self):
+        repo = Path(self._tmp) / "docsrepo"
+        repo.mkdir()
+        subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+        (repo / "README.md").write_text("# hello\n", encoding="utf-8")
+        (repo / "docs").mkdir()
+        (repo / "docs" / "note.md").write_text("note\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=repo, check=True)
+        os.chdir(repo)
+        return repo
+
+    def test_commit_msg_prompt_leads_with_kind_line(self):
+        self._make_docs_repo()
+        FakeOllamaHandler.prompts = []
+        code, out, err = self.run_cli("commit-msg")
+        self.assertEqual(code, 0, msg=err)
+        self.assertTrue(out.startswith("docs:"), msg=out)
+        body = FakeOllamaHandler.prompts[0]
+        lines = body.splitlines()
+        self.assertTrue(lines[2].startswith("File kinds:"), msg=lines[:4])
+        self.assertIn("suggested type: docs", body)
+        self.assertIn("Excerpts (reference only", body)
+
+    def test_commit_msg_wrong_type_retried_and_corrected(self):
+        repo = self._make_docs_repo()
+        (repo / "docs" / "extra.md").write_text("WRONGTYPEONCE\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=repo, check=True)
+        code, out, err = self.run_cli("commit-msg")
+        self.assertEqual(code, 0, msg=err)
+        self.assertEqual(out.strip(), "docs: update the guides")
+
+    def test_commit_msg_filename_scope_retried(self):
+        repo = self._make_docs_repo()
+        (repo / "docs" / "extra.md").write_text("SCOPEDRAFTONCE\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=repo, check=True)
+        code, out, err = self.run_cli("commit-msg")
+        self.assertEqual(code, 0, msg=err)
+        self.assertEqual(out.strip(), "docs: update the guides")
+
+    def test_commit_msg_persistent_wrong_type_exits_6(self):
+        repo = self._make_docs_repo()
+        (repo / "docs" / "extra.md").write_text("ALWAYSWRONGTYPE\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=repo, check=True)
+        code, out, err = self.run_cli("commit-msg")
+        self.assertEqual(code, 6, msg=err)
 
     # -- draft-code ---------------------------------------------------------
 
