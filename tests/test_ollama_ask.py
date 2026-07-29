@@ -1374,6 +1374,14 @@ class OllamaAskTests(unittest.TestCase):
             for needle in needles:
                 self.assertIn(needle, body, msg=f"{needle!r} missing from {rel}")
 
+    def test_commit_intent_rule_pinned(self):
+        for rel in ("skills/ollama-commit/SKILL.md", "agents/ollama-git.md"):
+            text = (ROOT / rel).read_text(encoding="utf-8")
+            self.assertIn("pass what you already know", text, msg=rel)
+            self.assertIn("--type", text, msg=rel)
+            self.assertIn("--hint", text, msg=rel)
+            self.assertIn("omit both", text, msg=rel)
+
     # -- pr-desc --------------------------------------------------------------
 
     def test_pr_desc_returns_valid_json(self):

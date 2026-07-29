@@ -128,6 +128,13 @@ ask for it. Your OK is required every time.
 
 Before it pushes, Claude always shows you the target, like this: `branch -> remote`.
 
+When you (or Claude) already know what the change is, say so — the draft only
+has to word it:
+
+```bash
+python scripts/ollama_ask.py commit-msg --type feat --hint "add retry helper"
+```
+
 ## Open a PR with the local model
 
 `pr-desc` reads your branch's commit subjects locally and drafts a PR title and

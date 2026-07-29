@@ -22,6 +22,9 @@ Use `python` on Windows, `python3` on macOS/Linux.
    (`git add <paths>`). Never `git add -A` unless the user said "everything".
    Nothing to stage → report that and stop.
 2. `python "$SCRIPT" commit-msg` (add `--body` only if asked).
+   If you authored or planned the staged change, pass what you already know:
+   `--type <t>` and a one-line `--hint`. If you are drafting for changes you did
+   not make, omit both.
 3. Validate the printed message:
    - First line matches `type: summary`, under 72 chars, type in:
      feat, fix, build, chore, ci, docs, style, refactor, perf, test.
@@ -63,5 +66,5 @@ Use `python` on Windows, `python3` on macOS/Linux.
    failure — fixing hooks is the ollama-precommit skill's job. A plain push to the
    current branch is allowed only via `commit-push`, never with force or
    branch-delete flags.
-4. Use only documented flags (`commit-msg --body --style`, `warmup --task`,
+4. Use only documented flags (`commit-msg --body --style --type --hint`, `warmup --task`,
    `health`). Do not invent flags.

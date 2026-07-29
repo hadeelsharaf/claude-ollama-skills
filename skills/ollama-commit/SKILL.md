@@ -21,6 +21,9 @@ Use `python` on Windows, `python3` on macOS/Linux.
 1. `git status --porcelain` — if nothing is staged, tell the user what is unstaged and
    stop. Stage only what the user asked for. Never `git add -A` on your own.
 2. `python "$SCRIPT" commit-msg` (add `--body` if the user wants a message body).
+   If you authored or planned the staged change, pass what you already know:
+   `--type <t>` and a one-line `--hint`. If you are drafting for changes you did
+   not make, omit both.
 3. Judge the printed message with only cheap context:
    - Format: first line matches `type: summary`, under 72 chars, allowed types:
      feat, fix, build, chore, ci, docs, style, refactor, perf, test.

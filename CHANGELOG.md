@@ -17,6 +17,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
   (docs / tests / CI / config) into the prompt with a suggested type, excerpts
   are demoted to reference-only, and wrong-type or filename-scoped drafts are
   rejected with corrective feedback before Claude reviews them.
+- `commit-msg --type <t>` and `--hint "<one line>"`: the caller passes the type
+  and intent it already knows; the semantic gate enforces the stated type.
+  Excerpts now lead with the highest-churn file, length rejections state the
+  measured character count, and hinted drafts are marked `"hinted": true` in
+  the usage ledger.
 
 ### Changed
 

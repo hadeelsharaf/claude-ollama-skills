@@ -106,6 +106,35 @@ def main() -> int:
     finally:
         rmtree_force(docs_tmp)
 
+    mixed_tmp = tempfile.mkdtemp(prefix="ollama_e2e_mixed_")
+    try:
+        mixed_repo = Path(mixed_tmp) / "repo"
+        mixed_repo.mkdir()
+        subprocess.run(["git", "init", "-q"], cwd=mixed_repo, check=True, capture_output=True)
+        subprocess.run(["git", "config", "user.email", "test@example.com"],
+                       cwd=mixed_repo, check=True)
+        subprocess.run(["git", "config", "user.name", "Test User"], cwd=mixed_repo, check=True)
+        (mixed_repo / "upload.py").write_text(
+            "def upload(client, blob):\n"
+            "    for attempt in range(3):\n"
+            "        if client.put(blob):\n"
+            "            return True\n"
+            "    return False\n",
+            encoding="utf-8",
+        )
+        (mixed_repo / "README.md").write_text(
+            "# Uploader\n\nRetries uploads three times.\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=mixed_repo, check=True)
+        out = run_step("commit-msg-hinted",
+                       ["commit-msg", "--type", "feat",
+                        "--hint", "add upload retry helper"], cwd=mixed_repo)
+        if not out.strip().startswith("feat:"):
+            print(f"E2E commit-msg-hinted FAILED: expected a feat: draft, got {out.strip()!r}")
+            sys.exit(1)
+        print(f"  commit-msg-hinted said: {out!r}")
+    finally:
+        rmtree_force(mixed_tmp)
+
     out = run_step("draft-command", ["draft-command", "show the five newest files in this folder"])
     print(f"  draft-command said: {out[:100]!r}...")
 
