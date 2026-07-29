@@ -13,6 +13,8 @@ docs/superpowers/
 venv/
 .ollama-skills.json
 !config/.ollama-skills.example.json
+# local usage ledger (counts only) - see README "Track what it saves you"
+.ollama-skills-usage.jsonl
 .DS_Store
 Thumbs.db
 *.log

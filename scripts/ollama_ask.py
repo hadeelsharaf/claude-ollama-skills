@@ -42,6 +42,7 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 
 EXIT_OK = 0
@@ -288,8 +289,8 @@ def http_get_json(host: str, path: str) -> dict:
 
 
 def stream_generate(cfg: dict, payload: dict, stall_seconds: int,
-                    total_seconds: int, quiet: bool) -> str:
-    """POST /api/generate with stream:true. Returns the full response text."""
+                    total_seconds: int, quiet: bool) -> tuple[str, dict]:
+    """POST /api/generate with stream:true. Returns (full text, usage stats)."""
     host = cfg["host"]
     model = payload.get("model", "?")
     body = json.dumps(payload).encode("utf-8")
@@ -297,9 +298,11 @@ def stream_generate(cfg: dict, payload: dict, stall_seconds: int,
         host + "/api/generate", data=body,
         headers={"Content-Type": "application/json"}, method="POST",
     )
+    started = time.monotonic()
     deadline = time.monotonic() + total_seconds
     pieces = []
     done_seen = False
+    final_chunk: dict = {}
     try:
         # The socket timeout applies to every read: it is the stall detector.
         with urllib.request.urlopen(request, timeout=stall_seconds) as resp:
@@ -327,6 +330,7 @@ def stream_generate(cfg: dict, payload: dict, stall_seconds: int,
                     sys.stderr.flush()
                 if chunk.get("done"):
                     done_seen = True
+                    final_chunk = chunk
                     break
     except urllib.error.HTTPError as exc:
         detail = ""
@@ -356,7 +360,12 @@ def stream_generate(cfg: dict, payload: dict, stall_seconds: int,
             f"Stream from {model} ended before it was finished — output may be "
             "truncated. Check `ollama serve` logs and retry.",
         )
-    return "".join(pieces)
+    stats = {
+        "prompt_tokens": final_chunk.get("prompt_eval_count"),
+        "output_tokens": final_chunk.get("eval_count"),
+        "duration_s": round(time.monotonic() - started, 2),
+    }
+    return "".join(pieces), stats
 
 
 def _stall_error(model: str, stall_seconds: int) -> CliError:
@@ -408,11 +417,21 @@ def generate(task: str, prompt: str, args, cfg: dict, system=None,
     total = args.timeout if args.timeout is not None else _cfg_int(cfg, "total_timeout_seconds", 480)
     debug(f"model={model} stall={stall}s total={total}s options={options}")
     try:
-        text = stream_generate(cfg, payload, stall, total, args.quiet)
+        text, stats = stream_generate(cfg, payload, stall, total, args.quiet)
     except ThinkRejected:
         payload.pop("think", None)
-        text = stream_generate(cfg, payload, stall, total, args.quiet)
-    return strip_think(text)
+        text, stats = stream_generate(cfg, payload, stall, total, args.quiet)
+    text = strip_think(text)
+    _USAGE_RECORDS.append({
+        "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "task": task,
+        "model": model,
+        "prompt_tokens": stats["prompt_tokens"],
+        "output_tokens": stats["output_tokens"],
+        "duration_s": stats["duration_s"],
+        "returned_chars": len(text),
+    })
+    return text
 
 
 # --------------------------------------------------------------------------
@@ -513,6 +532,87 @@ def run_git(cmd_args, check=True) -> str:
     if check and result.returncode != 0:
         raise CliError(EXIT_USAGE, f"git {' '.join(cmd_args)} failed: {result.stderr.strip()}")
     return result.stdout
+
+
+# --------------------------------------------------------------------------
+# Usage ledger (counts only - never prompt content, paths, or repo names)
+# --------------------------------------------------------------------------
+
+USAGE_BASENAME = ".ollama-skills-usage.jsonl"
+
+_USAGE_RECORDS: list = []
+_USAGE_CTX = {"cmd": None, "avoided_chars": 0}
+
+
+def _usage_enabled(cfg: dict) -> bool:
+    if os.environ.get("OLLAMA_SKILLS_NO_USAGE") == "1":
+        return False
+    return cfg.get("usage_log") is not False
+
+
+def _usage_path(cfg: dict):
+    """Resolve the ledger location. Returns (path, repo_root_or_None).
+
+    Config "usage_log_path" wins; else the git toplevel (per-repo ledger);
+    else the home directory. Never raises - stats and the flush both depend
+    on that.
+    """
+    override = cfg.get("usage_log_path")
+    if override:
+        return Path(override), None
+    try:
+        top = run_git(["rev-parse", "--show-toplevel"], check=False).strip()
+    except CliError:   # git itself missing
+        top = ""
+    if top:
+        root = Path(top)
+        return root / USAGE_BASENAME, root
+    return Path.home() / USAGE_BASENAME, None
+
+
+def _ensure_excluded(root: Path) -> None:
+    """Keep the ledger untracked via .git/info/exclude (never the user's
+    .gitignore). Best-effort: in linked worktrees .git is a file and this
+    quietly does nothing."""
+    exclude = root / ".git" / "info" / "exclude"
+    try:
+        existing = exclude.read_text(encoding="utf-8") if exclude.is_file() else ""
+        if USAGE_BASENAME in existing.splitlines():
+            return
+        exclude.parent.mkdir(parents=True, exist_ok=True)
+        with open(exclude, "a", encoding="utf-8") as fh:
+            fh.write(USAGE_BASENAME + "\n")
+    except OSError:
+        pass
+
+
+def _flush_usage(cfg: dict, code: int) -> None:
+    """Write buffered records once per process, after the handler finished.
+
+    Only the LAST record of a successful (exit 0) run is `delivered` - the
+    draft Claude actually reads; retries and map chunks are cost, not
+    savings. avoided_chars rides only on the delivered record.
+    """
+    records = list(_USAGE_RECORDS)
+    _USAGE_RECORDS.clear()
+    if not records or not _usage_enabled(cfg):
+        return
+    try:
+        path, repo_root = _usage_path(cfg)
+        first_write = not path.exists()
+        for i, rec in enumerate(records):
+            delivered = code == EXIT_OK and i == len(records) - 1
+            rec["v"] = 1
+            rec["cmd"] = _USAGE_CTX["cmd"]
+            rec["delivered"] = delivered
+            rec["avoided_chars"] = _USAGE_CTX["avoided_chars"] if delivered else 0
+        with open(path, "a", encoding="utf-8") as fh:
+            for rec in records:
+                fh.write(json.dumps(rec) + "\n")
+        if first_write and repo_root is not None:
+            _ensure_excluded(repo_root)
+    except OSError as exc:
+        debug(f"usage ledger skipped: {exc}")
 
 
 # --------------------------------------------------------------------------
@@ -1679,20 +1779,27 @@ def main(argv=None) -> int:
         return EXIT_USAGE if exc.code not in (0, None) else EXIT_OK
     if not args.quiet and not sys.stderr.isatty():
         args.quiet = True  # progress dots are noise in captured output
+    cfg = None
+    code = 1
     try:
         cfg = load_config()
-        return HANDLERS[args.command](args, cfg)
+        _USAGE_CTX["cmd"] = args.command
+        _USAGE_CTX["avoided_chars"] = 0
+        code = HANDLERS[args.command](args, cfg)
     except CliError as exc:
         eprint(f"error: {exc}")
-        return exc.code
+        code = exc.code
     except KeyboardInterrupt:
         eprint("interrupted")
-        return 130
+        code = 130
     except Exception as exc:  # noqa: BLE001 - keep the exit-code contract
         eprint(f"unexpected error: {type(exc).__name__}: {exc}")
         if os.environ.get("OLLAMA_SKILLS_DEBUG"):
             raise
-        return 1
+        code = 1
+    if cfg is not None:
+        _flush_usage(cfg, code)
+    return code
 
 
 if __name__ == "__main__":

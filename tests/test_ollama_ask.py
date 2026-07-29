@@ -200,6 +200,11 @@ class OllamaAskTests(unittest.TestCase):
         os.environ["OLLAMA_HOST"] = f"http://127.0.0.1:{self.port}"
         os.environ["HOME"] = self._tmp
         os.environ["USERPROFILE"] = self._tmp
+        # Tests must never write a usage ledger into the real repo or home.
+        # Usage tests opt back in explicitly by deleting this key.
+        os.environ["OLLAMA_SKILLS_NO_USAGE"] = "1"
+        ollama_ask._USAGE_RECORDS.clear()
+        ollama_ask._USAGE_CTX.update({"cmd": None, "avoided_chars": 0})
         self._saved_cwd = os.getcwd()
 
     def tearDown(self):
@@ -588,6 +593,112 @@ class OllamaAskTests(unittest.TestCase):
         code, out, err = self.run_cli("commit-msg")
         self.assertEqual(code, 0, msg=err)
         self.assertEqual(out.strip(), "docs(readme.md): update the guides")
+
+    # -- usage ledger --------------------------------------------------------
+
+    def _read_ledger(self, repo: Path) -> list:
+        path = repo / ".ollama-skills-usage.jsonl"
+        self.assertTrue(path.is_file(), msg=f"no ledger at {path}")
+        return [json.loads(line) for line in
+                path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+    def test_usage_ledger_written_in_repo(self):
+        repo = self._make_repo(staged=True)
+        os.environ.pop("OLLAMA_SKILLS_NO_USAGE", None)
+        code, _, err = self.run_cli("commit-msg")
+        self.assertEqual(code, 0, msg=err)
+        records = self._read_ledger(repo)
+        self.assertEqual(len(records), 1)
+        rec = records[0]
+        self.assertEqual(rec["v"], 1)
+        self.assertEqual(rec["cmd"], "commit-msg")
+        self.assertEqual(rec["task"], "commit")
+        self.assertEqual(rec["prompt_tokens"], 10)   # fake server's real counts
+        self.assertEqual(rec["output_tokens"], 12)
+        self.assertTrue(rec["delivered"])
+        self.assertIn("avoided_chars", rec)          # value wired in Task 2
+        self.assertGreater(rec["returned_chars"], 0)
+        exclude = repo / ".git" / "info" / "exclude"
+        self.assertIn(".ollama-skills-usage.jsonl",
+                      exclude.read_text(encoding="utf-8"))
+
+    def test_usage_exclude_entry_written_once(self):
+        repo = self._make_repo(staged=True)
+        os.environ.pop("OLLAMA_SKILLS_NO_USAGE", None)
+        self.assertEqual(self.run_cli("commit-msg")[0], 0)
+        self.assertEqual(self.run_cli("commit-msg")[0], 0)
+        entries = [line for line in
+                   (repo / ".git" / "info" / "exclude").read_text(
+                       encoding="utf-8").splitlines()
+                   if line == ".ollama-skills-usage.jsonl"]
+        self.assertEqual(len(entries), 1)
+
+    def test_usage_optout_env_writes_nothing(self):
+        repo = self._make_repo(staged=True)   # setUp already set NO_USAGE=1
+        code, _, err = self.run_cli("commit-msg")
+        self.assertEqual(code, 0, msg=err)
+        self.assertFalse((repo / ".ollama-skills-usage.jsonl").exists())
+
+    def test_usage_optout_config_writes_nothing(self):
+        repo = self._make_repo(staged=True)
+        os.environ.pop("OLLAMA_SKILLS_NO_USAGE", None)
+        (repo / ".ollama-skills.json").write_text(
+            json.dumps({"usage_log": False}), encoding="utf-8")
+        code, _, err = self.run_cli("commit-msg")
+        self.assertEqual(code, 0, msg=err)
+        self.assertFalse((repo / ".ollama-skills-usage.jsonl").exists())
+
+    def test_usage_ledger_never_contains_content(self):
+        repo = self._make_repo(staged=True)   # stages SECRETMARKER123 in upload.py
+        os.environ.pop("OLLAMA_SKILLS_NO_USAGE", None)
+        self.assertEqual(self.run_cli("commit-msg")[0], 0)
+        text = (repo / ".ollama-skills-usage.jsonl").read_text(encoding="utf-8")
+        self.assertNotIn("SECRETMARKER123", text)
+        self.assertNotIn("upload.py", text)
+
+    def test_usage_log_path_override(self):
+        repo = self._make_repo(staged=True)
+        os.environ.pop("OLLAMA_SKILLS_NO_USAGE", None)
+        target_dir = Path(self._tmp) / "elsewhere"
+        target_dir.mkdir()
+        target = target_dir / "usage.jsonl"
+        (repo / ".ollama-skills.json").write_text(
+            json.dumps({"usage_log_path": str(target)}), encoding="utf-8")
+        code, _, err = self.run_cli("commit-msg")
+        self.assertEqual(code, 0, msg=err)
+        self.assertTrue(target.is_file())
+        self.assertFalse((repo / ".ollama-skills-usage.jsonl").exists())
+
+    def test_usage_path_home_fallback_outside_repo(self):
+        os.chdir(self._tmp)   # tempdir, not a git repo; HOME/USERPROFILE = self._tmp
+        cfg = {"tasks": {}}
+        path, root = ollama_ask._usage_path(cfg)
+        self.assertIsNone(root)
+        self.assertEqual(path, Path(self._tmp) / ".ollama-skills-usage.jsonl")
+
+    def test_usage_retry_marks_only_final_delivered(self):
+        repo = self._make_docs_repo()
+        (repo / "docs" / "extra.md").write_text("WRONGTYPEONCE\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=repo, check=True)
+        os.environ.pop("OLLAMA_SKILLS_NO_USAGE", None)
+        code, _, err = self.run_cli("commit-msg")
+        self.assertEqual(code, 0, msg=err)
+        records = self._read_ledger(repo)
+        self.assertEqual(len(records), 2)
+        self.assertEqual([r["delivered"] for r in records], [False, True])
+        self.assertEqual(records[0]["avoided_chars"], 0)
+
+    def test_usage_exit6_marks_all_undelivered(self):
+        repo = self._make_docs_repo()
+        (repo / "docs" / "extra.md").write_text("ALWAYSWRONGTYPE\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=repo, check=True)
+        os.environ.pop("OLLAMA_SKILLS_NO_USAGE", None)
+        code, _, _ = self.run_cli("commit-msg")
+        self.assertEqual(code, 6)
+        records = self._read_ledger(repo)
+        self.assertEqual(len(records), 2)
+        self.assertFalse(any(r["delivered"] for r in records))
+        self.assertTrue(all(r["avoided_chars"] == 0 for r in records))
 
     # -- draft-code ---------------------------------------------------------
 
