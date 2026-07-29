@@ -42,7 +42,7 @@ safe to run blind.
 Three layers, coupled by an **exit-code contract** rather than by imports:
 
 1. **`scripts/ollama_ask.py`** — the only runtime code. Subcommands: `health`, `models`,
-   `warmup`, `ask`, `commit-msg`, `commit-push`, `draft-command`, `draft-code`, `fix-lint`,
+   `warmup`, `ask`, `commit-msg`, `commit-push`, `pr-desc`, `pr-create`, `draft-command`, `draft-code`, `fix-lint`,
    `summarize`. All model calls funnel through `generate()` → `stream_generate()`
    (`POST /api/generate`, `stream: true`, `think: false`); the socket read timeout *is* the
    stall detector. Task profiles (`TASK_DEFAULTS` for `commit|shell|code|general|summarize`)
@@ -64,7 +64,7 @@ Skills reference the script as `${CLAUDE_PLUGIN_ROOT}/scripts/ollama_ask.py`
 
 `0` ok · `2` bad usage / over budget · `3` Ollama unreachable · `4` model missing ·
 `5` stall/timeout · `6` output failed validation · `7` protected branch refused ·
-`8` git command failed · `1` unexpected · `130` interrupted.
+`8` git/gh/glab command failed · `1` unexpected · `130` interrupted.
 
 These codes are how a failed delegation degrades gracefully: on 3/4/5/6 the skill tells
 Claude to do the task itself and say so. The codes appear in **four** places that must

@@ -75,6 +75,7 @@ Check the setup, then just ask Claude in plain words:
 | "explain why this container keeps crashing" | `ollama-docker` skill (logs → local summarize, checked) |
 | "why is this pod crashlooping?" | `ollama-k8s` skill (describe+events+logs → local summarize; context echoed) |
 | "what changed on this branch this week?" | `ollama-git-history` skill (compact log → local summarize) |
+| "open a PR for this branch" | `ollama-pr` skill (local model drafts the description; created as a draft PR via gh/glab) |
 
 Skills can also be invoked directly: `/ollama-skills:ollama-commit`.
 Background agents (run on cheap haiku): `@agent-ollama-skills:ollama-coder`,
@@ -89,6 +90,8 @@ python scripts/ollama_ask.py warmup --task commit
 python scripts/ollama_ask.py commit-msg
 python scripts/ollama_ask.py draft-command "show the five newest files"
 python scripts/ollama_ask.py draft-code --spec "csv to json converter" --lang python
+python scripts/ollama_ask.py pr-desc
+python scripts/ollama_ask.py pr-create --title "feat: x" --body "..."
 docker logs --tail 200 web 2>&1 | python scripts/ollama_ask.py summarize --kind log
 ```
 
@@ -110,6 +113,17 @@ branches unless you say yes first. Claude only adds `--allow-protected` after yo
 ask for it. Your OK is required every time.
 
 Before it pushes, Claude always shows you the target, like this: `branch -> remote`.
+
+## Open a PR with the local model
+
+`pr-desc` reads your branch's commit subjects locally and drafts a PR title and
+description. Claude reviews them, then one gated step — `pr-create` — opens the PR
+with `gh` (GitHub) or `glab` (GitLab), picked from your remote URL.
+
+PRs are created as **drafts** by default. Claude adds `--ready` only when you
+explicitly ask for a ready-for-review PR. Force-push, `--web`, and editing existing
+PRs are not possible through this path, and a PR can never be opened from `main` or
+`master` as the head branch.
 
 ## Models used during development
 
@@ -174,7 +188,7 @@ auto-detect from installed models.
 
 Exit codes: `0` ok · `2` bad usage / over budget · `3` Ollama unreachable ·
 `4` model missing / none fits free RAM · `5` stall/timeout · `6` output failed validation ·
-`7` protected branch refused · `8` git command failed.
+`7` protected branch refused · `8` git/gh/glab command failed.
 Skills use these to fall back: **if the local model fails, Claude does the task
 itself and says so** — a failed delegation never blocks work.
 

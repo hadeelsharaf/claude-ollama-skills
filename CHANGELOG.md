@@ -12,6 +12,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
   and `--json` gains a `skipped` array. Explicit `--model` / env / config picks are
   never gated. When every matching candidate is gated, the task fails with exit 4
   naming the model, its size, and free RAM.
+- `ollama-pr` skill + `pr-desc`/`pr-create` subcommands: the local model drafts a PR
+  title/description from commit subjects (never patches), Claude reviews, and one
+  gated step opens a **draft** PR/MR via gh or glab (picked from the remote URL).
+  `--ready` is the only escalation; force/web/edit flags cannot be smuggled in.
 
 ### Changed
 
