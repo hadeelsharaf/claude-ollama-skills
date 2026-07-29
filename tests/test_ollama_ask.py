@@ -762,6 +762,40 @@ class OllamaAskTests(unittest.TestCase):
         os.chdir(work)
         return work
 
+    def _install_fake_cli(self, name: str, create_exit: int = 0) -> Path:
+        """Put a fake gh/glab first on PATH. It answers `auth status` with 0,
+        records the argv of any other call to a capture file, and either
+        prints a fake URL or fails with `create_exit`. Found via shutil.which
+        (which honours .bat through PATHEXT on Windows). setUp/tearDown's
+        os.environ save/restore undoes the PATH change."""
+        bin_dir = Path(self._tmp) / "fakebin"
+        bin_dir.mkdir(exist_ok=True)
+        capture = bin_dir / f"{name}-argv.txt"
+        if os.name == "nt":
+            script = bin_dir / f"{name}.bat"
+            lines = ["@echo off",
+                     'if "%1"=="auth" exit /b 0',
+                     f'echo %* >> "{capture}"']
+            if create_exit:
+                lines += ["echo boom 1>&2", f"exit /b {create_exit}"]
+            else:
+                lines += ["echo https://example.test/pr/1"]
+            script.write_text("\r\n".join(lines) + "\r\n", encoding="ascii")
+        else:
+            script = bin_dir / name
+            lines = ["#!/bin/sh",
+                     '[ "$1" = "auth" ] && exit 0',
+                     f'printf \'%s \' "$@" >> "{capture}"',
+                     f'printf \'\\n\' >> "{capture}"']
+            if create_exit:
+                lines += ["echo boom >&2", f"exit {create_exit}"]
+            else:
+                lines += ["echo https://example.test/pr/1"]
+            script.write_text("\n".join(lines) + "\n", encoding="ascii")
+            script.chmod(0o755)
+        os.environ["PATH"] = str(bin_dir) + os.pathsep + os.environ["PATH"]
+        return capture
+
     def test_commit_push_non_protected_branch_succeeds(self):
         work, bare = self._make_push_repo()
         subprocess.run(["git", "branch", "-m", "work"], cwd=work, check=True)
@@ -947,6 +981,89 @@ class OllamaAskTests(unittest.TestCase):
                        cwd=work, check=True)
         code, out, err = self.run_cli("pr-desc")
         self.assertEqual(code, 6, msg=err)
+
+    # -- pr-create --------------------------------------------------------
+
+    def test_pr_create_draft_by_default(self):
+        self._make_pr_repo()
+        capture = self._install_fake_cli("gh")
+        code, out, err = self.run_cli("pr-create", "--title", "feat: add two",
+                                      "--body", "Adds two.")
+        self.assertEqual(code, 0, msg=err)
+        self.assertIn("creating draft PR: feature -> main", out)
+        self.assertIn("https://example.test/pr/1", out)
+        argv = capture.read_text(encoding="utf-8", errors="replace")
+        self.assertIn("--draft", argv)
+        self.assertIn("--base", argv)
+
+    def test_pr_create_ready_omits_draft(self):
+        self._make_pr_repo()
+        capture = self._install_fake_cli("gh")
+        code, out, err = self.run_cli("pr-create", "--title", "feat: add two",
+                                      "--body", "Adds two.", "--ready")
+        self.assertEqual(code, 0, msg=err)
+        self.assertIn("creating ready PR: feature -> main", out)
+        self.assertNotIn("--draft", capture.read_text(encoding="utf-8",
+                                                      errors="replace"))
+
+    def test_pr_create_title_body_verbatim(self):
+        self._make_pr_repo()
+        capture = self._install_fake_cli("gh")
+        code, out, err = self.run_cli(
+            "pr-create", "--title", "feat: add two (verbatim check)",
+            "--body", "Line one with spaces. Line two.")
+        self.assertEqual(code, 0, msg=err)
+        argv = capture.read_text(encoding="utf-8", errors="replace")
+        self.assertIn("feat: add two (verbatim check)", argv)
+        self.assertIn("Line one with spaces. Line two.", argv)
+
+    def test_pr_create_glab_mapping(self):
+        self._make_pr_repo(url="https://gitlab.com/example/repo.git")
+        capture = self._install_fake_cli("glab")
+        code, out, err = self.run_cli("pr-create", "--title", "feat: add two",
+                                      "--body", "Adds two.")
+        self.assertEqual(code, 0, msg=err)
+        argv = capture.read_text(encoding="utf-8", errors="replace")
+        for needle in ("mr", "create", "--description", "--target-branch",
+                       "--source-branch", "--draft"):
+            self.assertIn(needle, argv, msg=f"{needle!r} missing from glab argv")
+
+    def test_pr_create_unknown_host_exits_2(self):
+        self._make_pr_repo(url="https://bitbucket.org/example/repo.git")
+        code, out, err = self.run_cli("pr-create", "--title", "t",
+                                      "--body", "b")
+        self.assertEqual(code, 2, msg=err)
+        self.assertIn("bitbucket.org", err)
+
+    def test_pr_create_missing_cli_exits_2(self):
+        self._make_pr_repo()
+        orig_which = ollama_ask.shutil.which
+        ollama_ask.shutil.which = (
+            lambda name, *a, **k: None if name in ("gh", "glab")
+            else orig_which(name, *a, **k))
+        try:
+            code, out, err = self.run_cli("pr-create", "--title", "t",
+                                          "--body", "b")
+        finally:
+            ollama_ask.shutil.which = orig_which
+        self.assertEqual(code, 2, msg=err)
+        self.assertIn("not installed", err)
+
+    def test_pr_create_no_upstream_exits_2(self):
+        self._make_pr_repo(upstream=False)
+        self._install_fake_cli("gh")
+        code, out, err = self.run_cli("pr-create", "--title", "t",
+                                      "--body", "b")
+        self.assertEqual(code, 2, msg=err)
+        self.assertIn("no upstream", err.lower())
+
+    def test_pr_create_cli_failure_exits_8(self):
+        self._make_pr_repo()
+        self._install_fake_cli("gh", create_exit=1)
+        code, out, err = self.run_cli("pr-create", "--title", "t",
+                                      "--body", "b")
+        self.assertEqual(code, 8, msg=err)
+        self.assertIn("boom", err)
 
 
 if __name__ == "__main__":

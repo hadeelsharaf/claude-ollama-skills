@@ -16,12 +16,13 @@ Subcommands:
   draft-code     Small spec -> code only (fences stripped; syntax check for
                  python, and for javascript when node is installed).
   fix-lint       Lint error + code window -> SEARCH/REPLACE suggestion (never applies).
+  pr-create      Create a draft PR/MR via gh/glab with a reviewed title/body (gated).
   pr-desc        Branch commits vs base -> JSON {title, body} for a PR (local).
   summarize      Log/events/describe/git text -> short digest (map-reduce, local).
 
 Exit codes: 0 ok · 2 bad usage/over budget · 3 Ollama unreachable ·
 4 model missing · 5 timeout/stall · 6 output failed validation ·
-7 protected branch refused · 8 git command failed ·
+7 protected branch refused · 8 git/gh/glab command failed ·
 1 unexpected error · 130 interrupted (Ctrl-C).
 """
 from __future__ import annotations
@@ -1002,6 +1003,100 @@ def cmd_pr_desc(args, cfg: dict) -> int:
     return EXIT_OK
 
 
+def _remote_host(url: str) -> str:
+    """Hostname from an https URL or scp-like git@host:path remote."""
+    bare = re.sub(r"^[a-zA-Z][\w+.-]*://", "", url)
+    first = bare.split("/", 1)[0]
+    if "@" in first:
+        bare = bare.split("@", 1)[1]
+    return re.split(r"[/:]", bare, 1)[0].lower()
+
+
+def cmd_pr_create(args, cfg: dict) -> int:
+    """Create a draft PR/MR with an already-reviewed title and body.
+
+    Calls no Ollama model. Like commit-push, every argv below is fixed
+    literals plus the flag values -- there is no path through which force,
+    web, or edit options can be smuggled in. Draft is the default; --ready
+    is the only escalation and the skill adds it only when the user
+    explicitly asked.
+    """
+    inside = run_git(["rev-parse", "--is-inside-work-tree"], check=False).strip()
+    if inside != "true":
+        raise CliError(EXIT_USAGE, "Not a git repository.")
+    branch = run_git(["symbolic-ref", "-q", "--short", "HEAD"], check=False).strip()
+    if not branch:
+        raise CliError(EXIT_USAGE, "Detached HEAD; checkout a branch first.")
+    if branch in PROTECTED_BRANCHES:
+        raise CliError(EXIT_USAGE,
+                       f"Refusing to open a PR from '{branch}' as the head "
+                       "branch. Create a feature branch first.")
+    base = _pr_base(args, cfg)
+    if branch == base:
+        raise CliError(EXIT_USAGE,
+                       f"Head and base are both '{branch}'. Checkout the "
+                       "feature branch or pass a different --base.")
+    upstream = run_git(["rev-parse", "--abbrev-ref", "--symbolic-full-name",
+                        "@{u}"], check=False).strip()
+    if not upstream:
+        raise CliError(EXIT_USAGE,
+                       "The current branch has no upstream. Push the branch "
+                       "first (use the gated push).")
+    remote = args.remote or (upstream.split("/", 1)[0] if "/" in upstream
+                             else "origin")
+    remote_url = run_git(["remote", "get-url", remote], check=False).strip()
+    if not remote_url:
+        raise CliError(EXIT_USAGE, f"Remote '{remote}' not found.")
+    host = _remote_host(remote_url)
+    if "github" in host:
+        cli = "gh"
+    elif "gitlab" in host:
+        cli = "glab"
+    else:
+        raise CliError(EXIT_USAGE,
+                       f"Unknown host '{host}' - only GitHub and GitLab are "
+                       "supported. Open the PR manually.")
+    cli_path = shutil.which(cli)
+    if not cli_path:
+        hint = ("https://cli.github.com" if cli == "gh"
+                else "https://gitlab.com/gitlab-org/cli")
+        raise CliError(EXIT_USAGE,
+                       f"The '{cli}' CLI is not installed ({hint}). Install "
+                       "it, authenticate, and retry.")
+    auth = subprocess.run([cli_path, "auth", "status"], capture_output=True,
+                          text=True, encoding="utf-8", errors="replace")
+    if auth.returncode != 0:
+        raise CliError(EXIT_USAGE,
+                       f"'{cli}' is not authenticated. Run: {cli} auth login")
+
+    title = (args.title or "").strip()
+    body = (args.body or "").strip()
+    if not title or not body:
+        raise CliError(EXIT_USAGE,
+                       "Both --title and --body are required and non-empty.")
+
+    kind = "ready" if args.ready else "draft"
+    print(f"creating {kind} PR: {branch} -> {base} on {host} ({remote_url})")
+
+    if cli == "gh":
+        argv = [cli_path, "pr", "create", "--title", title, "--body", body,
+                "--base", base, "--head", branch]
+    else:
+        argv = [cli_path, "mr", "create", "--title", title,
+                "--description", body, "--target-branch", base,
+                "--source-branch", branch]
+    if not args.ready:
+        argv.append("--draft")
+    result = subprocess.run(argv, capture_output=True, text=True,
+                            encoding="utf-8", errors="replace")
+    if result.returncode != 0:
+        eprint(result.stderr.strip())
+        raise CliError(EXIT_GIT, f"{cli} failed to create the PR/MR.")
+    out = result.stdout.strip()
+    print(out if out else "created (no URL returned)")
+    return EXIT_OK
+
+
 # --------------------------------------------------------------------------
 # summarize (map-reduce digest of log / events / describe / git text)
 # --------------------------------------------------------------------------
@@ -1360,6 +1455,21 @@ def build_parser() -> argparse.ArgumentParser:
                        help="base branch (default: remote default branch)")
     p_prd.set_defaults(task="general")
 
+    p_prc = sub.add_parser("pr-create", parents=[common],
+                           help="create a draft PR/MR with a reviewed "
+                                "title/body (gated)")
+    p_prc.add_argument("--title", required=True,
+                       help="the Claude-reviewed PR title")
+    p_prc.add_argument("--body", required=True,
+                       help="the Claude-reviewed PR body")
+    p_prc.add_argument("--base",
+                       help="base branch (default: remote default branch)")
+    p_prc.add_argument("--remote", default=None,
+                       help="remote name (default: upstream or origin)")
+    p_prc.add_argument("--ready", action="store_true",
+                       help="create ready-for-review instead of draft "
+                            "(only if the user explicitly asked)")
+
     p_sum = sub.add_parser("summarize", parents=[common],
                            help="digest log/events/describe/git text into a short draft")
     p_sum.add_argument("--file", help="read input text from this file (default: stdin)")
@@ -1394,6 +1504,7 @@ HANDLERS = {
     "draft-code": cmd_draft_code,
     "fix-lint": cmd_fix_lint,
     "pr-desc": cmd_pr_desc,
+    "pr-create": cmd_pr_create,
     "summarize": cmd_summarize,
 }
 
