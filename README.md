@@ -86,6 +86,7 @@ Just ask Claude in plain words:
 | "pre-commit is failing, fix it" | `ollama-precommit` skill (deterministic fixers first) |
 | "zip the logs folder" | `ollama-shell` skill (drafted command + safety check + permission prompt) |
 | "write a small parser for X with the local model" | `ollama-code` skill (draft → line-by-line review) |
+| "summarize errors in app.log" | `ollama-logs` skill (file body → local digest; Claude never reads the file) |
 | "explain why this container keeps crashing" | `ollama-docker` skill (logs → local summarize, checked) |
 | "why is this pod crashlooping?" | `ollama-k8s` skill (describe+events+logs → local summarize; context echoed) |
 | "what changed on this branch this week?" | `ollama-git-history` skill (compact log → local summarize) |
@@ -266,7 +267,7 @@ itself and says so** — a failed delegation never blocks work.
 
 ```
 .claude-plugin/    plugin + marketplace manifests
-skills/            nine SKILL.md folders (ask, commit, precommit, shell, code, docker, k8s, git-history, pr)
+skills/            ten SKILL.md folders (ask, commit, precommit, shell, code, logs, docker, k8s, git-history, pr)
 agents/            three subagents (coder, git, ops) — model: haiku
 scripts/           ollama_ask.py (the one runtime file) + validate_repo.py
 config/            example config

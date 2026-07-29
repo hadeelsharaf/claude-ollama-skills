@@ -1442,6 +1442,15 @@ class OllamaAskTests(unittest.TestCase):
         for needle in needles:
             self.assertIn(needle, body, msg=f"{needle!r} missing from {rel}")
 
+    def test_logs_skill_bans_reading_the_file(self):
+        """ollama-logs delegates the file body away; a reword that dropped
+        the no-read rule would silently defeat the privacy design."""
+        body = (ROOT / "skills" / "ollama-logs" / "SKILL.md").read_text(
+            encoding="utf-8")
+        for needle in ("do not read the file yourself", "Get-Content",
+                       "UNTRUSTED DRAFT", "--tail"):
+            self.assertIn(needle, body, msg=f"{needle!r} missing")
+
     def test_commit_push_born_attached_branch_succeeds(self):
         # The common real-world shape the other commit-push tests miss: a
         # branch with history and HEAD attached (not unborn, not detached).

@@ -47,7 +47,7 @@ Three layers, coupled by an **exit-code contract** rather than by imports:
    (`POST /api/generate`, `stream: true`, `think: false`); the socket read timeout *is* the
    stall detector. Task profiles (`TASK_DEFAULTS` for `commit|shell|code|general|summarize`)
    set max tokens, temperature, and `num_ctx`.
-2. **`skills/*/SKILL.md`** — nine skills. Each is a prompt contract telling Claude which
+2. **`skills/*/SKILL.md`** — ten skills. Each is a prompt contract telling Claude which
    subcommand to run, how to review the draft, which commands are deny-listed, and what to
    do on each exit code. Skills are the safety layer; the script only enforces what a
    script can (branch gating, input budgets, syntax checks).
