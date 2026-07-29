@@ -29,13 +29,14 @@ def rmtree_force(path: str) -> None:
     shutil.rmtree(path, onerror=onerror)
 
 
-def run_step(name: str, argv: list, cwd=None, stdin_text=None) -> str:
+def run_step(name: str, argv: list, cwd=None, stdin_text=None, env=None) -> str:
     started = time.monotonic()
     try:
         result = subprocess.run(
             [sys.executable, str(SCRIPT)] + argv + ["--quiet"],
             capture_output=True, text=True, encoding="utf-8", errors="replace",
             cwd=cwd, timeout=600, input=stdin_text,
+            env={**os.environ, **env} if env else None,
         )
     except subprocess.TimeoutExpired:
         print(f"E2E {name} FAILED: no answer within 600s (is the model too big for this machine?)")
@@ -114,6 +115,27 @@ def main() -> int:
     )
     digest = run_step("summarize", ["summarize", "--kind", "log"], stdin_text=sample)
     print(f"  summarize said: {digest[:100]!r}...")
+
+    import json as _json
+    usage_tmp = tempfile.mkdtemp(prefix="ollama_e2e_usage_")
+    try:
+        ledger = Path(usage_tmp) / "usage.jsonl"
+        cfg_file = Path(usage_tmp) / "cfg.json"
+        cfg_file.write_text(_json.dumps({"usage_log_path": str(ledger)}),
+                            encoding="utf-8")
+        env = {"OLLAMA_SKILLS_CONFIG": str(cfg_file)}
+        run_step("ask-usage", ["ask", "Reply with the single word OK"], env=env)
+        stats_json = run_step("stats-json", ["stats", "--json"], env=env)
+        data = _json.loads(stats_json)
+        if data["total"]["calls"] < 1 or data["total"]["local_tokens"] <= 0:
+            print(f"E2E stats FAILED: no real usage recorded: {stats_json[:200]}")
+            sys.exit(1)
+        table = run_step("stats-table", ["stats"], env=env)
+        print("  stats table:")
+        for line in table.splitlines():
+            print(f"    {line}")
+    finally:
+        rmtree_force(usage_tmp)
 
     print("E2E all green")
     return 0

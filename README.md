@@ -179,6 +179,42 @@ of full hunks, both trace back to the original CPU-only prefill measurements in
 to the devstral row above. GPU owners can raise budgets in config
 ([docs/ADVANCED.md](docs/ADVANCED.md) §6 has per-hardware advice).
 
+## Track what it saves you
+
+Every local model call appends one line of **counts only** to
+`.ollama-skills-usage.jsonl` in the repo root (or `~/.ollama-skills-usage.jsonl`
+outside a repo). The file is kept out of git automatically via
+`.git/info/exclude`. No prompt content, file paths, or repo names are ever
+recorded — a unit test enforces that.
+
+```json
+{"v": 1, "ts": "2026-07-29T21:04:00+00:00", "cmd": "commit-msg", "task": "commit",
+ "model": "qwen2.5-coder:1.5b", "prompt_tokens": 412, "output_tokens": 18,
+ "duration_s": 2.7, "returned_chars": 52, "avoided_chars": 9184, "delivered": true}
+```
+
+See the numbers:
+
+```bash
+python scripts/ollama_ask.py stats            # per-command table + totals
+python scripts/ollama_ask.py stats --json     # machine-readable
+python scripts/ollama_ask.py stats --since 7  # last week only
+python scripts/ollama_ask.py stats --reset    # archive to .bak and start over
+```
+
+Honesty rules, so the numbers stay trustworthy:
+
+- Local token counts are **real** — Ollama reports them per call.
+- Cloud figures are **estimates**: `chars / 4`, labeled as such. "Avoided" is a
+  counterfactual (what Claude would have read without delegation), and net
+  savings subtract the draft Claude reads back.
+- Review overhead (Claude reading `--stat` output and skill text) is not
+  counted, so the cloud-side cost is slightly underestimated.
+- Rejected drafts count their local tokens but claim **zero** savings.
+
+Opt out any time: `OLLAMA_SKILLS_NO_USAGE=1` (env) or `"usage_log": false`
+(config). Move the file with `"usage_log_path": "<path>"`.
+
 ## Configuration
 
 Resolution order for the model of each task:

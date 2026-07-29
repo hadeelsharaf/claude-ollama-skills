@@ -42,7 +42,7 @@ safe to run blind.
 Three layers, coupled by an **exit-code contract** rather than by imports:
 
 1. **`scripts/ollama_ask.py`** — the only runtime code. Subcommands: `health`, `models`,
-   `warmup`, `ask`, `commit-msg`, `commit-push`, `pr-desc`, `pr-create`, `draft-command`, `draft-code`, `fix-lint`,
+   `warmup`, `ask`, `commit-msg`, `commit-push`, `pr-desc`, `pr-create`, `stats`, `draft-command`, `draft-code`, `fix-lint`,
    `summarize`. All model calls funnel through `generate()` → `stream_generate()`
    (`POST /api/generate`, `stream: true`, `think: false`); the socket read timeout *is* the
    stall detector. Task profiles (`TASK_DEFAULTS` for `commit|shell|code|general|summarize`)
@@ -107,6 +107,8 @@ models --json` prints the resolved model and its source for every task.
 - **`pr-create` is draft-by-default.** Its argv is fixed literals plus
   `--title`/`--body`/`--base`/`--remote`/`--ready`; `--ready` is the only escalation and
   the head branch can never be main/master. Keep it that way.
+- **The usage ledger stores counts only** — never prompt content, paths, or repo
+  names; ledger writes are best-effort and must never break a command.
 - Nothing may bypass Claude Code's permission prompts.
 - Conventional Commits for this repo's own history; every behavior change gets a test.
 

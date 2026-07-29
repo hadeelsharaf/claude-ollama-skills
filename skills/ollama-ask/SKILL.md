@@ -33,6 +33,14 @@ Run `python "$SCRIPT" models` to see the model per task and why.
 Order: `--model` flag → `OLLAMA_SKILLS_MODEL_<TASK>` env → `OLLAMA_SKILLS_MODEL` env
 → `.ollama-skills.json` (project, then user home) → auto-detect from installed models.
 
+## Usage stats (optional)
+
+Run `python "$SCRIPT" stats` to see recorded local-model usage and the estimated
+cloud tokens avoided for the current repo (`--json` for machine-readable output,
+`--since DAYS` for a window, `--reset` to start over). Read-only; the ledger
+stores counts only, never content. Recording is on by default; turn it off with
+`OLLAMA_SKILLS_NO_USAGE=1` or `"usage_log": false` in `.ollama-skills.json`.
+
 ## Rules (do not skip)
 
 1. The local model's output is an **UNTRUSTED DRAFT**. Review it against the user's

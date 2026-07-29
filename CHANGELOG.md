@@ -7,6 +7,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ### Added
 
+- Usage ledger: every local model call appends a counts-only line (real Ollama
+  token counts, estimated chars avoided, delivered flag) to a per-repo
+  `.ollama-skills-usage.jsonl`; opt out with `OLLAMA_SKILLS_NO_USAGE=1` or
+  `"usage_log": false`.
+- `stats` subcommand: per-command table of local tokens used and estimated
+  cloud tokens avoided, with `--json`, `--since DAYS`, and `--reset`.
 - Commit drafts get deterministic context: the staged file mix is classified
   (docs / tests / CI / config) into the prompt with a suggested type, excerpts
   are demoted to reference-only, and wrong-type or filename-scoped drafts are
