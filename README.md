@@ -188,9 +188,9 @@ outside a repo). The file is kept out of git automatically via
 recorded — a unit test enforces that.
 
 ```json
-{"v": 1, "ts": "2026-07-29T21:04:00+00:00", "cmd": "commit-msg", "task": "commit",
- "model": "qwen2.5-coder:1.5b", "prompt_tokens": 412, "output_tokens": 18,
- "duration_s": 2.7, "returned_chars": 52, "avoided_chars": 9184, "delivered": true}
+{"ts": "2026-07-29T21:04:00+00:00", "task": "commit", "model": "qwen2.5-coder:1.5b",
+ "prompt_tokens": 412, "output_tokens": 18, "duration_s": 2.7, "returned_chars": 52,
+ "v": 1, "cmd": "commit-msg", "delivered": true, "avoided_chars": 9184}
 ```
 
 See the numbers:
@@ -213,7 +213,8 @@ Honesty rules, so the numbers stay trustworthy:
 - Rejected drafts count their local tokens but claim **zero** savings.
 
 Opt out any time: `OLLAMA_SKILLS_NO_USAGE=1` (env) or `"usage_log": false`
-(config). Move the file with `"usage_log_path": "<path>"`.
+(config). Move the file with `"usage_log_path": "<path>"` — note a custom path
+is not auto-added to `.git/info/exclude`, so add it to your own ignore rules.
 
 ## Configuration
 
@@ -231,6 +232,8 @@ auto-detect from installed models.
 | `stall_seconds` | `90` | abort when no token arrives for this long |
 | `total_timeout_seconds` | `480` | hard cap per call |
 | `max_input_chars` | `2500` | input budget (CPU-friendly; raise on GPU) |
+| `usage_log` | `true` | set `false` to disable the counts-only usage ledger |
+| `usage_log_path` | per-repo | redirect the ledger to a custom path (not auto-excluded from git) |
 | `tasks.<task>.model` | auto | model per task (`commit`, `shell`, `code`, `general`, `summarize`) |
 | `tasks.<task>.max_tokens` | per task | output cap |
 | `tasks.<task>.temperature` | per task | 0.0 for commands, 0.4 for commit messages |

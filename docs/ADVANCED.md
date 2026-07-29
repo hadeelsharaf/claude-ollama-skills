@@ -12,6 +12,8 @@ none of it.
 4. Set the environment variable `OLLAMA_SKILLS_HOME` to the clone path.
    The skills use it to find `scripts/ollama_ask.py` when `${CLAUDE_PLUGIN_ROOT}`
    does not exist (it only exists for plugin installs).
+5. Set `OLLAMA_SKILLS_NO_USAGE=1` if you want to disable the local counts-only
+   usage ledger entirely (see README's "Track what it saves you").
 
 ## 2. MCP server instead of the CLI script
 

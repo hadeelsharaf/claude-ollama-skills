@@ -633,6 +633,35 @@ class OllamaAskTests(unittest.TestCase):
                    if line == ".ollama-skills-usage.jsonl"]
         self.assertEqual(len(entries), 1)
 
+    def test_usage_exclude_preserves_pattern_without_trailing_newline(self):
+        repo = self._make_repo(staged=True)
+        os.environ.pop("OLLAMA_SKILLS_NO_USAGE", None)
+        exclude = repo / ".git" / "info" / "exclude"
+        exclude.parent.mkdir(parents=True, exist_ok=True)
+        exclude.write_text("# mine\nsecrets.env", encoding="utf-8")  # no \n at EOF
+        self.assertEqual(self.run_cli("commit-msg")[0], 0)
+        lines = exclude.read_text(encoding="utf-8").splitlines()
+        self.assertIn("secrets.env", lines)                    # pattern intact
+        self.assertIn(".ollama-skills-usage.jsonl", lines)     # ours on its own line
+
+    def test_usage_exclude_works_in_linked_worktree(self):
+        repo = self._make_repo(staged=True)
+        subprocess.run(["git", "config", "user.email", "t@e.st"], cwd=repo, check=True)
+        subprocess.run(["git", "config", "user.name", "T"], cwd=repo, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=repo, check=True)
+        wt = Path(self._tmp) / "wt"
+        subprocess.run(["git", "worktree", "add", "-q", str(wt)], cwd=repo, check=True)
+        os.chdir(wt)
+        (wt / "extra.txt").write_text("x\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=wt, check=True)
+        os.environ.pop("OLLAMA_SKILLS_NO_USAGE", None)
+        self.assertEqual(self.run_cli("commit-msg")[0], 0)
+        self.assertTrue((wt / ".ollama-skills-usage.jsonl").is_file())
+        status = subprocess.run(["git", "status", "--porcelain"], cwd=wt,
+                                capture_output=True, text=True, check=True).stdout
+        self.assertNotIn(".ollama-skills-usage.jsonl", status)
+        os.chdir(self._tmp)   # release the worktree dir for teardown on Windows
+
     def test_usage_optout_env_writes_nothing(self):
         repo = self._make_repo(staged=True)   # setUp already set NO_USAGE=1
         code, _, err = self.run_cli("commit-msg")
@@ -764,6 +793,19 @@ class OllamaAskTests(unittest.TestCase):
         self.assertIn("<<<<<<< SEARCH", out)
         self.assertIn("WHY:", out)
         self.assertEqual(target.read_text(encoding="utf-8"), original)
+
+    def test_usage_fix_lint_skip_claims_zero(self):
+        repo = self._make_repo(staged=True)
+        os.environ.pop("OLLAMA_SKILLS_NO_USAGE", None)
+        target = repo / "code.py"
+        target.write_text("import os\nSKIPFIX\n" * 40, encoding="utf-8")
+        code, out, err = self.run_cli("fix-lint", "--file", str(target),
+                                      "--line", "1", "--error", "unused import")
+        self.assertEqual(code, 0, msg=err)
+        self.assertEqual(out.strip(), "SKIP")
+        rec = self._read_ledger(repo)[-1]
+        self.assertTrue(rec["delivered"])
+        self.assertEqual(rec["avoided_chars"], 0)
 
     # -- health / errors ----------------------------------------------------
 
@@ -1502,6 +1544,28 @@ class OllamaAskTests(unittest.TestCase):
         self.assertEqual(cm["net_est_saved_tokens"], 1990)
         self.assertEqual(data["total"]["calls"], 3)
         self.assertEqual(data["total"]["local_tokens"], 1840)
+
+    def test_stats_type_confused_records_skipped(self):
+        path = self._write_stats_fixture()
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps({"v": 1, "ts": "2026-07-29T00:00:00+00:00",
+                                 "cmd": "ask", "prompt_tokens": "x",
+                                 "delivered": True}) + "\n")
+        code, out, err = self.run_cli("stats", "--json")
+        self.assertEqual(code, 0, msg=err)
+        data = json.loads(out)
+        self.assertEqual(data["skipped_lines"], 2)   # 1 malformed + 1 type-confused
+        self.assertNotIn("ask", data["per_cmd"])
+
+    def test_stats_empty_existing_ledger_zeroed_total(self):
+        os.chdir(self._tmp)
+        path = Path(self._tmp) / "empty-usage.jsonl"
+        path.write_text("", encoding="utf-8")
+        (Path(self._tmp) / ".ollama-skills.json").write_text(
+            json.dumps({"usage_log_path": str(path)}), encoding="utf-8")
+        code, out, err = self.run_cli("stats", "--json")
+        self.assertEqual(code, 0, msg=err)
+        self.assertEqual(json.loads(out)["total"]["calls"], 0)
 
     def test_stats_since_filters_old_records(self):
         self._write_stats_fixture()

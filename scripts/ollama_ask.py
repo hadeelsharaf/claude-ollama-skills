@@ -571,19 +571,27 @@ def _usage_path(cfg: dict):
     return Path.home() / USAGE_BASENAME, None
 
 
-def _ensure_excluded(root: Path) -> None:
-    """Keep the ledger untracked via .git/info/exclude (never the user's
-    .gitignore). Best-effort: in linked worktrees .git is a file and this
-    quietly does nothing."""
-    exclude = root / ".git" / "info" / "exclude"
+def _ensure_excluded() -> None:
+    """Keep the ledger untracked via the repo's exclude file (never the
+    user's .gitignore). Resolved with `git rev-parse --git-path` so linked
+    worktrees and submodules (where .git is a file) work too. Best-effort."""
     try:
+        rel = run_git(["rev-parse", "--git-path", "info/exclude"],
+                      check=False).strip()
+        if not rel:
+            return
+        exclude = Path(rel)
+        if not exclude.is_absolute():
+            exclude = Path.cwd() / rel
         existing = exclude.read_text(encoding="utf-8") if exclude.is_file() else ""
         if USAGE_BASENAME in existing.splitlines():
             return
         exclude.parent.mkdir(parents=True, exist_ok=True)
+        # never glue onto a user pattern that lacks a trailing newline
+        prefix = "" if (not existing or existing.endswith("\n")) else "\n"
         with open(exclude, "a", encoding="utf-8") as fh:
-            fh.write(USAGE_BASENAME + "\n")
-    except OSError:
+            fh.write(prefix + USAGE_BASENAME + "\n")
+    except (OSError, CliError):
         pass
 
 
@@ -600,7 +608,6 @@ def _flush_usage(cfg: dict, code: int) -> None:
         return
     try:
         path, repo_root = _usage_path(cfg)
-        first_write = not path.exists()
         for i, rec in enumerate(records):
             delivered = code == EXIT_OK and i == len(records) - 1
             rec["v"] = 1
@@ -610,9 +617,9 @@ def _flush_usage(cfg: dict, code: int) -> None:
         with open(path, "a", encoding="utf-8") as fh:
             for rec in records:
                 fh.write(json.dumps(rec) + "\n")
-        if first_write and repo_root is not None:
-            _ensure_excluded(repo_root)
-    except (OSError, TypeError, ValueError) as exc:
+        if repo_root is not None:
+            _ensure_excluded()
+    except Exception as exc:
         debug(f"usage ledger skipped: {exc}")
 
 
@@ -633,7 +640,7 @@ def cmd_stats(args, cfg: dict) -> int:
             raise CliError(EXIT_USAGE, "--since must be a positive number of days")
         cutoff = datetime.now(timezone.utc) - timedelta(days=args.since)
     records, skipped = [], 0
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
         if not line.strip():
             continue
         try:
@@ -653,6 +660,13 @@ def cmd_stats(args, cfg: dict) -> int:
                 ts = ts.replace(tzinfo=timezone.utc)
             if ts < cutoff:
                 continue
+        try:
+            for key in ("prompt_tokens", "output_tokens",
+                        "avoided_chars", "returned_chars"):
+                rec[key] = int(rec.get(key) or 0)
+        except (TypeError, ValueError):
+            skipped += 1
+            continue
         records.append(rec)
 
     per_cmd: dict = {}
@@ -661,12 +675,11 @@ def cmd_stats(args, cfg: dict) -> int:
             "calls": 0, "delivered": 0, "local_tokens": 0,
             "avoided_chars": 0, "returned_chars": 0})
         row["calls"] += 1
-        row["local_tokens"] += (int(rec.get("prompt_tokens") or 0)
-                                + int(rec.get("output_tokens") or 0))
+        row["local_tokens"] += rec["prompt_tokens"] + rec["output_tokens"]
         if rec.get("delivered"):
             row["delivered"] += 1
-            row["avoided_chars"] += int(rec.get("avoided_chars") or 0)
-            row["returned_chars"] += int(rec.get("returned_chars") or 0)
+            row["avoided_chars"] += rec["avoided_chars"]
+            row["returned_chars"] += rec["returned_chars"]
 
     def finish(row: dict) -> dict:
         est_avoided = row["avoided_chars"] // 4
@@ -978,7 +991,8 @@ def cmd_commit_msg(args, cfg: dict) -> int:
     context, suggested = _staged_context(cfg, args)
     # Counterfactual for the ledger: without delegation Claude reads the full
     # staged diff. Local measurement, count only - the text goes nowhere.
-    _USAGE_CTX["avoided_chars"] = len(run_git(["diff", "--cached"], check=False))
+    if _usage_enabled(cfg):
+        _USAGE_CTX["avoided_chars"] = len(run_git(["diff", "--cached"], check=False))
     style_note = "" if args.body else " Reply with one single line."
     prompt = f"Write the commit message for this staged change:\n\n{context}"
     text = generate("commit", prompt, args, cfg, system=COMMIT_SYSTEM + style_note)
@@ -1247,6 +1261,7 @@ def cmd_fix_lint(args, cfg: dict) -> int:
 
     text = generate("code", prompt, args, cfg, system=FIX_SYSTEM, max_tokens=256)
     if text.strip() == "SKIP":
+        _USAGE_CTX["avoided_chars"] = 0
         print("SKIP")
         return EXIT_OK
     if "<<<<<<< SEARCH" not in text or ">>>>>>> REPLACE" not in text:
