@@ -127,6 +127,11 @@ class FakeOllamaHandler(BaseHTTPRequestHandler):
             text = ("docs(readme.md): update the guides"
                     if FakeOllamaHandler.counters[key] == 1
                     else "docs: update the guides")
+        elif "LONGLINEONCE" in prompt:
+            key = "longline"
+            FakeOllamaHandler.counters[key] = FakeOllamaHandler.counters.get(key, 0) + 1
+            text = ("feat: " + "x" * 80 if FakeOllamaHandler.counters[key] == 1
+                    else CANNED_TEXT)
         elif "ALWAYSSCOPED" in prompt:
             text = "docs(readme.md): update the guides"
         elif "suggested type: docs" in prompt:
@@ -856,6 +861,35 @@ class OllamaAskTests(unittest.TestCase):
         records = self._read_ledger(repo)
         self.assertTrue(records[0]["hinted"])
         self.assertNotIn("hinted", records[-1])
+
+    def test_staged_context_orders_by_churn(self):
+        repo = Path(self._tmp) / "churnrepo"
+        repo.mkdir()
+        subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+        (repo / "a.txt").write_text("tiny\n", encoding="utf-8")
+        (repo / "z.py").write_text(
+            "\n".join(f"def f{i}(): return {i}" for i in range(30)) + "\n",
+            encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=repo, check=True)
+        os.chdir(repo)
+        FakeOllamaHandler.prompts = []
+        code, _, err = self.run_cli("commit-msg")
+        self.assertEqual(code, 0, msg=err)
+        body = FakeOllamaHandler.prompts[0]
+        self.assertLess(body.find("def f0"), body.find("tiny"),
+                        msg="high-churn z.py must be excerpted before tiny a.txt")
+
+    def test_commit_msg_length_feedback_includes_count(self):
+        repo = self._make_repo(staged=True)
+        (repo / "extra.py").write_text("# LONGLINEONCE\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=repo, check=True)
+        FakeOllamaHandler.prompts = []
+        code, out, err = self.run_cli("commit-msg")
+        self.assertEqual(code, 0, msg=err)
+        self.assertEqual(out.strip(), "feat: add upload retry loop")
+        self.assertEqual(len(FakeOllamaHandler.prompts), 2)
+        self.assertIn("It is 86 chars", FakeOllamaHandler.prompts[1]
+                      + FakeOllamaHandler.last_payload.get("system", ""))
 
     # -- health / errors ----------------------------------------------------
 

@@ -972,6 +972,19 @@ def _staged_context(cfg: dict, args) -> tuple[str, str | None]:
     ).splitlines() if n]
     kept = [n for n in names
             if not any(fnmatch.fnmatch(Path(n).name, p) for p in LOCKFILE_PATTERNS)]
+    # Highest-churn file first: a 2-line .gitignore must never hijack the
+    # excerpt budget from the file that IS the change. Renames fall back to
+    # git order (numstat prints them as "old => new", which misses the map).
+    churn = {}
+    for line in run_git(["-c", "core.quotepath=off", "diff", "--cached",
+                         "--numstat"]).splitlines():
+        cols = line.split("\t")
+        if len(cols) == 3:
+            try:
+                churn[cols[2]] = int(cols[0]) + int(cols[1])
+            except ValueError:   # binary files: "-\t-\tpath"
+                churn[cols[2]] = 0
+    kept.sort(key=lambda n: churn.get(n, 0), reverse=True)
     limit = (args.max_input_chars if args.max_input_chars is not None
              else _cfg_int(cfg, "max_input_chars", 2500))
     kind_line, suggested = _change_kind(kept)
@@ -1022,9 +1035,10 @@ def cmd_commit_msg(args, cfg: dict) -> int:
     if args.style == "conventional":
         problem = None
         if not _valid_commit_line(message):
-            problem = (f"Your last answer was rejected: {message!r}. It must "
-                       "match <type>: <summary> with an allowed type and "
-                       "under 72 chars total.")
+            first = message.splitlines()[0] if message.strip() else ""
+            problem = (f"Your last answer was rejected: {message!r}. It is "
+                       f"{len(first)} chars; it must match <type>: <summary> "
+                       "with an allowed type and stay under 72 chars total.")
         else:
             semantic = _semantic_problem(message, suggested)
             if semantic:
