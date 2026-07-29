@@ -204,7 +204,8 @@ class OllamaAskTests(unittest.TestCase):
         # Usage tests opt back in explicitly by deleting this key.
         os.environ["OLLAMA_SKILLS_NO_USAGE"] = "1"
         ollama_ask._USAGE_RECORDS.clear()
-        ollama_ask._USAGE_CTX.update({"cmd": None, "avoided_chars": 0})
+        ollama_ask._USAGE_CTX.update(
+            {"cmd": None, "avoided_chars": 0, "hinted": False})
         self._saved_cwd = os.getcwd()
 
     def tearDown(self):
@@ -806,6 +807,55 @@ class OllamaAskTests(unittest.TestCase):
         rec = self._read_ledger(repo)[-1]
         self.assertTrue(rec["delivered"])
         self.assertEqual(rec["avoided_chars"], 0)
+
+    # -- author-intent channel ------------------------------------------------
+
+    def test_commit_msg_intent_line_position(self):
+        self._make_repo(staged=True)
+        FakeOllamaHandler.prompts = []
+        code, out, err = self.run_cli(
+            "commit-msg", "--type", "feat", "--hint", "add retry helper to uploads")
+        self.assertEqual(code, 0, msg=err)
+        lines = FakeOllamaHandler.prompts[0].splitlines()
+        self.assertEqual(
+            lines[2], "Author's intent: feat - add retry helper to uploads")
+        self.assertTrue(lines[4].startswith("File kinds:"), msg=lines[:6])
+
+    def test_commit_msg_type_flag_beats_classifier(self):
+        repo = self._make_repo(staged=True)   # code repo: classifier suggests None
+        (repo / "extra.py").write_text("# WRONGTYPEONCE\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=repo, check=True)
+        FakeOllamaHandler.prompts = []
+        code, out, err = self.run_cli("commit-msg", "--type", "docs")
+        self.assertEqual(code, 0, msg=err)
+        self.assertEqual(out.strip(), "docs: update the guides")
+        self.assertEqual(len(FakeOllamaHandler.prompts), 2)   # corrective retry ran
+
+    def test_commit_msg_type_flag_persistent_conflict_exits_6(self):
+        repo = self._make_repo(staged=True)
+        (repo / "extra.py").write_text("# ALWAYSWRONGTYPE\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=repo, check=True)
+        code, _, _ = self.run_cli("commit-msg", "--type", "docs")
+        self.assertEqual(code, 6)
+
+    def test_commit_msg_hint_sanitized(self):
+        self._make_repo(staged=True)
+        FakeOllamaHandler.prompts = []
+        messy = "add\nretry\thelper  " + "x" * 300
+        code, _, err = self.run_cli("commit-msg", "--hint", messy)
+        self.assertEqual(code, 0, msg=err)
+        intent = FakeOllamaHandler.prompts[0].splitlines()[2]
+        self.assertTrue(intent.startswith("Author's intent: add retry helper x"))
+        self.assertLessEqual(len(intent), len("Author's intent: ") + 200)
+
+    def test_usage_hinted_field(self):
+        repo = self._make_repo(staged=True)
+        os.environ.pop("OLLAMA_SKILLS_NO_USAGE", None)
+        self.assertEqual(self.run_cli("commit-msg", "--type", "feat")[0], 0)
+        self.assertEqual(self.run_cli("commit-msg")[0], 0)
+        records = self._read_ledger(repo)
+        self.assertTrue(records[0]["hinted"])
+        self.assertNotIn("hinted", records[-1])
 
     # -- health / errors ----------------------------------------------------
 

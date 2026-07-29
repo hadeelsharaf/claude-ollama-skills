@@ -542,7 +542,7 @@ def run_git(cmd_args, check=True) -> str:
 USAGE_BASENAME = ".ollama-skills-usage.jsonl"
 
 _USAGE_RECORDS: list = []
-_USAGE_CTX = {"cmd": None, "avoided_chars": 0}
+_USAGE_CTX = {"cmd": None, "avoided_chars": 0, "hinted": False}
 
 
 def _usage_enabled(cfg: dict) -> bool:
@@ -614,6 +614,8 @@ def _flush_usage(cfg: dict, code: int) -> None:
             rec["cmd"] = _USAGE_CTX["cmd"]
             rec["delivered"] = delivered
             rec["avoided_chars"] = _USAGE_CTX["avoided_chars"] if delivered else 0
+            if _USAGE_CTX["hinted"]:
+                rec["hinted"] = True
         with open(path, "a", encoding="utf-8") as fh:
             for rec in records:
                 fh.write(json.dumps(rec) + "\n")
@@ -944,7 +946,9 @@ def _semantic_problem(message, suggested, final=False):
 COMMIT_SYSTEM = (
     "You write git commit messages. Reply with ONE line in Conventional Commit "
     f"format: <type>: <summary>. Allowed types: {COMMIT_TYPES}. Use present "
-    "tense. Keep the whole line under 72 characters. Choosing the type: when "
+    "tense. Keep the whole line under 72 characters. When the input states the "
+    "author's intent, trust it: use its type and word the summary from that "
+    "intent as reflected in the files. Choosing the type: when "
     "the input names a suggested type, use it unless the excerpts plainly "
     "contradict it; docs: when only documentation changed; test: for test-only "
     "changes; ci: for CI config; chore: for version or config housekeeping. "
@@ -989,6 +993,23 @@ def _staged_context(cfg: dict, args) -> tuple[str, str | None]:
 
 def cmd_commit_msg(args, cfg: dict) -> int:
     context, suggested = _staged_context(cfg, args)
+    # Author-intent channel: the delegating caller often authored the change
+    # and knows the type/intent. This ADDS caller text; nothing new is read.
+    hint = None
+    if args.hint:
+        hint = " ".join(args.hint.split()).strip()[:200] or None
+    intent = None
+    if args.ctype and hint:
+        intent = f"Author's intent: {args.ctype} - {hint}"
+    elif args.ctype:
+        intent = f"Author's intent: commit type {args.ctype}"
+    elif hint:
+        intent = f"Author's intent: {hint}"
+    if args.ctype:
+        suggested = args.ctype
+    if intent:
+        context = intent + "\n\n" + context
+        _USAGE_CTX["hinted"] = True
     # Counterfactual for the ledger: without delegation Claude reads the full
     # staged diff. Local measurement, count only - the text goes nowhere.
     if _usage_enabled(cfg):
@@ -1804,6 +1825,12 @@ def build_parser() -> argparse.ArgumentParser:
                           default="conventional")
     p_commit.add_argument("--body", action="store_true",
                           help="allow a multi-line message body")
+    p_commit.add_argument("--type", dest="ctype", default=None,
+                          choices=["feat", "fix", "build", "chore", "ci", "docs",
+                                   "style", "refactor", "perf", "test"],
+                          help="the commit type the caller knows to be correct")
+    p_commit.add_argument("--hint", default=None,
+                          help="one short line of author intent for the draft")
     p_commit.set_defaults(task="commit")
 
     p_push = sub.add_parser("commit-push", parents=[common],
@@ -1918,6 +1945,7 @@ def main(argv=None) -> int:
         cfg = load_config()
         _USAGE_CTX["cmd"] = args.command
         _USAGE_CTX["avoided_chars"] = 0
+        _USAGE_CTX["hinted"] = False
         code = HANDLERS[args.command](args, cfg)
     except CliError as exc:
         eprint(f"error: {exc}")
