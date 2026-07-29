@@ -1065,6 +1065,18 @@ class OllamaAskTests(unittest.TestCase):
         self.assertEqual(code, 8, msg=err)
         self.assertIn("boom", err)
 
+    def test_pr_skill_safety_wording_present(self):
+        # A silent reword dropping draft-by-default or the deny-list would
+        # defeat ollama-pr's safety story - pin the load-bearing wording.
+        needles = [
+            "UNTRUSTED DRAFT", "--ready", "explicitly", "never force-push",
+            "draft", "--web", "main",
+        ]
+        rel = "skills/ollama-pr/SKILL.md"
+        body = (ROOT / rel).read_text(encoding="utf-8")
+        for needle in needles:
+            self.assertIn(needle, body, msg=f"{needle!r} missing from {rel}")
+
 
 if __name__ == "__main__":
     unittest.main()
