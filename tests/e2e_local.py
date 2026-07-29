@@ -84,6 +84,9 @@ def main() -> int:
         docs_repo = Path(docs_tmp) / "repo"
         docs_repo.mkdir()
         subprocess.run(["git", "init", "-q"], cwd=docs_repo, check=True, capture_output=True)
+        subprocess.run(["git", "config", "user.email", "test@example.com"],
+                       cwd=docs_repo, check=True)
+        subprocess.run(["git", "config", "user.name", "Test User"], cwd=docs_repo, check=True)
         (docs_repo / "README.md").write_text(
             "# Sample project\n\nThis is a small sample project used for e2e testing.\n",
             encoding="utf-8",
