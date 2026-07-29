@@ -558,7 +558,7 @@ def _usage_path(cfg: dict):
     on that.
     """
     override = cfg.get("usage_log_path")
-    if override:
+    if isinstance(override, str) and override:
         return Path(override), None
     try:
         top = run_git(["rev-parse", "--show-toplevel"], check=False).strip()
@@ -611,7 +611,7 @@ def _flush_usage(cfg: dict, code: int) -> None:
                 fh.write(json.dumps(rec) + "\n")
         if first_write and repo_root is not None:
             _ensure_excluded(repo_root)
-    except OSError as exc:
+    except (OSError, TypeError, ValueError) as exc:
         debug(f"usage ledger skipped: {exc}")
 
 

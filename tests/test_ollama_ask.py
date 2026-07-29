@@ -669,6 +669,15 @@ class OllamaAskTests(unittest.TestCase):
         self.assertTrue(target.is_file())
         self.assertFalse((repo / ".ollama-skills-usage.jsonl").exists())
 
+    def test_usage_log_path_nonstring_falls_back(self):
+        repo = self._make_repo(staged=True)
+        os.environ.pop("OLLAMA_SKILLS_NO_USAGE", None)
+        (repo / ".ollama-skills.json").write_text(
+            json.dumps({"usage_log_path": 12345}), encoding="utf-8")
+        code, _, err = self.run_cli("commit-msg")
+        self.assertEqual(code, 0, msg=err)   # exit code must survive the typo
+        self.assertTrue((repo / ".ollama-skills-usage.jsonl").is_file())
+
     def test_usage_path_home_fallback_outside_repo(self):
         os.chdir(self._tmp)   # tempdir, not a git repo; HOME/USERPROFILE = self._tmp
         cfg = {"tasks": {}}
