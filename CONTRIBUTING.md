@@ -11,6 +11,7 @@ Thanks for helping! This project is small on purpose. Please keep it that way.
 - Skill frontmatter stays single-line `key: value` pairs (the validator depends on this).
 - Safety rules are not optional: local model output stays an untrusted draft,
   and nothing may bypass Claude Code permission prompts.
+- Releases: merge draft → main, bump plugin.json version, update CHANGELOG, tag ollama-skills--v<version> — pushes without a version bump never reach installed users.
 
 ## Before you open a PR
 

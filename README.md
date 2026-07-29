@@ -18,25 +18,24 @@ worker.
 > CPU-only machines are slow with big models — the defaults here are tuned for that
 > (see the measured numbers below). Fully offline options: [docs/ADVANCED.md](docs/ADVANCED.md).
 
-## What's new in v0.2
+## What's new in v0.3
 
-- **`summarize`** — a new subcommand that digests logs, Kubernetes events, `kubectl describe`
-  output, or a git range into a short verdict + fact bullets, entirely on the local model.
-  Big raw text is piped in over stdin and never enters Claude's context; only the digest
-  returns. Small input is one call; large input is chunked map-reduce with visible progress
-  and per-chunk drop markers.
-- **Three new skills:** `ollama-docker` (read state, summarize container logs, draft docker /
-  Dockerfile / Compose), `ollama-k8s` (read state, triage failing pods, draft kubectl /
-  manifests, with a context+namespace echo and a clean no-context stop), and
-  `ollama-git-history` (read-only history; a local summary only when asked). Each drafts
-  read-only commands freely, makes changes only when your words clearly ask, refuses
-  destructive / cluster-scoped commands, and treats every draft as an untrusted draft Claude checks.
+- **Draft PRs from your branch** — the `ollama-pr` skill: the local model drafts the
+  title and description from commit subjects (never patches), Claude reviews, and one
+  gated step opens a **draft** PR via gh or glab. `--ready` only when you say so.
+- **Free-RAM gate in model auto-detect** — a model bigger than free RAM is skipped
+  (and `models` tells you why); explicit picks are never gated.
+- **GPU-measured model fleet** — defaults, docs, and speed tables refreshed against
+  measured numbers (`qwen2.5-coder:1.5b`, `gemma2:2b`, RTX 4050 Laptop).
+
+Earlier releases: see [CHANGELOG.md](CHANGELOG.md).
 
 ## Requirements
 
 - [Ollama](https://ollama.com) running locally (tested with 0.32) and at least one model
 - Python 3.9+ (standard library only — nothing to pip install)
 - git, Claude Code 2.x
+- Optional, for the PR skill: [gh](https://cli.github.com) (GitHub) or [glab](https://gitlab.com/gitlab-org/cli) (GitLab), authenticated
 
 ## Install
 
@@ -56,12 +55,27 @@ From a local clone:
 
 Manual install without the plugin system: see [docs/ADVANCED.md](docs/ADVANCED.md) §1.
 
+Installs track the `main` release branch. Updates arrive with `/plugin update`
+and only when a release bumps the plugin version — day-to-day development on
+the `draft` branch never reaches installed users.
+
 Then paste the routing block from
 [templates/CLAUDE.md-snippet.md](templates/CLAUDE.md-snippet.md) into your project's
 CLAUDE.md — research shows delegation only happens reliably when CLAUDE.md says when
 to delegate.
 
-## Quick start
+## First-time setup (5 minutes, fresh machine)
+
+1. Install [Ollama](https://ollama.com) and start it (`ollama serve`, or the desktop app).
+2. Pull the two small models the docs' measured tables use:
+   `ollama pull gemma2:2b` and `ollama pull qwen2.5-coder:1.5b`
+   (any Ollama models work — these are the tested defaults).
+3. Install the plugin (see Install above).
+4. In Claude Code, say: **"check the local model setup"**. You should see the
+   Ollama version, your installed models with sizes, and free RAM — with a
+   warning next to any model too big for your machine.
+
+## Everyday use
 
 Check the setup, then just ask Claude in plain words:
 
