@@ -77,7 +77,7 @@ to delegate.
 
 ## Everyday use
 
-Check the setup, then just ask Claude in plain words:
+Just ask Claude in plain words:
 
 | You say | What runs |
 |---|---|
@@ -220,7 +220,7 @@ itself and says so** — a failed delegation never blocks work.
 
 ```
 .claude-plugin/    plugin + marketplace manifests
-skills/            eight SKILL.md folders (ask, commit, precommit, shell, code, docker, k8s, git-history)
+skills/            nine SKILL.md folders (ask, commit, precommit, shell, code, docker, k8s, git-history, pr)
 agents/            three subagents (coder, git, ops) — model: haiku
 scripts/           ollama_ask.py (the one runtime file) + validate_repo.py
 config/            example config
@@ -238,7 +238,8 @@ python scripts/validate_repo.py           # manifest + frontmatter checks
 RUN_OLLAMA_E2E=1 python tests/e2e_local.py  # real e2e (needs local Ollama)
 ```
 
-Both commands above are what CI runs. The design and the measurements behind the
+The first two commands are what CI runs on every push; the e2e run is manual
+(workflow_dispatch). The design and the measurements behind the
 default budgets are in [docs/DESIGN.md](docs/DESIGN.md); how to add a skill is in
 [CONTRIBUTING.md](CONTRIBUTING.md).
 

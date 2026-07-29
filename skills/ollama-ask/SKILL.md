@@ -1,6 +1,6 @@
 ---
 name: ollama-ask
-description: Delegate a small text task to a local Ollama model through the bundled script. Use when the user asks to use the local model, wants text drafted offline or privately, or another ollama-* skill needs the base workflow. Requires local Ollama and Python 3.9+.
+description: Delegate a small text task to a local Ollama model through the bundled script. Use when the user asks to use the local model, wants text drafted offline or privately, or another ollama-* skill needs the base workflow. Requires local Ollama and Python 3.9+. Also use to check the local model setup (health, installed models, free RAM).
 ---
 
 # ollama-ask — talk to the local model
