@@ -193,9 +193,9 @@
         "cache_read_mean": 259136,
         "cost_mean_usd": 0.3721,
         "local_tokens_mean": 1836,
-        "delegated": 2
-      },
-      "savings_pct": -15.1
+        "delegated": 2,
+        "savings_pct": -15.1
+      }
     },
     "summarize": {
       "without": {
@@ -218,9 +218,9 @@
         "cache_read_mean": 176775,
         "cost_mean_usd": 0.3275,
         "local_tokens_mean": 0,
-        "delegated": 0
-      },
-      "savings_pct": -17.2
+        "delegated": 0,
+        "savings_pct": -17.2
+      }
     }
   }
 }

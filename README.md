@@ -271,24 +271,28 @@ summarize  without  3/3       16,021      0.2756        0        -
 summarize  directed 0/3            0      0.0000        0        0
 ```
 
-What directed invocation changed, per the run records: **delegation became
-reliable** (5 of 6 directed runs engaged the local model, vs 2 of 6
-undirected), and delegated summarize runs consumed 14-15k tokens — below
-the 16k baseline — because the 338k-char log body stayed local. What it did
-NOT change: at these input sizes the cloud-token deltas stay inside session
-noise (±2k on a ~16k baseline), and strict task-success got WORSE unattended
-— the 2B local model's digest dropped one of three planted facts, and
-headless agents sometimes stalled mid-workflow (drafted the message, never
-committed). Deliberate invocation fixes engagement, not unattended
-reliability.
+What directed invocation changed, measured with the SAME yardstick on both
+arms (per-run rows in the published JSONs): runs that invoked the local
+model rose from 3/6 to **5/6**, and runs with a delivered local draft from
+3/6 to 4/6 — a modest engagement gain, not a transformation. Delegated
+summarize runs consumed 14-15k tokens, below the 16k baseline, because the
+338k-char log body stayed local. The uncomfortable other half: strict task
+success FELL from 5/6 to 1/6 unattended — the 2B local model's digest
+dropped one of three planted facts, and headless agents stalled
+mid-workflow (drafted the message, never committed). At these input sizes
+cloud-token deltas stay inside session noise (±2k on a ~16k baseline).
+Deliberate invocation improves engagement; it does not make unattended
+sessions reliable.
 
 So when IS it worth it? Interactively — a person directing the work across a
 session with several delegations, which is how this plugin is actually used.
-This repo's own development ledger shows that picture: 43 delegated calls,
-33,031 real local tokens, roughly 26,000 cloud tokens avoided net — plus the
-part no token count captures: **the diff and log bodies never entered cloud
-context at all**. That privacy property, and full-coverage digests of files
-an unattended model would only sample, are the honest headline.
+This repo's own development ledger shows that picture: at publication time,
+47 delegated calls, ~36,700 real local tokens, roughly 33,000 cloud tokens
+avoided net — and counting, since every dogfooded commit (including the one
+that shipped this section) adds to it. Plus the part no token count
+captures: **the diff and log bodies never entered cloud context at all**.
+That privacy property, and full-coverage digests of files an unattended
+model would only sample, are the honest headline.
 
 ### Making local delegation cost-effective
 
