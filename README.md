@@ -157,9 +157,6 @@ building and testing this project:
 - `qwen2.5-coder:1.5b` — coder pick: commit messages, shell drafts, small code
 - `gemma2:2b` — general + summarize pick (the one small model that satisfies
   every task's preference list by itself)
-- `devstral-small-2:latest` — 15.2 GB; auto-detect **skips it on this machine**
-  (bigger than free RAM — the `models` command shows the skip and why). On a
-  machine where it fits, it is auto-picked for code tasks.
 
 **If you clone this, model choice is yours.** Set models in `.ollama-skills.json`
 (copy `config/.ollama-skills.example.json`) or env vars — any Ollama model works.
@@ -170,9 +167,8 @@ list — or tells you clearly when nothing installed fits, instead of guessing
 ## Measured speed (development machine: 16 GB RAM, NVIDIA GeForce RTX 4050 Laptop GPU, 6 GB VRAM)
 
 Real numbers from `tests/e2e_local.py` and the design-phase measurements — so you
-can set expectations before you wait. The small models in the table (qwen2.5-coder:1.5b,
-gemma2:2b) ran 100% on the GPU; devstral-small-2 (15.2 GB) does not fit in 6 GB VRAM
-and is split across CPU/GPU (see its row below).
+can set expectations before you wait. Both models in the table (qwen2.5-coder:1.5b,
+gemma2:2b) ran 100% on the GPU.
 
 | Operation | qwen2.5-coder:1.5b | gemma2:2b |
 |---|---|---|
@@ -181,12 +177,11 @@ and is split across CPU/GPU (see its row below).
 | `commit-msg` (small staged change) | 2.6–2.8 s | — |
 | `draft-command` | 3.4 s | — |
 | `summarize` (single-shot, ~3k chars) | — | 8.0–8.3 s |
-| `devstral-small-2:latest` (15.2 GB) | slow but works, with cold-stall risk (64–68 s cold, 5.2 s warm; one cold attempt stalled > 120 s) | |
 
 The 2,500-char input budget, and `commit-msg` sending a compact diff summary instead
 of full hunks, both trace back to the original CPU-only prefill measurements in
-[docs/DESIGN.md](docs/DESIGN.md) §3 (~7 tok/s prefill on a ~2,758-token prompt) — not
-to the devstral row above. GPU owners can raise budgets in config
+[docs/DESIGN.md](docs/DESIGN.md) §3 (~7 tok/s prefill on a ~2,758-token prompt).
+GPU owners can raise budgets in config
 ([docs/ADVANCED.md](docs/ADVANCED.md) §6 has per-hardware advice).
 
 ## Track what it saves you
