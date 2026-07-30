@@ -237,10 +237,10 @@ says "use the local model"), 2026-07 pricing. Full data:
 task       arm      ok    tokens (mean)  cache read  cost USD  local tokens  delegated
 commit     without  3/3          16,832     207,895    0.3039             0  -
 commit     with     2/3          19,376     259,136    0.3721         1,836  2
-commit     savings: -15.1% (mean tokens, successful runs only)
+commit     with savings vs without: -15.1% (mean tokens, successful runs only)
 summarize  without  3/3          16,556     155,221    0.2801             0  -
 summarize  with     3/3          19,397     176,775    0.3275             0  0
-summarize  savings: -17.2% (mean tokens, successful runs only)
+summarize  with savings vs without: -17.2% (mean tokens, successful runs only)
 ```
 
 Yes — **negative**. In unattended, neutral-prompt sessions the plugin *cost*
