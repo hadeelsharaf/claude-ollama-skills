@@ -224,6 +224,90 @@ Opt out any time: `OLLAMA_SKILLS_NO_USAGE=1` (env) or `"usage_log": false`
 (config). Move the file with `"usage_log_path": "<path>"` — note a custom path
 is not auto-added to `.git/info/exclude`, so add it to your own ignore rules.
 
+### Measured, honestly: an A/B experiment
+
+We ran the same two tasks (commit a staged multi-file change; summarize a
+4,000-line log) through headless Claude Opus in two identical projects — one
+with this plugin loaded, one without. n=3 per cell, neutral prompts (nothing
+says "use the local model"), 2026-07 pricing. Full data:
+`benchmarks/results/ab-published-0.4.0.json`; reproduce with
+`python benchmarks/measure_ab.py`.
+
+```
+task       arm      ok    tokens (mean)  cache read  cost USD  local tokens  delegated
+commit     without  3/3          16,832     207,895    0.3039             0  -
+commit     with     2/3          19,376     259,136    0.3721         1,836  2
+commit     savings: -15.1% (mean tokens, successful runs only)
+summarize  without  3/3          16,556     155,221    0.2801             0  -
+summarize  with     3/3          19,397     176,775    0.3275             0  0
+summarize  savings: -17.2% (mean tokens, successful runs only)
+```
+
+Yes — **negative**. In unattended, neutral-prompt sessions the plugin *cost*
+15-17% more cloud tokens than it saved. Three reasons, all visible in the
+data:
+
+- Ten skill descriptions load into every session (~2-3k tokens) whether or
+  not anything delegates.
+- Left to itself, the model delegates inconsistently (commit 2/3,
+  summarize 0/3 here) — and un-delegated runs pay the overhead for nothing.
+- Without the plugin, Claude doesn't actually read whole inputs anyway: it
+  greps and tails the 338k-char log strategically, so "Claude would have read
+  everything" is not what unattended sessions do.
+
+### The confirmation arm: skills invoked deliberately
+
+We then added a third arm — same tasks, same model, but the prompt names the
+skill ("Use the ollama-commit skill ...") — to test whether deliberate
+invocation flips the result
+(`benchmarks/results/ab-published-0.4.0-directed.json`, reproduce with
+`python benchmarks/measure_ab.py --arms without,directed`):
+
+```
+task       arm      ok    tokens (mean)  cost USD  local tokens  delegated
+commit     without  3/3       16,682      0.3041        0        -
+commit     directed 1/3       15,850      0.3000        1,848    1
+summarize  without  3/3       16,021      0.2756        0        -
+summarize  directed 0/3            0      0.0000        0        0
+```
+
+What directed invocation changed, per the run records: **delegation became
+reliable** (5 of 6 directed runs engaged the local model, vs 2 of 6
+undirected), and delegated summarize runs consumed 14-15k tokens — below
+the 16k baseline — because the 338k-char log body stayed local. What it did
+NOT change: at these input sizes the cloud-token deltas stay inside session
+noise (±2k on a ~16k baseline), and strict task-success got WORSE unattended
+— the 2B local model's digest dropped one of three planted facts, and
+headless agents sometimes stalled mid-workflow (drafted the message, never
+committed). Deliberate invocation fixes engagement, not unattended
+reliability.
+
+So when IS it worth it? Interactively — a person directing the work across a
+session with several delegations, which is how this plugin is actually used.
+This repo's own development ledger shows that picture: 43 delegated calls,
+33,031 real local tokens, roughly 26,000 cloud tokens avoided net — plus the
+part no token count captures: **the diff and log bodies never entered cloud
+context at all**. That privacy property, and full-coverage digests of files
+an unattended model would only sample, are the honest headline.
+
+### Making local delegation cost-effective
+
+Four levers, ranked by measured impact:
+
+1. **Invoke skills explicitly** instead of hoping for auto-delegation
+   (`/ollama-skills:ollama-commit`, `@agent-ollama-skills:ollama-git`, or a
+   prompt that names the skill). Un-delegated sessions pay the catalog
+   overhead and save nothing — deliberate invocation is what flips the sign
+   (see the directed arm below).
+2. **Batch several delegations per session.** The ~2-3k-token skill catalog
+   loads once per session; five commits in one session amortize it five ways.
+3. **Drive delegation-heavy workflows from the bundled haiku agents**, not a
+   frontier model — most of the with-arm's cost above is the frontier model
+   itself, not the delegation.
+4. **Watch your own ledger.** `python scripts/ollama_ask.py stats` shows the
+   per-command net; if a command is negative for your usage (tiny inputs),
+   stop delegating that one.
+
 ## Configuration
 
 Resolution order for the model of each task:

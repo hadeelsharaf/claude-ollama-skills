@@ -14,11 +14,17 @@ Both are opt-in, manual, real-money-spending tools. Neither runs in CI.
 
 ## 1. Token-consumption runner (`measure_ab.py`)
 
-Runs the same task prompt twice per trial in a fresh, disposable fixture
-folder — once WITH the plugin (`--plugin-dir <repo>`), once WITHOUT — via
-headless `claude -p --output-format json --model opus`, and compares token
-usage, cost, wall time, success, and (WITH arm) real local-model tokens from
-the Ollama usage ledger.
+Runs the same task in fresh, disposable fixture folders across three arms via
+headless `claude -p --output-format json --model opus`, comparing token
+usage, cost, wall time, success, and (plugin arms) real local-model tokens
+from the Ollama usage ledger:
+
+- `without` — neutral prompt, no plugin (the baseline).
+- `with` — same neutral prompt, plugin loaded via `--plugin-dir <repo>`:
+  measures UNATTENDED behavior (does the model delegate on its own?).
+- `directed` — plugin loaded AND the prompt names the skill
+  (`Use the ollama-commit skill ...`): measures the plugin as actually used,
+  with deliberate invocation.
 
 Pilot first (1 run, summarize only — cheapest way to shake out the harness):
 
@@ -26,8 +32,8 @@ Pilot first (1 run, summarize only — cheapest way to shake out the harness):
 python benchmarks/measure_ab.py --runs 1 --tasks summarize
 ```
 
-Full matrix (default: both tasks, both arms, 3 runs each = 12 headless
-sessions):
+Full matrix (default: both tasks, all three arms, 3 runs each = 18 headless
+sessions; pick arms with e.g. `--arms without,directed`):
 
 ```bash
 python benchmarks/measure_ab.py
@@ -51,7 +57,7 @@ explicitly published `ab-published-*.json` files.
 
 ### Cost warning
 
-Real opus API spend. Defaults run **~12 opus sessions** (2 tasks × 2 arms ×
+Real opus API spend. Defaults run **~18 opus sessions** (2 tasks × 3 arms ×
 3 runs). Always run the `--runs 1 --tasks summarize` pilot first.
 
 ## 2. Quality/regression evals (`claude plugin eval`)

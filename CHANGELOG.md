@@ -22,6 +22,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
   Excerpts now lead with the highest-churn file, length rejections state the
   measured character count, and hinted drafts are marked `"hinted": true` in
   the usage ledger.
+- `ollama-logs` skill: plain log/text-file digests via `summarize --file` —
+  the A/B benchmark exposed the gap (the README claimed log digests but only
+  docker/k8s/git wrappers existed).
+- A/B benchmark suite: `benchmarks/measure_ab.py` (three arms — without /
+  with / directed — with honest, measured results published in the README)
+  plus `evals/` quality cases for `claude plugin eval --ablation
+  with-without`.
 
 ### Changed
 
