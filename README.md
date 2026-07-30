@@ -18,15 +18,17 @@ worker.
 > CPU-only machines are slow with big models — the defaults here are tuned for that
 > (see the measured numbers below). Fully offline options: [docs/ADVANCED.md](docs/ADVANCED.md).
 
-## What's new in v0.3
+## What's new in v0.4
 
-- **Draft PRs from your branch** — the `ollama-pr` skill: the local model drafts the
-  title and description from commit subjects (never patches), Claude reviews, and one
-  gated step opens a **draft** PR via gh or glab. `--ready` only when you say so.
-- **Free-RAM gate in model auto-detect** — a model bigger than free RAM is skipped
-  (and `models` tells you why); explicit picks are never gated.
-- **GPU-measured model fleet** — defaults, docs, and speed tables refreshed against
-  measured numbers (`qwen2.5-coder:1.5b`, `gemma2:2b`, RTX 4050 Laptop).
+- **Usage ledger + `stats`**: every local call is recorded (counts only, never
+  content) and `stats` shows real local tokens vs estimated cloud tokens
+  avoided — honest numbers, including the published A/B experiment below.
+- **Author-intent commit drafts**: `commit-msg --type <t> --hint "<one line>"`
+  passes what the caller already knows; drafts on directed commits now land
+  usable far more often.
+- **`ollama-logs` skill** (tenth skill): private digests of plain log files.
+- **A/B benchmark + eval suite**: `benchmarks/` and `evals/` measure the
+  plugin instead of asserting about it.
 
 Earlier releases: see [CHANGELOG.md](CHANGELOG.md).
 
