@@ -33,6 +33,24 @@ CONVENTIONAL_RE = re.compile(
 PROMPTS = {"commit": fixtures.PROMPT_COMMIT,
            "summarize": fixtures.PROMPT_SUMMARIZE}
 
+# The "directed" arm: same tasks, but the prompt names the skill - measuring
+# the plugin the way it is actually used (deliberate invocation), against the
+# same neutral "without" baseline.
+DIRECTED_PROMPTS = {
+    "commit": ("Use the ollama-commit skill (local Ollama model) to commit "
+               "the staged changes in this repository with an appropriate "
+               "one-line commit message. Do not push."),
+    "summarize": ("Use the ollama-logs skill (local Ollama model) to read "
+                  "app.log and summarize what went wrong: the main failure "
+                  "patterns and the most likely root cause. Keep it under "
+                  "15 lines."),
+}
+
+# arm name -> (prompt set, plugin loaded)
+ARMS = {"without": (PROMPTS, False),
+        "with": (PROMPTS, True),
+        "directed": (DIRECTED_PROMPTS, True)}
+
 
 def run_claude(prompt: str, cwd: Path, with_plugin: bool) -> dict:
     """THE paid-subprocess boundary. Tests monkeypatch this function."""
@@ -132,12 +150,13 @@ def run_matrix(runs: int, tasks, arms, out_dir: Path) -> dict:
     rows = []
     for task in tasks:
         for arm in arms:
+            prompt_set, plugin_loaded = ARMS[arm]
             for trial in range(runs):
                 base = Path(tempfile.mkdtemp(prefix=f"ab_{task}_{arm}_"))
                 fixture = _make_fixture(task, base)
                 started = time.monotonic()
-                row = usage_row(run_claude(PROMPTS[task], fixture,
-                                           arm == "with"))
+                row = usage_row(run_claude(prompt_set[task], fixture,
+                                           plugin_loaded))
                 row.update({"task": task, "arm": arm, "trial": trial,
                             "wall_s": round(time.monotonic() - started, 1)})
                 if row["error"]:
@@ -147,7 +166,7 @@ def run_matrix(runs: int, tasks, arms, out_dir: Path) -> dict:
                 else:
                     row["success"] = validate_summarize(row["result_text"])
                 row["delegated"], row["local_tokens"] = (
-                    read_delegation(fixture) if arm == "with" else (None, 0))
+                    read_delegation(fixture) if plugin_loaded else (None, 0))
                 row.pop("result_text", None)   # keep the record small
                 rows.append(row)
                 print(f"  {task}/{arm} trial {trial + 1}/{runs}: "
@@ -176,13 +195,15 @@ def run_matrix(runs: int, tasks, arms, out_dir: Path) -> dict:
                 "delegated": sum(1 for r in ok if r.get("delegated")),
             }
         # A savings claim needs at least one SUCCESSFUL run on each side -
-        # a zero-success cell would otherwise print an absurd 100%.
-        if ("with" in cell and "without" in cell
-                and cell["with"]["ok"] and cell["without"]["ok"]
-                and cell["without"]["tokens_mean"]):
-            cell["savings_pct"] = round(
-                100 * (1 - cell["with"]["tokens_mean"]
-                       / cell["without"]["tokens_mean"]), 1)
+        # a zero-success cell would otherwise print an absurd 100%. Every
+        # plugin arm is compared against the same neutral "without" baseline.
+        for arm in arms:
+            if (arm != "without" and "without" in cell
+                    and cell[arm]["ok"] and cell["without"]["ok"]
+                    and cell["without"]["tokens_mean"]):
+                cell[arm]["savings_pct"] = round(
+                    100 * (1 - cell[arm]["tokens_mean"]
+                           / cell["without"]["tokens_mean"]), 1)
         agg["cells"][task] = cell
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -196,7 +217,7 @@ def render_table(agg: dict) -> str:
     lines = ["task       arm      ok    tokens (mean)  cache read  "
              "cost USD  local tokens  delegated"]
     for task, cell in agg["cells"].items():
-        for arm in ("without", "with"):
+        for arm in ("without", "with", "directed"):
             if arm not in cell:
                 continue
             c = cell[arm]
@@ -204,13 +225,15 @@ def render_table(agg: dict) -> str:
                 f"{task:<10} {arm:<8} {c['ok']}/{c['runs']:<3} "
                 f"{c['tokens_mean']:>13,}  {c['cache_read_mean']:>10,}  "
                 f"{c['cost_mean_usd']:>8.4f}  {c['local_tokens_mean']:>12,}  "
-                f"{c['delegated'] if arm == 'with' else '-'}")
-        if "savings_pct" in cell:
-            lines.append(f"{task:<10} savings: {cell['savings_pct']}% "
-                         "(mean tokens, successful runs only)")
+                f"{c['delegated'] if arm != 'without' else '-'}")
+            if "savings_pct" in c:
+                lines.append(f"{task:<10} {arm} savings vs without: "
+                             f"{c['savings_pct']}% "
+                             "(mean tokens, successful runs only)")
     lines.append("")
-    lines.append("Both arms opus, identical prompts, cold folders; cache "
-                 "reads excluded from the consumed metric.")
+    lines.append("All arms opus, cold folders; cache reads excluded from the "
+                 "consumed metric. The directed arm's prompt names the skill; "
+                 "the other two arms share one neutral prompt.")
     return "\n".join(lines)
 
 
@@ -218,7 +241,7 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--tasks", default="commit,summarize")
-    parser.add_argument("--arms", default="without,with")
+    parser.add_argument("--arms", default="without,with,directed")
     parser.add_argument("--out", default=str(REPO_ROOT / "benchmarks"
                                              / "results"))
     args = parser.parse_args(argv)
@@ -228,7 +251,12 @@ def main(argv=None) -> int:
         if task not in PROMPTS:
             print(f"unknown task {task!r}", file=sys.stderr)
             return 2
-    if "with" in arms:
+    for arm in arms:
+        if arm not in ARMS:
+            print(f"unknown arm {arm!r} (choose from {sorted(ARMS)})",
+                  file=sys.stderr)
+            return 2
+    if any(ARMS[arm][1] for arm in arms):
         health = subprocess.run(
             [sys.executable, str(REPO_ROOT / "scripts" / "ollama_ask.py"),
              "health"], capture_output=True, text=True)

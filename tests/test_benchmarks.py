@@ -135,7 +135,7 @@ class RunnerTests(unittest.TestCase):
         cells = agg["cells"]
         self.assertEqual(cells["summarize"]["without"]["tokens_mean"], 2000)
         self.assertEqual(cells["summarize"]["with"]["tokens_mean"], 800)
-        self.assertAlmostEqual(cells["summarize"]["savings_pct"], 60.0)
+        self.assertAlmostEqual(cells["summarize"]["with"]["savings_pct"], 60.0)
         table = measure_ab.render_table(agg)
         self.assertIn("summarize", table)
         self.assertIn("savings", table)
@@ -156,7 +156,28 @@ class RunnerTests(unittest.TestCase):
                                     out_dir=Path(self._tmp) / "out2")
         cell = agg["cells"]["summarize"]
         self.assertEqual(cell["with"]["ok"], 0)
-        self.assertNotIn("savings_pct", cell)   # never an absurd 100% claim
+        self.assertNotIn("savings_pct", cell["with"])   # never an absurd 100%
+
+    def test_matrix_directed_arm_prompt_and_plugin(self):
+        seen = []
+
+        def stub(prompt, cwd, with_plugin):
+            seen.append((prompt, with_plugin))
+            return fake_usage(consumed=500 if with_plugin else 2000)
+
+        measure_ab.run_claude = stub
+        agg = measure_ab.run_matrix(runs=1, tasks=["summarize"],
+                                    arms=["without", "directed"],
+                                    out_dir=Path(self._tmp) / "out3")
+        neutral, directed = seen[0], seen[1]
+        self.assertFalse(neutral[1])
+        self.assertTrue(directed[1])                    # plugin loaded
+        self.assertIn("ollama-logs", directed[0])       # prompt names the skill
+        self.assertNotEqual(neutral[0], directed[0])
+        cell = agg["cells"]["summarize"]
+        self.assertEqual(cell["directed"]["savings_pct"], 75.0)
+        self.assertIn("directed savings vs without",
+                      measure_ab.render_table(agg))
 
 
 class EvalCaseTests(unittest.TestCase):
