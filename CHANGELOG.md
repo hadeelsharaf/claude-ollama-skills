@@ -38,6 +38,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
   suggested type after one corrective retry, instead of printing it;
   scope-only defects are retried once, then the draft is printed for Claude
   to edit.
+- `ollama-commit` and the `ollama-git` agent now commit in the same turn the
+  message is approved — the permission prompt on the git command is the
+  user's approval; they no longer stop to ask "shall I commit?" first.
 
 ## [0.3.0] - 2026-07-29
 

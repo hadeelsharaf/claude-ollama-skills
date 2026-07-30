@@ -37,6 +37,10 @@ OLLAMA_SKILLS_DEBUG=1 python scripts/ollama_ask.py ...   # model/timeout/options
 Both e2e scripts exit 0 with a "skipped" message when their env var is unset, so they are
 safe to run blind.
 
+`benchmarks/measure_ab.py` is **PAID**: ~18 headless opus sessions at defaults; never run
+it in tests or CI — pilot first with `--runs 1 --tasks summarize`.
+`evals/` holds paid `claude plugin eval` cases, gated behind an early-access CLI feature.
+
 ## Architecture
 
 Three layers, coupled by an **exit-code contract** rather than by imports:

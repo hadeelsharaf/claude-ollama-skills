@@ -266,11 +266,14 @@ invocation flips the result
 `python benchmarks/measure_ab.py --arms without,directed`):
 
 ```
-task       arm      ok    tokens (mean)  cost USD  local tokens  delegated
-commit     without  3/3       16,682      0.3041        0        -
-commit     directed 1/3       15,850      0.3000        1,848    1
-summarize  without  3/3       16,021      0.2756        0        -
-summarize  directed 0/3            0      0.0000        0        0
+task       arm      ok    tokens (mean)  cache read  cost USD  local tokens  delegated
+commit     without  3/3          16,682     204,445    0.3041             0  -
+commit     directed 1/3          15,850     215,193    0.3000         1,848  1
+commit     directed savings vs without: 5.0% (mean tokens, successful runs only)
+summarize  without  3/3          16,021     169,313    0.2756             0  -
+summarize  directed 0/3               0           0    0.0000             0  0
+
+All arms opus, cold folders; cache reads excluded from the consumed metric. The directed arm's prompt names the skill; the other two arms share one neutral prompt.
 ```
 
 What directed invocation changed, measured with the SAME yardstick on both
@@ -282,9 +285,10 @@ summarize runs consumed 14-15k tokens, below the 16k baseline, because the
 success FELL from 5/6 to 1/6 unattended — the 2B local model's digest
 dropped one of three planted facts, and headless agents stalled
 mid-workflow (drafted the message, never committed). At these input sizes
-cloud-token deltas stay inside session noise (±2k on a ~16k baseline).
-Deliberate invocation improves engagement; it does not make unattended
-sessions reliable.
+cloud-token deltas stay inside session noise (±3k on a ~16k baseline); the
+commit cell's +5.0% directed savings is a single successful run sitting
+inside that noise band, so we do not claim it. Deliberate invocation
+improves engagement; it does not make unattended sessions reliable.
 
 So when IS it worth it? Interactively — a person directing the work across a
 session with several delegations, which is how this plugin is actually used.
@@ -298,13 +302,15 @@ model would only sample, are the honest headline.
 
 ### Making local delegation cost-effective
 
-Four levers, ranked by measured impact:
+Four levers, in the order we'd reach for them (levers 1-2 and 4 are
+measured; lever 3 is expected, not yet measured):
 
 1. **Invoke skills explicitly** instead of hoping for auto-delegation
    (`/ollama-skills:ollama-commit`, `@agent-ollama-skills:ollama-git`, or a
    prompt that names the skill). Un-delegated sessions pay the catalog
-   overhead and save nothing — deliberate invocation is what flips the sign
-   (see the directed arm below).
+   overhead and save nothing — deliberate invocation is what makes the local
+   model actually get used (invoked 5/6 vs 3/6 here; see the directed arm
+   above).
 2. **Batch several delegations per session.** The ~2-3k-token skill catalog
    loads once per session; five commits in one session amortize it five ways.
 3. **Drive delegation-heavy workflows from the bundled haiku agents**, not a
@@ -363,6 +369,8 @@ scripts/           ollama_ask.py (the one runtime file) + validate_repo.py
 config/            example config
 templates/         CLAUDE.md routing snippet
 tests/             unit tests (fake Ollama server) + opt-in real e2e
+benchmarks/        A/B token-consumption runner (paid, opt-in, never in CI)
+evals/             claude plugin eval quality cases (paid, opt-in, never in CI)
 docs/              DESIGN, RESEARCH, ADVANCED, SECURITY, skill-tests
 .github/workflows  CI: unit tests (Ubuntu+Windows), validation, opt-in e2e
 ```

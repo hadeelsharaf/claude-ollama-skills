@@ -1069,6 +1069,12 @@ class OllamaAskTests(unittest.TestCase):
         env = dict(os.environ)
         env.pop("PYTHONUTF8", None)
         env.pop("PYTHONIOENCODING", None)
+        # The spawned real subprocess reads REAL free RAM (the in-process
+        # free_ram monkeypatch in setUp doesn't cross the subprocess
+        # boundary) and would exit 4 if the resident models don't fit free
+        # RAM. Pin the model explicitly - explicit pins bypass the RAM gate
+        # by design, and this test's subject (UTF-8 pipes) is untouched.
+        env["OLLAMA_SKILLS_MODEL"] = "qwen3:8b"
         script = ROOT / "scripts" / "ollama_ask.py"
         result = subprocess.run(
             [sys.executable, str(script), "ask", "NONASCII please", "--quiet"],

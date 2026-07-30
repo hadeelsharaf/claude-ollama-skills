@@ -1,7 +1,6 @@
 """Hermetic tests for the A/B benchmark tooling. No network, no paid calls."""
 from __future__ import annotations
 
-import json
 import os
 import shutil
 import stat
@@ -90,12 +89,21 @@ class FixtureTests(unittest.TestCase):
 
 class RunnerTests(unittest.TestCase):
     def setUp(self):
+        # run_matrix() calls tempfile.mkdtemp("ab_<task>_<arm>_") for each
+        # fixture, outside self._tmp - snapshot what's already there so
+        # tearDown can remove only what THIS test created, not other
+        # processes' leftovers.
+        self._pre_ab_dirs = set(Path(tempfile.gettempdir()).glob("ab_*"))
         self._tmp = tempfile.mkdtemp(prefix="ab_runner_")
         self._orig = measure_ab.run_claude
 
     def tearDown(self):
         measure_ab.run_claude = self._orig
         rmtree_force(self._tmp)
+        for path in (set(Path(tempfile.gettempdir()).glob("ab_*"))
+                     - self._pre_ab_dirs):
+            if path.is_dir():
+                rmtree_force(str(path))
 
     def test_tokens_consumed_metric(self):
         row = measure_ab.usage_row(fake_usage())

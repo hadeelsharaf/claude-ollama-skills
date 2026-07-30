@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
 """A/B token-consumption runner: the plugin's savings, measured for real.
 
-Runs the same task prompt in a fresh fixture folder twice per trial - one
-arm WITH the plugin (--plugin-dir <this repo>), one WITHOUT - via headless
+Runs the same task prompt in a fresh fixture folder across three arms per
+trial - without the plugin (the baseline), with the plugin loaded
+(--plugin-dir <this repo>) but a neutral prompt, and directed (plugin loaded
+AND the prompt names the skill) - via headless
 `claude -p --output-format json --model opus`, and compares usage.
 
 --dangerously-skip-permissions is passed ONLY because every run happens
 inside a disposable generated fixture directory; never reuse this pattern
 against a real project.
 
-Paid API usage: ~12 opus runs at defaults. Run the pilot first:
+Paid API usage: ~18 opus runs at defaults (2 tasks x 3 arms x 3 runs). Run
+the pilot first:
     python benchmarks/measure_ab.py --runs 1 --tasks summarize
 """
 from __future__ import annotations
@@ -107,7 +110,8 @@ def validate_commit(repo: Path) -> bool:
         return False
     subject = _git_out(repo, "log", "-1", "--format=%s")
     staged = _git_out(repo, "diff", "--cached", "--name-only")
-    return bool(CONVENTIONAL_RE.match(subject)) and staged == ""
+    return (bool(CONVENTIONAL_RE.match(subject)) and len(subject) <= 72
+            and staged == "")
 
 
 def validate_summarize(text: str) -> bool:

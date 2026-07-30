@@ -23,6 +23,8 @@ Use `python` on Windows, `python3` on macOS/Linux.
 2. Digest it:
    `python "$SCRIPT" summarize --file "<path>" --kind log`
    - Plain prose or mixed text instead of a log? Use `--kind text`.
+   - Prose or mixed text (`--kind text`)? Add `--no-verdict` — the verdict
+     line invites invented error counts on non-log input.
    - Huge file? Add `--tail 2000` to keep only the newest lines, or raise
      `--ceiling-chars` / pass `--force` if the script says the input is over
      the ceiling and the user wants it all.
@@ -48,7 +50,7 @@ Use `python` on Windows, `python3` on macOS/Linux.
    was skipped. Do not retry more than once. Do not make the user wait for a
    second stall. (Doing it yourself here means asking the user's permission to
    read the file, per rule 3.)
-5. Use only the commands and flags shown in the ollama-* skills. If you need a flag
+5. Use only the commands and flags shown in this skill. If you need a flag
    that is not documented, it does not exist — do not invent one.
 
 ## Troubleshooting

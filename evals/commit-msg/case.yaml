@@ -21,9 +21,12 @@ graders:
   # working directory after its turns) — the discovered schema has no
   # "read git log" grader, but this file gives the exact same text
   # mechanically, with none of the LLM grader's judgment. A regex anchored
-  # with ^...$ and the "m" flag checks the whole first line: a real
-  # Conventional Commit type, and (via `.{1,72}`) the under-72-chars rule —
-  # the one part of the rubric below that doesn't need judgment at all.
+  # with ^...$ and the "m" flag checks the whole first line for a real
+  # Conventional Commit type and caps the summary text itself at 72 chars
+  # via `.{1,72}` — but the regex alone does not bound the WHOLE subject
+  # line (a long type + scope prefix can still push the total past 72
+  # chars), so the LLM grader's "under 72 characters" criterion below is
+  # still doing real, non-redundant work, not just double-checking the regex.
   - type: regex
     name: commit_message_shape
     target:

@@ -19,6 +19,8 @@ Delegate to the local Ollama model when the task is SMALL and MECHANICAL:
   → use the ollama-code skill, or the ollama-coder agent in the background.
 - Opening a PR/MR for the current branch → use the ollama-pr skill (drafted
   description, draft PR by default).
+- Summarizing a log or big text file → use the ollama-logs skill (the file
+  body stays local).
 - Other small private text work → use the ollama-ask skill.
 - Checking the local model setup / which models are available → use the ollama-ask skill (health).
 

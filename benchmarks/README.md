@@ -43,11 +43,12 @@ Output: `benchmarks/results/ab-YYYYMMDD-HHMMSS.json` (per-run rows + per-cell
 aggregates) plus a printed table. `benchmarks/results/` is gitignored except
 explicitly published `ab-published-*.json` files.
 
-### Honesty rules (spec §8 — verbatim)
+### Honesty rules
 
 - n=3 per cell; mean with min-max, not a significance claim.
-- Both arms opus, identical prompts, cold folders; the ONLY difference is
-  `--plugin-dir`.
+- All arms opus, cold folders. The `with` arm differs from `without` only by
+  `--plugin-dir`; the `directed` arm also changes the prompt to name the
+  skill — by design.
 - `tokens_consumed` excludes cache reads (reported separately); cost USD is
   the secondary, pricing-dated metric.
 - Savings counted over successful runs only; delegation rate published even
