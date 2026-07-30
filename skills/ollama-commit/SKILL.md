@@ -30,8 +30,9 @@ Use `python` on Windows, `python3` on macOS/Linux.
    - Truth: compare against `git diff --cached --stat` (file names + sizes only).
      The message must describe those files' change. If it names things not in the
      stat list, it is wrong — fix it yourself.
-4. Show the user the final message and commit:
-   `git commit -m "<message>"` (normal permission flow).
+4. Show the user the final message and commit in the same turn:
+   `git commit -m "<message>"`. The permission prompt on the git command IS
+   the user's approval — do not stop to ask "shall I commit?" first.
 5. Report the commit hash.
 
 ## Push (only when the user asked to push)

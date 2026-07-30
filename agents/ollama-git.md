@@ -31,7 +31,8 @@ Use `python` on Windows, `python3` on macOS/Linux.
    - Compare against `git diff --cached --stat` (names + sizes only — do NOT read
      the full diff; that would defeat the privacy design). Message must describe
      those files. Wrong or vague → fix the message yourself.
-4. `git commit -m "<message>"` (normal permission flow).
+4. `git commit -m "<message>"` in the same turn — the permission prompt on
+   the git command IS the user's approval; do not stop to ask first.
 5. Report: the final message, the commit hash (`git rev-parse --short HEAD`), and
    whether the local model's draft was used, edited, or replaced.
 
