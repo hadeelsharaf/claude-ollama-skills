@@ -99,6 +99,11 @@ class FakeOllamaHandler(BaseHTTPRequestHandler):
             text = "I cannot help with that request."
         elif "SKIPFIX" in prompt:
             text = "SKIP"
+        elif "SKIPRETRY" in prompt:
+            key = "skipretry"
+            FakeOllamaHandler.counters[key] = FakeOllamaHandler.counters.get(key, 0) + 1
+            text = ("no suggestion markers here"
+                    if FakeOllamaHandler.counters[key] == 1 else "SKIP")
         elif "NONASCII" in prompt:
             text = "naïve ✓ done"
         elif "SUGGESTFIX" in prompt:
@@ -1108,6 +1113,18 @@ class OllamaAskTests(unittest.TestCase):
             "--error", "SKIPFIX E501 line too long")
         self.assertEqual(code, 0)
         self.assertEqual(out.strip(), "SKIP")
+
+    def test_fix_lint_skip_on_retry_still_fails_format(self):
+        # SKIP is a valid answer only on the FIRST attempt; on the corrective
+        # retry it means the model dodged the format instruction -> exit 6.
+        target = Path(self._tmp) / "skipretry.py"
+        target.write_text("import os\n", encoding="utf-8")
+        FakeOllamaHandler.generate_calls = 0
+        code, out, err = self.run_cli(
+            "fix-lint", "--file", str(target), "--line", "1",
+            "--error", "SKIPRETRY bad name")
+        self.assertEqual(code, 6, msg=err)
+        self.assertEqual(FakeOllamaHandler.generate_calls, 2)
 
     def test_payload_pins_think_false_and_defaults(self):
         code, _, _ = self.run_cli("ask", "hello there")

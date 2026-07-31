@@ -1379,7 +1379,7 @@ def cmd_fix_lint(args, cfg: dict) -> int:
     check_budget(prompt, cfg, args)
 
     def judge(text, attempt):
-        if text.strip() == "SKIP":
+        if attempt == 1 and text.strip() == "SKIP":
             return None
         if "<<<<<<< SEARCH" in text and ">>>>>>> REPLACE" in text:
             return None
