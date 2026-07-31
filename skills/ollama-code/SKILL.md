@@ -28,7 +28,7 @@ Use `python` on Windows, `python3` on macOS/Linux.
    - Does it do exactly what the spec says? Edge cases handled?
    - No secrets, no network calls, no file deletions the spec did not ask for.
    - Style matches the surrounding project.
-4. Fix small problems yourself (do not loop the model for nitpicks).
+4. Fix small problems yourself.
 5. Place the code with Write/Edit, run the project's quick check
    (tests, linter, or at least import/compile).
 6. Tell the user what the local model drafted and what you changed.

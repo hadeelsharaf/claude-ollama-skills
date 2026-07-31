@@ -1,6 +1,6 @@
 ---
 name: ollama-git
-description: Stages requested changes, generates the commit message with a local Ollama model (the diff never leaves the machine), validates it, and commits. Use when the user wants changes committed with a locally drafted message. Never rewrites history.
+description: Stages requested changes, generates the commit message with a local Ollama model (the diff never leaves the machine), validates it, and commits. Use when the user wants changes committed with a locally drafted message.
 tools: Bash, Read, Grep
 model: haiku
 ---
