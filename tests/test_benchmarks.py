@@ -229,3 +229,15 @@ class CatalogTests(unittest.TestCase):
         rows = [{"kind": "skill", "name": "a", "desc_chars": 100, "body_chars": 9000},
                 {"kind": "agent", "name": "b", "desc_chars": 50, "body_chars": 4000}]
         self.assertEqual(measure_catalog.catalog_total(rows), 150)
+
+    def test_catalog_shares_validate_repo_parser_and_constants(self):
+        import measure_catalog
+        import validate_repo
+        self.assertIs(measure_catalog.parse_frontmatter,
+                      validate_repo.parse_frontmatter)
+        self.assertEqual(measure_catalog.CATALOG_BUDGET, validate_repo.CATALOG_BUDGET)
+        self.assertEqual(measure_catalog.DESC_CAP_SKILL, validate_repo.DESC_CAP_SKILL)
+        self.assertEqual(measure_catalog.DESC_CAP_AGENT, validate_repo.DESC_CAP_AGENT)
+        src = Path(measure_catalog.__file__).read_text(encoding="utf-8")
+        self.assertNotIn("except ImportError", src,
+                         msg="the silent constants fallback must stay deleted")

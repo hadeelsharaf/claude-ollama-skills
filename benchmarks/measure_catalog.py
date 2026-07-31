@@ -7,39 +7,31 @@ Stdlib only; safe in CI.
 from __future__ import annotations
 
 import argparse
-import re
 import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
-try:
-    from validate_repo import CATALOG_BUDGET, DESC_CAP_AGENT, DESC_CAP_SKILL
-except ImportError:  # constants land in Task 4; defaults keep Task 1 usable
-    DESC_CAP_SKILL, DESC_CAP_AGENT, CATALOG_BUDGET = 330, 250, 2700
-
-_FM = re.compile(r"^---\r?\n(.*?)\r?\n---\r?\n(.*)$", re.S)
-
-
-def _parse(path: Path) -> tuple[str, str]:
-    text = path.read_text(encoding="utf-8-sig")
-    m = _FM.match(text)
-    front, body = (m.group(1), m.group(2)) if m else ("", text)
-    desc = ""
-    for line in front.splitlines():
-        if line.startswith("description:"):
-            desc = line[len("description:"):].strip()
-    return desc, body
+from validate_repo import (CATALOG_BUDGET, DESC_CAP_AGENT, DESC_CAP_SKILL,
+                           parse_frontmatter)
 
 
 def catalog_rows(root: Path) -> list[dict]:
     rows = []
     for skill_md in sorted((root / "skills").glob("*/SKILL.md")):
-        desc, body = _parse(skill_md)
+        try:
+            fields, body = parse_frontmatter(skill_md)
+        except ValueError:
+            fields, body = {}, skill_md.read_text(encoding="utf-8-sig")
+        desc = fields.get("description", "")
         rows.append({"kind": "skill", "name": skill_md.parent.name,
                      "desc_chars": len(desc), "body_chars": len(body)})
     for agent_md in sorted((root / "agents").glob("*.md")):
-        desc, body = _parse(agent_md)
+        try:
+            fields, body = parse_frontmatter(agent_md)
+        except ValueError:
+            fields, body = {}, agent_md.read_text(encoding="utf-8-sig")
+        desc = fields.get("description", "")
         rows.append({"kind": "agent", "name": agent_md.stem,
                      "desc_chars": len(desc), "body_chars": len(body)})
     return rows
