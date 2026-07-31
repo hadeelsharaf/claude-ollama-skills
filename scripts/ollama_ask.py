@@ -1309,12 +1309,11 @@ _DISQUALIFIERS = (";", "&&", "||", ">", "`", "$(")
 
 def classify_command(cmd: str) -> tuple:
     """Trust verdict for a drafted command: deny / read-only / review."""
-    # Line breaks hide a second command from the rest of this function,
-    # which normalizes all whitespace (including newlines) to single
-    # spaces; check the RAW string first, before any normalization erases
-    # the evidence. Treat them like ";" — a hard disqualifier.
-    if "\n" in cmd or "\r" in cmd:
-        return ("review", None)
+    # Required precedence: deny > newline-disqualifier > read-only. The
+    # deny scan runs FIRST, on the whitespace-collapsed normalization —
+    # plain `.split()` already collapses \n/\r (and any other whitespace
+    # run) to single spaces, so a deny phrase is visible even when it was
+    # split across a line break in the raw string.
     norm = " ".join(cmd.split())
     low = norm.lower()
     # Scan for deny patterns twice: once on the command as written, and
@@ -1326,6 +1325,13 @@ def classify_command(cmd: str) -> tuple:
         for pat, rx in _DENY_RES:
             if rx.search(scan):
                 return ("deny", pat)
+    # Only once nothing denies: a line break in the RAW command hides a
+    # second command from every check below (all of which operate on the
+    # whitespace-collapsed `norm`), so — same tier as ";" — it forces
+    # review. This must never run before the deny scan above, or a deny
+    # verdict could be silently swallowed by a stray trailing newline.
+    if "\n" in cmd or "\r" in cmd:
+        return ("review", None)
     if any(tok in norm for tok in _DISQUALIFIERS):
         return ("review", None)
     for seg in norm.split("|"):

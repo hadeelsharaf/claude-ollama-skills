@@ -610,6 +610,29 @@ class OllamaAskTests(unittest.TestCase):
         self.assertEqual(
             ollama_ask.classify_command("ls\r\nmv important.txt /dev/null")[0], "review")
 
+    def test_deny_precedes_newline_disqualifier(self):
+        """Fix round 2 (Important): the round-1 newline rule must never
+        outrank a deny verdict. Required precedence: deny > newline > read
+        -only. A stray newline (plausible model-output noise, or a deny
+        phrase split across a line break) must not downgrade a deny-worthy
+        draft to review — review still prints the full command JSON, so
+        that would silently drop the exit-6 hard block."""
+        self.assertEqual(
+            ollama_ask.classify_command("rm -rf /\nls"), ("deny", "rm -rf"))
+        self.assertEqual(
+            ollama_ask.classify_command("rm -rf /important-data\n")[0], "deny")
+        # a deny pattern split across the newline itself must still deny,
+        # via the same whitespace-collapsing normalization that already
+        # closes the pipe-split bypass (IMPORTANT 5).
+        self.assertEqual(
+            ollama_ask.classify_command("docker system\nprune -af")[0], "deny")
+        # round-1 behavior must be unchanged when no deny pattern matches:
+        # the newline still forces review, and "mv" never reaches the
+        # read-only per-segment check.
+        self.assertEqual(
+            ollama_ask.classify_command("ls\nmv important.txt /dev/null"),
+            ("review", None))
+
     def test_git_branch_write_forms_and_bare_form_are_review(self):
         """CRITICAL 3: `git branch` was wrongly blanket-allowed; `-f`/`-m`/
         `--set-upstream-to` rewrite refs, and even the bare form is no
