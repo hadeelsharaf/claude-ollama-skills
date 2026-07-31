@@ -5,6 +5,30 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ## [Unreleased]
 
+### Removed
+- `summarize --kind events|describe` and the kubectl describe pre-filter —
+  remnants of the kubernetes support parked in 0.5.0. kubectl output still
+  digests through the generic `log`/`text` kinds. Orphaned kubectl test
+  fixtures removed with them.
+
+### Fixed
+- The remote-host privacy warning can no longer be silenced by a hostname
+  prefix (`localhost.attacker.example`, `127.0.0.1.evil.example`): loopback is
+  now decided by exact hostname or a genuine loopback/unspecified IP literal,
+  and bracketed IPv6 (`http://[::1]`) no longer false-warns.
+- `summarize` rejects a negative `--tail` as a usage error instead of silently
+  dropping the first N lines, and the reduce loop stops with a best-effort
+  summary when a pass no longer shrinks the text (it could previously loop
+  forever with `--chunk-chars` below the model's output size).
+- `pr-desc`/`pr-create` resolve the PR base from the remote the PR actually
+  targets (`--remote`, else the branch upstream) instead of a hardcoded
+  `origin`.
+- `validate_repo.py` reads manifests BOM-tolerantly (`utf-8-sig`) and reports
+  unreadable files as clean FAILs; it also now pins the README exit-code list
+  against the script's constants and docstring, and the README gained the
+  missing `1`/`130` rows.
+- The base skill documents the `summarize` task profile.
+
 ### Changed
 - Internal deepening, no change to exit codes or stdout (two commands' "not a
   git repository" error text is now unified, and drafting failure paths now

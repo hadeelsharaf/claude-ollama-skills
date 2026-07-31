@@ -1225,7 +1225,7 @@ class OllamaAskTests(unittest.TestCase):
 
     def test_summarize_map_reduce_multiple_calls(self):
         big = "\n".join(f"event number {i} happened on host node-{i}" for i in range(400))
-        code, out, err = self.run_stdin(big, "summarize", "--kind", "events", "--no-dedupe")
+        code, out, err = self.run_stdin(big, "summarize", "--kind", "log", "--no-dedupe")
         self.assertEqual(code, 0, msg=err)
         self.assertGreater(FakeOllamaHandler.generate_calls, 1)  # map + reduce
 
@@ -1249,7 +1249,7 @@ class OllamaAskTests(unittest.TestCase):
         ollama_ask.free_ram_bytes = flaky_free_ram
 
         big = "\n".join(f"event number {i} happened on host node-{i}" for i in range(400))
-        code, out, err = self.run_stdin(big, "summarize", "--kind", "events", "--no-dedupe")
+        code, out, err = self.run_stdin(big, "summarize", "--kind", "log", "--no-dedupe")
 
         self.assertEqual(code, 0, msg=err)  # would be 4 if re-gated mid-run
         self.assertGreater(FakeOllamaHandler.generate_calls, 1)  # map + reduce ran
@@ -1347,9 +1347,11 @@ class OllamaAskTests(unittest.TestCase):
         return (ROOT / "tests" / "fixtures" / Path(*parts)).read_text(encoding="utf-8")
 
     def test_summarize_kubectl_and_docker_fixtures_run(self):
+        """kubectl output still digests fine through the generic kinds; the
+        k8s-specific kinds were removed with the kubernetes parking."""
         cases = [
-            (("kubectl", "describe-pod-crashloop.txt"), "describe"),
-            (("kubectl", "events.txt"), "events"),
+            (("kubectl", "describe-pod-crashloop.txt"), "text"),
+            (("kubectl", "events.txt"), "log"),
             (("kubectl", "logs-crashloop.txt"), "log"),
             (("docker", "logs-crashloop.txt"), "log"),
         ]
@@ -1358,18 +1360,15 @@ class OllamaAskTests(unittest.TestCase):
                                             "summarize", "--kind", kind)
             self.assertEqual(code, 0, msg=f"{parts}: {err}")
 
-    def test_summarize_describe_drops_env_block(self):
-        text = self._fixture("kubectl", "describe-pod-crashloop.txt")
-        self.run_stdin(text, "summarize", "--kind", "describe", "--chunk-chars", "500")
-        sent = "\n".join(FakeOllamaHandler.prompts)
-        self.assertNotIn("SECRET_TOKEN_ENVMARKER", sent)  # Env block pruned before model
-        self.assertIn("Conditions", sent)                 # kept the useful section
-
-    def test_kubectl_no_context_fixture_present(self):
-        self.assertIn("current-context", self._fixture("kubectl", "no-context.txt").lower())
-
-    def test_get_pods_json_fixture_parses(self):
-        json.loads(self._fixture("kubectl", "get-pods.json"))  # must be valid JSON
+    def test_summarize_k8s_kinds_are_removed(self):
+        """--kind events|describe rode along with the parked kubernetes
+        support; they must now be rejected as usage errors."""
+        for kind in ("events", "describe"):
+            with self.subTest(kind=kind):
+                code, _out, err = self.run_stdin("x\n", "summarize",
+                                                 "--kind", kind)
+                self.assertEqual(code, 2, msg=err)
+                self.assertIn("invalid choice", err)
 
     def test_draft_code_yaml_and_dockerfile_fence_free(self):
         for lang in ("yaml", "dockerfile"):

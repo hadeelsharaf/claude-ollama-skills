@@ -1,6 +1,0 @@
-NAME                      READY   STATUS             RESTARTS       AGE
-web-7d9f8c6b5-abcde       1/1     Running            0              2d
-web-7d9f8c6b5-fghij       1/1     Running            0              2d
-api-5c8b6d7f9-klmno       0/1     CrashLoopBackOff   7 (2m ago)     18m
-redis-0                   1/1     Running            0              5d
-worker-6f7c9b8d4-pqrst    0/1     Error              3 (30s ago)    4m

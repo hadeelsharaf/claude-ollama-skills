@@ -19,7 +19,7 @@ Subcommands:
   pr-create      Create a draft PR/MR via gh/glab with a reviewed title/body (gated).
   pr-desc        Branch commits vs base -> JSON {title, body} for a PR (local).
   stats          Show recorded local usage and estimated cloud-token savings.
-  summarize      Log/events/describe/git text -> short digest (map-reduce, local).
+  summarize      Log/git/plain text -> short digest (map-reduce, local).
 
 Exit codes: 0 ok · 2 bad usage/over budget · 3 Ollama unreachable ·
 4 model missing · 5 timeout/stall · 6 output failed validation ·
@@ -1619,13 +1619,11 @@ def cmd_pr_create(args, cfg: dict) -> int:
 
 
 # --------------------------------------------------------------------------
-# summarize (map-reduce digest of log / events / describe / git text)
+# summarize (map-reduce digest of log / git / plain text)
 # --------------------------------------------------------------------------
 
 _KIND_WORDS = {
     "log": "log lines",
-    "events": "Kubernetes events",
-    "describe": "kubectl describe output",
     "git": "git commit log lines",
     "text": "text",
 }
@@ -1729,32 +1727,6 @@ def _dedupe_lines(lines):
     return out
 
 
-_DESCRIBE_DROP = ("Environment:", "Environment Variables from:", "Mounts:", "Volumes:")
-
-
-def _describe_filter(lines):
-    """Drop the long Env/Mounts/Volumes blocks; keep Conditions/Status/Events.
-
-    kubectl indents Environment:/Mounts: under the container, so this is
-    indentation-aware: skip a matched header and every MORE-indented line under
-    it, and resume at the next same-or-lower-indent line.
-    """
-    kept, drop_indent = [], None
-    for line in lines:
-        stripped = line.strip()
-        indent = len(line) - len(line.lstrip())
-        if drop_indent is not None:
-            if stripped and indent <= drop_indent:
-                drop_indent = None
-            else:
-                continue
-        if stripped and any(stripped.startswith(h) for h in _DESCRIBE_DROP):
-            drop_indent = indent
-            continue
-        kept.append(line)
-    return kept
-
-
 def _collapse_blanks(lines):
     out, blank = [], False
     for line in lines:
@@ -1768,12 +1740,8 @@ def _collapse_blanks(lines):
 
 
 def _prefilter(lines, kind, dedupe, chunk_chars):
-    if kind in ("log", "events") and dedupe:
+    if kind == "log" and dedupe:
         return _dedupe_lines(lines)
-    if kind == "describe":
-        if len("\n".join(lines)) > chunk_chars:
-            return _describe_filter(lines)
-        return lines
     if kind == "git":
         return lines
     return _collapse_blanks(lines)
@@ -2016,9 +1984,9 @@ def build_parser() -> argparse.ArgumentParser:
                             "(only if the user explicitly asked)")
 
     p_sum = sub.add_parser("summarize", parents=[common],
-                           help="digest log/events/describe/git text into a short draft")
+                           help="digest log/git/plain text into a short draft")
     p_sum.add_argument("--file", help="read input text from this file (default: stdin)")
-    p_sum.add_argument("--kind", choices=["log", "events", "describe", "git", "text"],
+    p_sum.add_argument("--kind", choices=["log", "git", "text"],
                        default="text",
                        help="context hint; drives the pre-filter and prompt wording")
     p_sum.add_argument("--tail", type=int, default=0,
@@ -2032,7 +2000,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_sum.add_argument("--no-verdict", action="store_false", dest="verdict",
                        help="print plain bullets only, with no VERDICT line")
     p_sum.add_argument("--no-dedupe", action="store_false", dest="dedupe",
-                       help="do not collapse repeated near-identical lines (log/events)")
+                       help="do not collapse repeated near-identical lines (log)")
     p_sum.set_defaults(task="summarize", verdict=True, dedupe=True)
 
     return parser
