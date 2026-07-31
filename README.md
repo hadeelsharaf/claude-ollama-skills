@@ -319,6 +319,54 @@ same discipline as the negative ones above:
   tokens per session) — which is exactly why each release re-measures both
   arms instead of comparing against old baselines.
 
+### Re-measured after the 0.6.0 skill-craft pass
+
+0.6.0 reworked the runtime and the skill *bodies* (one shared retry policy,
+leading-word rewrites, progressive disclosure) and left the always-on
+catalog essentially flat (2,583 → 2,596 chars). Same experiment, same
+neutral prompts, n=3 per cell
+(`benchmarks/results/ab-published-0.6.0.json`):
+
+```
+task       arm      ok    tokens (mean)  cache read  cost USD  local tokens  delegated
+commit     without  3/3          18,581         n/a       n/a             0  -
+commit     with     3/3          20,607         n/a       n/a         1,228  2
+commit     with savings vs without: -10.9% (mean tokens, successful runs only)
+summarize  without  3/3          23,887         n/a       n/a             0  -
+summarize  with     2/3          28,321     273,856    0.5284        13,969  1
+summarize  with savings vs without: -18.6% (mean tokens, successful runs only)
+```
+
+Both deltas are **negative again** — and this is the round with the best
+engagement so far. Read it with the usual discipline:
+
+- Provenance of the n/a columns: the 12-session matrix was interrupted
+  after 9 sessions. Those rows keep their token counts and pass/fail
+  results (recovered from the runner's stdout and the fixtures' usage
+  ledgers) but lost cache and cost with the process; the missing
+  summarize/with cell was re-run to completion at the same commit. Rows
+  are flagged in the published JSON.
+- Engagement rose across the board: commit/with passed 3/3 for the first
+  time (2/3 in both earlier rounds) while delivering a local draft in 2/3
+  runs, and a successful summarize run delegated for the first time
+  (27,938 local tokens — no earlier round had a passing run with a
+  delivered digest).
+- The tokens went the other way: the delegating summarize runs were the
+  expensive ones. The failed run pushed 41,859 tokens through the local
+  model and still consumed 32,843 cloud tokens before its digest missed a
+  planted fact, and even the successful delegated run (29,331) cost more
+  than the without-arm mean — the delegation workflow (health checks,
+  chunked local calls, reading the digest back) costs more cloud tokens
+  than strategic grep/tail at this input size. Including the failed run,
+  summarize is **-24.9%**; the ok-only -18.6% flatters the plugin, so we
+  say so.
+- Sign-not-magnitude, applied to ourselves: the without-arm baselines moved
+  20,661 → 18,581 (commit) and 21,745 → 23,887 (summarize) between rounds
+  with no plugin in that arm at all — cell-to-cell noise is the same size
+  as every delta this project has published. Three rounds now read
+  -15/-17, +8/+10, -11/-19: unattended neutral-prompt sessions show **no
+  reliable token saving**, and we won't claim one.
+
 ### The confirmation arm: skills invoked deliberately
 
 We then added a third arm — same tasks, same model, but the prompt names the
