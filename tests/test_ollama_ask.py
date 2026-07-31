@@ -76,6 +76,10 @@ CANNED_RESPONSES = {
     "LONGLINEONCE": _counted("longline", "feat: " + "x" * 80, CANNED_TEXT),
     "ALWAYSSCOPED": "docs(readme.md): update the guides",
     "suggested type: docs": "docs: update the guides",
+    "DENYDOCKERCMD": json.dumps(
+        {"command": "docker system prune -af", "explanation": "", "caution": "none"}),
+    "READONLYPIPECMD": json.dumps(
+        {"command": "git log --oneline | grep fix", "explanation": "", "caution": "none"}),
 }
 
 
@@ -536,6 +540,50 @@ class OllamaAskTests(unittest.TestCase):
         code, out, err = self.run_cli("draft-command", "INVALID_JSON_PLEASE task")
         self.assertEqual(code, 6, msg=err)
         self.assertEqual(FakeOllamaHandler.generate_calls, 2)
+
+    # -- command trust classifier --------------------------------------------
+
+    def test_deny_patterns_exit_6_and_name_pattern(self):
+        """A drafted command matching a deny pattern must exit 6 and name the
+        matched pattern on stderr, never reach stdout as an accepted draft."""
+        code, out, err = self.run_cli("draft-command", "DENYDOCKERCMD clean up docker")
+        self.assertEqual(code, 6, msg=err)
+        self.assertIn("docker system prune", err)
+
+    def test_read_only_pipeline_classified(self):
+        code, out, err = self.run_cli("draft-command", "READONLYPIPECMD find fix commits")
+        self.assertEqual(code, 0, msg=err)
+        self.assertIn("classification: read-only", err)
+
+    def test_separator_disqualifies_read_only(self):
+        self.assertEqual(ollama_ask.classify_command("ls; rm -rf /tmp/x")[0], "deny")
+        self.assertEqual(ollama_ask.classify_command("ls && whoami")[0], "review")
+        self.assertEqual(ollama_ask.classify_command("git log > out.txt")[0], "review")
+        self.assertEqual(ollama_ask.classify_command("ls $(cat f)")[0], "review")
+
+    def test_write_flag_disqualifies_segment(self):
+        self.assertEqual(
+            ollama_ask.classify_command("git log | sort -o out.txt")[0], "review")
+
+    def test_non_listed_segment_is_review(self):
+        self.assertEqual(
+            ollama_ask.classify_command("git log | python x.py")[0], "review")
+        self.assertEqual(ollama_ask.classify_command("curl http://x")[0], "review")
+
+    def test_deny_beats_read_only_and_is_word_bounded(self):
+        self.assertEqual(
+            ollama_ask.classify_command("git push --force")[0], "deny")
+        # substring of a benign word must NOT match: 'ddict' contains 'dd'
+        self.assertEqual(
+            ollama_ask.classify_command("grep ddict file.txt")[0], "read-only")
+
+    def test_every_deny_pattern_lives_in_skill_prose(self):
+        prose = ""
+        for rel in ("skills/ollama-shell/SKILL.md", "skills/ollama-docker/SKILL.md",
+                    "agents/ollama-ops.md"):
+            prose += (ROOT / rel).read_text(encoding="utf-8")
+        for pat in ollama_ask.DENY_PATTERNS:
+            self.assertIn(pat, prose, f"deny pattern not in any skill prose: {pat}")
 
     # -- commit-msg ---------------------------------------------------------
 

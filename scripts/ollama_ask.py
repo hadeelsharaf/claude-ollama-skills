@@ -1249,6 +1249,63 @@ SHELL_SYSTEM_TEMPLATE = (
 )
 
 
+# --- command trust classifier -------------------------------------------
+# DENY strings must each appear verbatim in the shell/docker/ops prose
+# deny-lists (test-enforced) so the two layers cannot drift apart.
+DENY_PATTERNS = [
+    "rm -rf", "Remove-Item -Recurse -Force", "rd /s /q", "del /f /s /q",
+    "git clean -fdx", "mkfs", "diskpart", "shutdown", "dd",
+    "git push --force", "git commit --no-verify", "git filter-branch",
+    "git reflog expire", "git branch -D",
+    "docker system prune", "docker volume rm", "docker volume prune",
+    "docker network rm", "docker network prune", "docker image prune",
+    "docker container prune", "docker builder prune",
+    "docker rm -f", "docker rmi -f", "docker compose down -v",
+    "--privileged", "--pid=host", "--network=host", "--cap-add=ALL",
+]
+
+# Leading tokens a pipe segment may start with and still count read-only.
+# Multi-word entries match the segment's first words after normalization.
+READONLY_ALLOW = [
+    "ls", "dir", "pwd", "wc", "du", "df", "head", "tail", "grep",
+    "findstr", "sort", "uniq", "cut", "tr", "file", "stat", "which",
+    "whoami", "date", "uname", "cat",
+    "git status", "git log", "git diff", "git branch", "git show",
+    "git remote -v", "docker ps", "docker images", "docker logs",
+    "docker inspect", "docker version", "docker info",
+    "ollama list", "ollama ps",
+    "Get-ChildItem", "Get-Item", "Get-Content", "Get-Command",
+    "Select-String", "Select-Object", "Measure-Object", "Where-Object",
+]
+
+_WRITE_FLAGS = ("-o", "--output", "-i", "--in-place")
+_DISQUALIFIERS = (";", "&&", "||", ">", "`", "$(")
+
+
+def classify_command(cmd: str) -> tuple:
+    """Trust verdict for a drafted command: deny / read-only / review."""
+    norm = " ".join(cmd.split())
+    low = norm.lower()
+    for pat in DENY_PATTERNS:
+        p = " ".join(pat.split()).lower()
+        if re.search(r"(?<![\w-])" + re.escape(p) + r"(?![\w-])", low):
+            return ("deny", pat)
+    if any(tok in norm for tok in _DISQUALIFIERS):
+        return ("review", None)
+    for seg in norm.split("|"):
+        seg = seg.strip()
+        if not seg:
+            return ("review", None)
+        seg_low = seg.lower()
+        if not any(seg_low == a.lower() or seg_low.startswith(a.lower() + " ")
+                   for a in READONLY_ALLOW):
+            return ("review", None)
+        if any(re.search(r"(?<!\S)" + re.escape(f) + r"(?!\S)", seg)
+               for f in _WRITE_FLAGS):
+            return ("review", None)
+    return ("read-only", None)
+
+
 def cmd_draft_command(args, cfg: dict) -> int:
     shell = args.shell or ("powershell" if os.name == "nt" else "bash")
     os_name = platform.system() or "this OS"
@@ -1277,7 +1334,12 @@ def cmd_draft_command(args, cfg: dict) -> int:
     _generate_with_retry("shell", args.task_text, args, cfg, system=system,
                          judge=judge, fail_message=fail_message,
                          response_format="json")
+    verdict, matched = classify_command(accepted["data"]["command"])
+    if verdict == "deny":
+        raise CliError(EXIT_BAD_OUTPUT,
+                       f"draft matched deny pattern '{matched}'")
     print(json.dumps(accepted["data"], indent=2))
+    eprint(f"classification: {verdict}")
     return EXIT_OK
 
 
