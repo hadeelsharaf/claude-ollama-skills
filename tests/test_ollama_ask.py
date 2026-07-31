@@ -1424,7 +1424,7 @@ class OllamaAskTests(unittest.TestCase):
             self.assertIn(needle, body, msg=f"{needle!r} missing from {rel}")
 
     def test_git_history_skill_bans_patches(self):
-        """ollama-git-history must keep its no-patch privacy rule; a silent
+        """ollama-digest must keep its no-patch privacy rule; a silent
         reword that dropped these needles would defeat the skill's purpose."""
         needles = [
             "git log -p", "--patch", "--word-diff", "--full-diff",
@@ -1433,19 +1433,33 @@ class OllamaAskTests(unittest.TestCase):
             # error/warning counts (observed live 2026-07-29) — pin the flag.
             "--no-verdict",
         ]
-        rel = "skills/ollama-git-history/SKILL.md"
+        rel = "skills/ollama-digest/SKILL.md"
         body = (ROOT / rel).read_text(encoding="utf-8")
         for needle in needles:
             self.assertIn(needle, body, msg=f"{needle!r} missing from {rel}")
 
-    def test_logs_skill_bans_reading_the_file(self):
-        """ollama-logs delegates the file body away; a reword that dropped
+    def test_digest_skill_bans_reading_the_file(self):
+        """ollama-digest delegates the file body away; a reword that dropped
         the no-read rule would silently defeat the privacy design."""
-        body = (ROOT / "skills" / "ollama-logs" / "SKILL.md").read_text(
+        body = (ROOT / "skills" / "ollama-digest" / "SKILL.md").read_text(
             encoding="utf-8")
         for needle in ("do not read the file yourself", "Get-Content",
                        "UNTRUSTED DRAFT", "--tail"):
             self.assertIn(needle, body, msg=f"{needle!r} missing")
+
+    def test_digest_skill_keeps_both_privacy_rules(self):
+        body = (ROOT / "skills" / "ollama-digest" / "SKILL.md").read_text(
+            encoding="utf-8")
+        for needle in ("do not read the file yourself",
+                       "never shows patch content", "--no-verdict"):
+            self.assertIn(needle, body, msg=f"{needle!r} missing")
+
+    def test_removed_skills_are_gone(self):
+        for rel in ("skills/ollama-k8s", "skills/ollama-logs",
+                    "skills/ollama-git-history", "tests/e2e_k8s.py",
+                    "scripts/kind-up.sh"):
+            self.assertFalse((ROOT / rel).exists(),
+                             msg=f"{rel} should have been removed in 0.5.0")
 
     def test_commit_push_born_attached_branch_succeeds(self):
         # The common real-world shape the other commit-push tests miss: a
