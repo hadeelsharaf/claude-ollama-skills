@@ -1,6 +1,6 @@
 ---
 name: ollama-coder
-description: Delegates small, self-contained coding tasks (one function, one small file, boilerplate, a test) to a local Ollama model, reviews the draft, and places it. Use for small offline or privacy-sensitive code tasks. Not for multi-file changes or work that needs project-wide context.
+description: Delegates small, self-contained coding tasks (one function, one small file, boilerplate, a test) to a local Ollama model, reviews the draft, and places it. Use for small offline or privacy-sensitive code tasks.
 tools: Read, Grep, Glob, Bash, Write, Edit
 model: haiku
 ---

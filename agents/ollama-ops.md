@@ -1,6 +1,6 @@
 ---
 name: ollama-ops
-description: Runs simple file and system chores (copy, move, clean, zip, list, run a script) with commands drafted by a local Ollama model and safety-checked before execution. Use for routine machine chores the user wants delegated. Refuses destructive or out-of-scope commands.
+description: Runs simple file and system chores (copy, move, clean, zip, list, run a script) with commands drafted by a local Ollama model and safety-checked before running. Use for routine machine chores the user wants delegated; refuses destructive commands.
 tools: Bash, Read, Glob
 model: haiku
 ---

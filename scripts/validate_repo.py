@@ -16,6 +16,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 FAILURES: list[str] = []
 
+# Always-on catalog budget: descriptions are billed into every Claude Code
+# session. Measured 0.5.0 baseline: 2,583 chars. Raising these numbers is a
+# product decision, not a formatting fix.
+DESC_CAP_SKILL = 330
+DESC_CAP_AGENT = 250
+CATALOG_BUDGET = 2700
+
 KEBAB = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 CONVENTIONAL_MODELS = {"haiku", "sonnet", "opus", "fable", "inherit"}
 
@@ -73,7 +80,7 @@ def check_json(path: Path, required: list[str]) -> dict | None:
     return data
 
 
-def check_skill(path: Path) -> None:
+def check_skill(path: Path, desc_tracker: list[tuple[int, Path]] | None = None) -> None:
     try:
         fields, body = parse_frontmatter(path)
     except ValueError as exc:
@@ -91,6 +98,8 @@ def check_skill(path: Path) -> None:
         fail(path, "frontmatter missing 'description'")
     elif len(description) > 1024:
         fail(path, f"description longer than 1024 chars ({len(description)})")
+    elif len(description) > DESC_CAP_SKILL:
+        fail(path, f"description longer than {DESC_CAP_SKILL} chars ({len(description)}) — the catalog bills every session; trim it")
     elif "use when" not in description.lower():
         fail(path, "description must say when to use the skill ('Use when ...')")
     elif "UNTRUSTED DRAFT" not in body:
@@ -99,9 +108,11 @@ def check_skill(path: Path) -> None:
         fail(path, f"name {name!r} must match folder {path.parent.name!r}")
     else:
         ok(path, f"skill '{name}'")
+        if desc_tracker is not None:
+            desc_tracker.append((len(description), path))
 
 
-def check_agent(path: Path) -> None:
+def check_agent(path: Path, desc_tracker: list[tuple[int, Path]] | None = None) -> None:
     try:
         fields, body = parse_frontmatter(path)
     except ValueError as exc:
@@ -115,8 +126,11 @@ def check_agent(path: Path) -> None:
         problems.append(f"name not kebab-case: {name!r}")
     elif name != path.stem:
         problems.append(f"name {name!r} must match filename {path.stem!r}")
-    if not fields.get("description"):
+    description = fields.get("description", "")
+    if not description:
         problems.append("missing 'description'")
+    elif len(description) > DESC_CAP_AGENT:
+        problems.append(f"description longer than {DESC_CAP_AGENT} chars ({len(description)}) — the catalog bills every session; trim it")
     model = fields.get("model", "")
     if not model:
         problems.append("missing 'model'")
@@ -130,6 +144,8 @@ def check_agent(path: Path) -> None:
         fail(path, "; ".join(problems))
     else:
         ok(path, f"agent '{name}'")
+        if desc_tracker is not None and description:
+            desc_tracker.append((len(description), path))
 
 
 def main() -> int:
@@ -140,10 +156,12 @@ def main() -> int:
     if example.exists():
         check_json(example, ["host", "tasks"])
 
+    desc_tracker: list[tuple[int, Path]] = []
+
     skills_dir = ROOT / "skills"
     if skills_dir.is_dir():
         for skill_md in sorted(skills_dir.glob("*/SKILL.md")):
-            check_skill(skill_md)
+            check_skill(skill_md, desc_tracker)
         for folder in sorted(p for p in skills_dir.iterdir() if p.is_dir()):
             if not (folder / "SKILL.md").exists():
                 fail(folder, "skill folder without SKILL.md")
@@ -151,7 +169,7 @@ def main() -> int:
     agents_dir = ROOT / "agents"
     if agents_dir.is_dir():
         for agent_md in sorted(agents_dir.glob("*.md")):
-            check_agent(agent_md)
+            check_agent(agent_md, desc_tracker)
 
     core = ROOT / "scripts" / "ollama_ask.py"
     if core.exists():
@@ -160,6 +178,14 @@ def main() -> int:
             ok(core, "compiles")
         except py_compile.PyCompileError as exc:
             fail(core, f"does not compile: {exc}")
+
+    # Check total catalog budget
+    total_desc = sum(length for length, _ in desc_tracker)
+    if total_desc > CATALOG_BUDGET:
+        desc_tracker_sorted = sorted(desc_tracker, reverse=True)
+        top3 = desc_tracker_sorted[:3]
+        top3_str = "; ".join(f"{length} chars: {path.relative_to(ROOT)}" for length, path in top3)
+        fail(ROOT, f"total descriptions {total_desc} exceed budget {CATALOG_BUDGET} — top 3 contributors: {top3_str}")
 
     if FAILURES:
         print(f"\n{len(FAILURES)} problem(s) found.")

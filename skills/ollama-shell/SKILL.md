@@ -1,6 +1,6 @@
 ---
 name: ollama-shell
-description: Turn a plain-words chore into a shell command using a local Ollama model, then safety-check and run it. Use when the user asks for simple file or system chores (copy, move, clean, zip, list, run a script) and wants the local model to draft the command. Requires local Ollama and Python 3.9+.
+description: Turn a plain-words chore into a shell command with a local Ollama model, then safety-check and run it. Use when the user asks for simple file or system chores (copy, move, clean, zip, list) drafted by the local model.
 argument-hint: "<task in plain words>"
 ---
 

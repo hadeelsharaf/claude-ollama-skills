@@ -1,6 +1,6 @@
 ---
 name: ollama-pr
-description: Create a draft pull/merge request with the title and description drafted by a local Ollama model from the branch's commits — commit subjects only, the diff never enters Claude's context. Use when the user asks to open or create a PR or MR, or to publish a branch for review. Requires git, local Ollama, Python 3.9+, and the gh (GitHub) or glab (GitLab) CLI.
+description: Create a draft pull/merge request with title and body drafted by a local Ollama model from commit subjects only — the diff never enters Claude's context. Use when the user asks to open a PR or MR, or to publish a branch for review.
 argument-hint: "[base-branch] [--ready]"
 ---
 

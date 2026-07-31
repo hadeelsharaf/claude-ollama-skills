@@ -1,6 +1,6 @@
 ---
 name: ollama-docker
-description: Read Docker state, summarize container logs, and draft docker / docker compose commands, Dockerfiles, and Compose files with a local Ollama model — checked by you before anything runs. Use when the user asks to read container state (ps, logs, inspect, images, stats), wants a docker or docker compose command drafted, needs a container's logs explained, or wants a Dockerfile or docker-compose.yml drafted. Read-only commands are drafted freely; changes only when the user's words clearly ask; destructive commands are refused. Requires local Ollama, Docker, and Python 3.9+.
+description: Docker help drafted by a local Ollama model and checked by you: read state, digest container logs, and draft docker and compose commands, Dockerfiles, and compose files. Use when the user asks about containers, images, or compose, or wants container logs explained.
 argument-hint: "<what you want to do with Docker, in plain words>"
 ---
 

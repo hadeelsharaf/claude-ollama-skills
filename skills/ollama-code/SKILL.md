@@ -1,6 +1,6 @@
 ---
 name: ollama-code
-description: Draft small, self-contained code (one function, one small file, boilerplate, a test) with a local Ollama model, then review and place it. Use when the user asks for a small offline code task, private code drafting, or says "use the local model to write". Requires local Ollama and Python 3.9+.
+description: Draft small, self-contained code (one function, one small file, boilerplate, a test) with a local Ollama model, then review and place it. Use when the user asks for a small offline code task or private code drafting.
 ---
 
 # ollama-code — small code drafts, reviewed line by line

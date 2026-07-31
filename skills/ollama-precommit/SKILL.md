@@ -1,6 +1,6 @@
 ---
 name: ollama-precommit
-description: Fix pre-commit hook and linter failures using deterministic fixers first and the local Ollama model only for simple leftovers. Use when pre-commit fails, a commit is blocked by hooks, or the user asks to clean up lint errors before committing. Requires git and Python 3.9+; Ollama only for the leftover step.
+description: Fix pre-commit hook and linter failures with deterministic fixers first and the local Ollama model only for simple leftovers. Use when pre-commit fails, hooks block a commit, or the user asks to clean up lint.
 ---
 
 # ollama-precommit — fix hook failures the boring way first
