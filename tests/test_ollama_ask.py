@@ -40,6 +40,44 @@ SUGGESTION_TEXT = (
 )
 
 
+def _counted(key, first, second):
+    """Stateful canned response: first call returns `first`, later calls `second`."""
+    def pick(handler):
+        FakeOllamaHandler.counters[key] = FakeOllamaHandler.counters.get(key, 0) + 1
+        return first if FakeOllamaHandler.counters[key] == 1 else second
+    return pick
+
+
+# marker -> canned text (str) or callable(handler) -> str, matched by substring
+# against prompt+system. INSERTION ORDER IS PRECEDENCE: a prompt can contain
+# two markers at once (e.g. WRONGTYPEONCE in an excerpt while the staged mix
+# adds "suggested type: docs"), and the first entry wins — same as the old
+# elif chain. The collision test below forbids one MARKER being a substring
+# of another; co-occurrence inside one prompt is legitimate and order-decided.
+CANNED_RESPONSES = {
+    "THINKBLOCK": lambda h: "<think>secret reasoning</think>" + CANNED_TEXT,
+    "CODEBLOCK": "```python\nprint('hi')\n```",
+    "BADCOMMIT": "I cannot help with that request.",
+    "SKIPFIX": "SKIP",
+    "SKIPRETRY": _counted("skipretry", "no suggestion markers here", "SKIP"),
+    "NONASCII": "naïve ✓ done",
+    "SUGGESTFIX": SUGGESTION_TEXT,
+    "BADJSON": _counted("badjson", "not json at all", CANNED_JSON),
+    "INVALID_JSON_PLEASE": "this is not json at all",
+    "pull request descriptions": CANNED_PR_JSON,
+    "ALWAYSWRONGTYPE": "fix: update stuff",
+    "WRONGTYPEONCE": _counted("wrongtype", "fix: update stuff",
+                              "docs: update the guides"),
+    "SCOPEDRAFTONCE": _counted("scopedraft", "docs(readme.md): update the guides",
+                               "docs: update the guides"),
+    "SCOPEDWRONGONCE": _counted("scopedwrong", "fix(readme.md): tweak",
+                                "docs: update the guides"),
+    "LONGLINEONCE": _counted("longline", "feat: " + "x" * 80, CANNED_TEXT),
+    "ALWAYSSCOPED": "docs(readme.md): update the guides",
+    "suggested type: docs": "docs: update the guides",
+}
+
+
 class FakeOllamaHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.0"
     counters: dict = {}
@@ -91,66 +129,13 @@ class FakeOllamaHandler(BaseHTTPRequestHandler):
             self._send_json(400, {"error": "model does not support think"})
             return
 
-        if "THINKBLOCK" in prompt:
-            text = "<think>secret reasoning</think>" + CANNED_TEXT
-        elif "CODEBLOCK" in prompt:
-            text = "```python\nprint('hi')\n```"
-        elif "BADCOMMIT" in prompt:
-            text = "I cannot help with that request."
-        elif "SKIPFIX" in prompt:
-            text = "SKIP"
-        elif "SKIPRETRY" in prompt:
-            key = "skipretry"
-            FakeOllamaHandler.counters[key] = FakeOllamaHandler.counters.get(key, 0) + 1
-            text = ("no suggestion markers here"
-                    if FakeOllamaHandler.counters[key] == 1 else "SKIP")
-        elif "NONASCII" in prompt:
-            text = "naïve ✓ done"
-        elif "SUGGESTFIX" in prompt:
-            text = SUGGESTION_TEXT
-        elif "BADJSON" in prompt:
-            key = "badjson"
-            FakeOllamaHandler.counters[key] = FakeOllamaHandler.counters.get(key, 0) + 1
-            if FakeOllamaHandler.counters[key] == 1:
-                text = "not json at all"
-            else:
-                text = CANNED_JSON
-        elif "INVALID_JSON_PLEASE" in prompt:
-            text = "this is not json at all"
-        elif "pull request descriptions" in prompt:
-            text = CANNED_PR_JSON
-        elif "ALWAYSWRONGTYPE" in prompt:
-            text = "fix: update stuff"
-        elif "WRONGTYPEONCE" in prompt:
-            key = "wrongtype"
-            FakeOllamaHandler.counters[key] = FakeOllamaHandler.counters.get(key, 0) + 1
-            text = ("fix: update stuff" if FakeOllamaHandler.counters[key] == 1
-                    else "docs: update the guides")
-        elif "SCOPEDRAFTONCE" in prompt:
-            key = "scopedraft"
-            FakeOllamaHandler.counters[key] = FakeOllamaHandler.counters.get(key, 0) + 1
-            text = ("docs(readme.md): update the guides"
-                    if FakeOllamaHandler.counters[key] == 1
-                    else "docs: update the guides")
-        elif "SCOPEDWRONGONCE" in prompt:
-            key = "scopedwrong"
-            FakeOllamaHandler.counters[key] = FakeOllamaHandler.counters.get(key, 0) + 1
-            text = ("fix(readme.md): tweak"
-                    if FakeOllamaHandler.counters[key] == 1
-                    else "docs: update the guides")
-        elif "LONGLINEONCE" in prompt:
-            key = "longline"
-            FakeOllamaHandler.counters[key] = FakeOllamaHandler.counters.get(key, 0) + 1
-            text = ("feat: " + "x" * 80 if FakeOllamaHandler.counters[key] == 1
-                    else CANNED_TEXT)
-        elif "ALWAYSSCOPED" in prompt:
-            text = "docs(readme.md): update the guides"
-        elif "suggested type: docs" in prompt:
-            text = "docs: update the guides"
-        elif payload.get("format") == "json":
-            text = CANNED_JSON
-        else:
-            text = CANNED_TEXT
+        text = None
+        for marker, response in CANNED_RESPONSES.items():
+            if marker in prompt:
+                text = response(self) if callable(response) else response
+                break
+        if text is None:
+            text = CANNED_JSON if payload.get("format") == "json" else CANNED_TEXT
 
         # Stream as NDJSON, HTTP/1.0 close-delimited.
         self.send_response(200)
@@ -255,6 +240,17 @@ class OllamaAskTests(unittest.TestCase):
         return json.loads(out)
 
     DEVSTRAL = "devstral-small-2:latest"
+
+    # -- fake server infrastructure -----------------------------------------
+
+    def test_fake_server_markers_do_not_collide(self):
+        markers = list(CANNED_RESPONSES)
+        for a in markers:
+            for b in markers:
+                if a != b:
+                    self.assertNotIn(a, b,
+                                     msg=f"marker {a!r} is a substring of {b!r}; "
+                                         "substring markers silently steal routes")
 
     # -- model resolution ---------------------------------------------------
 
