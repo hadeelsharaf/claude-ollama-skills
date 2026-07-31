@@ -300,9 +300,16 @@ same discipline as the negative ones above:
 - Savings are computed on successful runs only, and the with arm passed 2/3
   on each task versus 3/3 without — unattended reliability is unchanged by
   the catalog cut.
-- Only the commit saving coincides with a delivered delegation (1 run, 918
-  local tokens). The summarize arm delegated **zero** times, so its 9.9% is
-  the smaller catalog plus session noise — not local-model payoff.
+- Only the commit saving coincides with a delivered delegation (1 successful
+  run, 918 local tokens). No successful summarize run delegated — that arm's
+  single delegation (27,862 local tokens) happened in its one failed run,
+  whose digest was rejected — so the 9.9% is the smaller catalog plus session
+  noise, not local-model payoff.
+- Including the failed runs, commit is +12.0% and summarize is **-1.6%**:
+  summarize's positive sign exists only because its failed run — the most
+  expensive one (27,058 tokens) — is excluded by the successful-runs-only
+  convention. Same convention as 0.4.0, but this time it flatters the
+  plugin, so we say so.
 - n=3 with per-run spreads of 16k–29k tokens: treat the *sign* as the
   finding (the plugin no longer costs more in neutral sessions), not the
   exact percentages.

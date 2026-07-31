@@ -181,7 +181,7 @@ class RunnerTests(unittest.TestCase):
         neutral, directed = seen[0], seen[1]
         self.assertFalse(neutral[1])
         self.assertTrue(directed[1])                    # plugin loaded
-        self.assertIn("ollama-logs", directed[0])       # prompt names the skill
+        self.assertIn("ollama-digest", directed[0])     # prompt names the skill
         self.assertNotEqual(neutral[0], directed[0])
         cell = agg["cells"]["summarize"]
         self.assertEqual(cell["directed"]["savings_pct"], 75.0)

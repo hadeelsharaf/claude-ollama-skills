@@ -99,7 +99,7 @@ def check_skill(path: Path, desc_tracker: list[tuple[int, Path]] | None = None) 
     elif len(description) > 1024:
         fail(path, f"description longer than 1024 chars ({len(description)})")
     elif len(description) > DESC_CAP_SKILL:
-        fail(path, f"description longer than {DESC_CAP_SKILL} chars ({len(description)}) — the catalog bills every session; trim it")
+        fail(path, f"description longer than {DESC_CAP_SKILL} chars ({len(description)}) - the catalog bills every session; trim it")
     elif "use when" not in description.lower():
         fail(path, "description must say when to use the skill ('Use when ...')")
     elif "UNTRUSTED DRAFT" not in body:
@@ -130,7 +130,7 @@ def check_agent(path: Path, desc_tracker: list[tuple[int, Path]] | None = None) 
     if not description:
         problems.append("missing 'description'")
     elif len(description) > DESC_CAP_AGENT:
-        problems.append(f"description longer than {DESC_CAP_AGENT} chars ({len(description)}) — the catalog bills every session; trim it")
+        problems.append(f"description longer than {DESC_CAP_AGENT} chars ({len(description)}) - the catalog bills every session; trim it")
     model = fields.get("model", "")
     if not model:
         problems.append("missing 'model'")
@@ -185,7 +185,8 @@ def main() -> int:
         desc_tracker_sorted = sorted(desc_tracker, reverse=True)
         top3 = desc_tracker_sorted[:3]
         top3_str = "; ".join(f"{length} chars: {path.relative_to(ROOT)}" for length, path in top3)
-        fail(ROOT, f"total descriptions {total_desc} exceed budget {CATALOG_BUDGET} — top 3 contributors: {top3_str}")
+        print(f"FAIL catalog: total descriptions {total_desc} exceed budget {CATALOG_BUDGET} - top 3 contributors: {top3_str}")
+        FAILURES.append("catalog")
 
     if FAILURES:
         print(f"\n{len(FAILURES)} problem(s) found.")

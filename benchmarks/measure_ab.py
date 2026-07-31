@@ -43,7 +43,7 @@ DIRECTED_PROMPTS = {
     "commit": ("Use the ollama-commit skill (local Ollama model) to commit "
                "the staged changes in this repository with an appropriate "
                "one-line commit message. Do not push."),
-    "summarize": ("Use the ollama-logs skill (local Ollama model) to read "
+    "summarize": ("Use the ollama-digest skill (local Ollama model) to read "
                   "app.log and summarize what went wrong: the main failure "
                   "patterns and the most likely root cause. Keep it under "
                   "15 lines."),
