@@ -485,6 +485,14 @@ class OllamaAskTests(unittest.TestCase):
         self.assertTrue(data["command"])
         self.assertIn("explanation", data)
 
+    def test_draft_command_double_bad_json_two_calls_exit_6(self):
+        """Pin the ceiling: two malformed-JSON drafts in a row must stop at
+        exactly two /api/generate calls and exit 6, not loop further."""
+        FakeOllamaHandler.generate_calls = 0
+        code, out, err = self.run_cli("draft-command", "INVALID_JSON_PLEASE task")
+        self.assertEqual(code, 6, msg=err)
+        self.assertEqual(FakeOllamaHandler.generate_calls, 2)
+
     # -- commit-msg ---------------------------------------------------------
 
     def _make_repo(self, staged: bool) -> Path:
@@ -632,6 +640,17 @@ class OllamaAskTests(unittest.TestCase):
         self.assertEqual(code, 0, msg=err)
         self.assertEqual(out.strip(), "docs: update the guides")
 
+    def test_commit_retry_makes_exactly_two_generate_calls(self):
+        """Pin the one-corrective-retry policy: a format/semantic reject on
+        attempt 1 must cost exactly one retry, never more."""
+        repo = self._make_docs_repo()
+        (repo / "docs" / "extra.md").write_text("WRONGTYPEONCE\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=repo, check=True)
+        FakeOllamaHandler.generate_calls = 0
+        code, out, err = self.run_cli("commit-msg")
+        self.assertEqual(code, 0, msg=err)
+        self.assertEqual(FakeOllamaHandler.generate_calls, 2)
+
     def test_commit_msg_filename_scope_retried(self):
         repo = self._make_docs_repo()
         (repo / "docs" / "extra.md").write_text("SCOPEDRAFTONCE\n", encoding="utf-8")
@@ -665,6 +684,17 @@ class OllamaAskTests(unittest.TestCase):
         subprocess.run(["git", "add", "."], cwd=repo, check=True)
         code, out, err = self.run_cli("commit-msg")
         self.assertEqual(code, 6, msg=err)
+
+    def test_commit_double_reject_two_calls_then_exit_6(self):
+        """Pin the ceiling: a draft that fails on both attempts must stop at
+        exactly two /api/generate calls, not loop or retry a third time."""
+        repo = self._make_docs_repo()
+        (repo / "docs" / "extra.md").write_text("ALWAYSWRONGTYPE\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=repo, check=True)
+        FakeOllamaHandler.generate_calls = 0
+        code, out, err = self.run_cli("commit-msg")
+        self.assertEqual(code, 6, msg=err)
+        self.assertEqual(FakeOllamaHandler.generate_calls, 2)
 
     def test_commit_msg_mixed_diff_scoped_draft_prints(self):
         """New contract: for a mixed staged mix (suggested is None), a

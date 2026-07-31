@@ -1059,6 +1059,30 @@ def _staged_context(cfg: dict, args) -> tuple[str, str | None]:
     return "\n".join(parts)[:limit], suggested
 
 
+def _generate_with_retry(task, prompt, args, cfg, *, system, judge, fail_message,
+                         response_format=None, max_tokens=None):
+    """The one-corrective-retry policy used by every drafting subcommand.
+
+    judge(text, attempt) returns None to accept, or the corrective feedback
+    to append to the system prompt for the single retry. After the second
+    rejection: raw output to stderr, CliError(EXIT_BAD_OUTPUT, fail_message(text)).
+    """
+    kwargs = {}
+    if response_format is not None:
+        kwargs["response_format"] = response_format
+    if max_tokens is not None:
+        kwargs["max_tokens"] = max_tokens
+    text = generate(task, prompt, args, cfg, system=system, **kwargs)
+    feedback = judge(text, 1)
+    if feedback is None:
+        return text
+    text = generate(task, prompt, args, cfg, system=system + " " + feedback, **kwargs)
+    if judge(text, 2) is None:
+        return text
+    eprint(f"raw output:\n{text[:300]}")
+    raise CliError(EXIT_BAD_OUTPUT, fail_message(text))
+
+
 def cmd_commit_msg(args, cfg: dict) -> int:
     context, suggested = _staged_context(cfg, args)
     # Author-intent channel: the delegating caller often authored the change
@@ -1084,41 +1108,44 @@ def cmd_commit_msg(args, cfg: dict) -> int:
         _USAGE_CTX["avoided_chars"] = len(run_git(["diff", "--cached"], check=False))
     style_note = "" if args.body else " Reply with one single line."
     prompt = f"Write the commit message for this staged change:\n\n{context}"
-    text = generate("commit", prompt, args, cfg, system=COMMIT_SYSTEM + style_note)
-    message = _clean_commit(text, args)
-
+    system = COMMIT_SYSTEM + style_note
     stated = bool(args.ctype)
-    if args.style == "conventional":
-        problem = None
+
+    if args.style != "conventional":
+        text = generate("commit", prompt, args, cfg, system=system)
+        print(_clean_commit(text, args))
+        return EXIT_OK
+
+    accepted = {}
+
+    def judge(text, attempt):
+        message = _clean_commit(text, args)
         if not _valid_commit_line(message):
             first = message.splitlines()[0] if message.strip() else ""
-            problem = (f"Your last answer was rejected: {message!r}. It is "
-                       f"{len(first)} chars; it must match <type>: <summary> "
-                       "with an allowed type and stay under 72 chars total.")
-        else:
-            semantic = _semantic_problem(message, suggested, stated=stated)
-            if semantic:
-                problem = (f"Your last answer was rejected: {message!r} - "
-                           f"{semantic}.")
-        if problem:
-            text = generate("commit", prompt, args, cfg,
-                            system=COMMIT_SYSTEM + style_note + " " + problem)
-            message = _clean_commit(text, args)
-            if not _valid_commit_line(message):
-                eprint(f"raw output:\n{text[:300]}")
-                raise CliError(EXIT_BAD_OUTPUT,
-                               "Model could not produce a valid Conventional "
-                               "Commit line.")
-            if _semantic_problem(message, suggested, final=True, stated=stated):
-                eprint(f"raw output:\n{text[:300]}")
-                if stated:
-                    raise CliError(EXIT_BAD_OUTPUT,
-                                   "Model still contradicts the caller's "
-                                   "stated type after one corrective retry.")
-                raise CliError(EXIT_BAD_OUTPUT,
-                               "Model still contradicts the staged files' type "
-                               "after one corrective retry.")
-    print(message)
+            return (f"Your last answer was rejected: {message!r}. It is "
+                    f"{len(first)} chars; it must match <type>: <summary> "
+                    "with an allowed type and stay under 72 chars total.")
+        semantic = _semantic_problem(message, suggested, final=(attempt == 2),
+                                      stated=stated)
+        if semantic:
+            return f"Your last answer was rejected: {message!r} - {semantic}."
+        accepted["message"] = message
+        return None
+
+    def fail_message(text):
+        message = _clean_commit(text, args)
+        if not _valid_commit_line(message):
+            return ("Model could not produce a valid Conventional "
+                     "Commit line.")
+        if stated:
+            return ("Model still contradicts the caller's "
+                     "stated type after one corrective retry.")
+        return ("Model still contradicts the staged files' type "
+                "after one corrective retry.")
+
+    _generate_with_retry("commit", prompt, args, cfg, system=system,
+                         judge=judge, fail_message=fail_message)
+    print(accepted["message"])
     return EXIT_OK
 
 
@@ -1212,26 +1239,29 @@ def cmd_draft_command(args, cfg: dict) -> int:
     system = SHELL_SYSTEM_TEMPLATE.format(shell=shell, os_name=os_name)
     check_budget(args.task_text, cfg, args)
 
-    def attempt(extra: str = "") -> dict:
-        text = generate("shell", args.task_text, args, cfg,
-                        system=system + extra, response_format="json")
-        data = json.loads(text)
-        if not isinstance(data, dict):
-            raise ValueError("not an object")
-        if not isinstance(data.get("command"), str) or not data["command"].strip():
-            raise ValueError("missing command")
+    accepted = {}
+
+    def judge(text, attempt):
+        try:
+            data = json.loads(text)
+            if not isinstance(data, dict):
+                raise ValueError("not an object")
+            if not isinstance(data.get("command"), str) or not data["command"].strip():
+                raise ValueError("missing command")
+        except (json.JSONDecodeError, ValueError):
+            return "Your last answer was invalid. JSON object ONLY."
         data.setdefault("explanation", "")
         data.setdefault("caution", "none")
-        return data
+        accepted["data"] = data
+        return None
 
-    try:
-        data = attempt()
-    except (json.JSONDecodeError, ValueError):
-        try:
-            data = attempt(" Your last answer was invalid. JSON object ONLY.")
-        except (json.JSONDecodeError, ValueError):
-            raise CliError(EXIT_BAD_OUTPUT, "Model did not return a usable command JSON.")
-    print(json.dumps(data, indent=2))
+    def fail_message(text):
+        return "Model did not return a usable command JSON."
+
+    _generate_with_retry("shell", args.task_text, args, cfg, system=system,
+                         judge=judge, fail_message=fail_message,
+                         response_format="json")
+    print(json.dumps(accepted["data"], indent=2))
     return EXIT_OK
 
 
@@ -1281,15 +1311,19 @@ def cmd_draft_code(args, cfg: dict) -> int:
     check_budget(spec, cfg, args)
     system = CODE_SYSTEM.format(lang=args.lang)
 
-    code_text = strip_fences(generate("code", spec, args, cfg, system=system))
-    error = _syntax_check(code_text, args.lang)
-    if error:
-        retry_spec = f"{spec}\n\nYour previous code had this syntax error:\n{error}\nFix it."
-        code_text = strip_fences(generate("code", retry_spec, args, cfg, system=system))
-        error = _syntax_check(code_text, args.lang)
-        if error:
-            eprint(f"raw output:\n{code_text}")
-            raise CliError(EXIT_BAD_OUTPUT, f"Draft still has a syntax error: {error[:200]}")
+    def judge(text, attempt):
+        error = _syntax_check(strip_fences(text), args.lang)
+        if error is None:
+            return None
+        return f"Your previous code had this syntax error:\n{error}\nFix it."
+
+    def fail_message(text):
+        error = _syntax_check(strip_fences(text), args.lang)
+        return f"Draft still has a syntax error: {error[:200]}"
+
+    raw = _generate_with_retry("code", spec, args, cfg, system=system,
+                               judge=judge, fail_message=fail_message)
+    code_text = strip_fences(raw)
     if args.out:
         out_path = Path(args.out)
         if out_path.exists():
@@ -1344,18 +1378,23 @@ def cmd_fix_lint(args, cfg: dict) -> int:
               f"(verbatim, no line numbers):\n{window}")
     check_budget(prompt, cfg, args)
 
-    text = generate("code", prompt, args, cfg, system=FIX_SYSTEM, max_tokens=256)
+    def judge(text, attempt):
+        if text.strip() == "SKIP":
+            return None
+        if "<<<<<<< SEARCH" in text and ">>>>>>> REPLACE" in text:
+            return None
+        return "Use the exact SUGGESTION format."
+
+    def fail_message(text):
+        return "Model did not return a SUGGESTION block."
+
+    text = _generate_with_retry("code", prompt, args, cfg, system=FIX_SYSTEM,
+                                judge=judge, fail_message=fail_message,
+                                max_tokens=256)
     if text.strip() == "SKIP":
         _USAGE_CTX["avoided_chars"] = 0
         print("SKIP")
         return EXIT_OK
-    if "<<<<<<< SEARCH" not in text or ">>>>>>> REPLACE" not in text:
-        text = generate("code", prompt, args, cfg,
-                        system=FIX_SYSTEM + " Use the exact SUGGESTION format.",
-                        max_tokens=256)
-        if "<<<<<<< SEARCH" not in text or ">>>>>>> REPLACE" not in text:
-            eprint(f"raw output:\n{text}")
-            raise CliError(EXIT_BAD_OUTPUT, "Model did not return a SUGGESTION block.")
     print(text.strip())
     return EXIT_OK
 
@@ -1404,32 +1443,33 @@ def cmd_pr_desc(args, cfg: dict) -> int:
     _USAGE_CTX["avoided_chars"] = len(text)   # what Claude would read instead
     check_budget(text, cfg, args)
 
-    def attempt(extra: str = "") -> dict:
-        raw = generate("general", text, args, cfg,
-                       system=PR_DESC_SYSTEM + extra,
-                       response_format="json", max_tokens=350)
-        data = json.loads(raw)
-        if not isinstance(data, dict):
-            raise ValueError("not an object")
-        title = strip_quotes(str(data.get("title", "")).strip())
-        body = str(data.get("body", "")).strip()
-        if not title or len(title) > 72:
-            raise ValueError("bad title")
-        if not body:
-            raise ValueError("empty body")
-        return {"title": title, "body": body}
+    accepted = {}
 
-    try:
-        data = attempt()
-    except (json.JSONDecodeError, ValueError):
+    def judge(output, attempt):
         try:
-            data = attempt(" Your last answer was invalid. One JSON object "
-                           'ONLY, with a non-empty "title" under 72 characters '
-                           'and a non-empty "body".')
+            data = json.loads(output)
+            if not isinstance(data, dict):
+                raise ValueError("not an object")
+            title = strip_quotes(str(data.get("title", "")).strip())
+            body = str(data.get("body", "")).strip()
+            if not title or len(title) > 72:
+                raise ValueError("bad title")
+            if not body:
+                raise ValueError("empty body")
         except (json.JSONDecodeError, ValueError):
-            raise CliError(EXIT_BAD_OUTPUT,
-                           "Model did not return a usable PR description.")
-    print(json.dumps(data, indent=2))
+            return ("Your last answer was invalid. One JSON object "
+                    'ONLY, with a non-empty "title" under 72 characters '
+                    'and a non-empty "body".')
+        accepted["data"] = {"title": title, "body": body}
+        return None
+
+    def fail_message(output):
+        return "Model did not return a usable PR description."
+
+    _generate_with_retry("general", text, args, cfg, system=PR_DESC_SYSTEM,
+                         judge=judge, fail_message=fail_message,
+                         response_format="json", max_tokens=350)
+    print(json.dumps(accepted["data"], indent=2))
     return EXIT_OK
 
 
