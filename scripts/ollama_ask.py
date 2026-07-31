@@ -978,10 +978,34 @@ COMMIT_SYSTEM = (
 )
 
 
-def _staged_context(cfg: dict, args) -> tuple[str, str | None]:
+def _require_git_repo() -> None:
+    """Raise EXIT_USAGE unless the cwd is inside a git work tree."""
     inside = run_git(["rev-parse", "--is-inside-work-tree"], check=False).strip()
     if inside != "true":
         raise CliError(EXIT_USAGE, "Not inside a git repository.")
+
+
+def _require_current_branch() -> str:
+    """Current branch name; refuses a detached HEAD. symbolic-ref (not
+    rev-parse --abbrev-ref) so an unborn branch still resolves to its name."""
+    branch = run_git(["symbolic-ref", "-q", "--short", "HEAD"], check=False).strip()
+    if not branch:
+        raise CliError(EXIT_USAGE, "Detached HEAD; checkout a branch first.")
+    return branch
+
+
+def _resolve_remote(explicit: str | None, upstream: str) -> tuple[str, str]:
+    """Remote name from --remote or the upstream ref, verified to exist.
+    Returns (name, url)."""
+    remote = explicit or (upstream.split("/", 1)[0] if "/" in upstream else "origin")
+    remote_url = run_git(["remote", "get-url", remote], check=False).strip()
+    if not remote_url:
+        raise CliError(EXIT_USAGE, f"Remote '{remote}' not found.")
+    return remote, remote_url
+
+
+def _staged_context(cfg: dict, args) -> tuple[str, str | None]:
+    _require_git_repo()
     stat = run_git(["diff", "--cached", "--stat"]).strip()
     if not stat:
         raise CliError(EXIT_USAGE, "Nothing is staged. Run: git add <files> first.")
@@ -1127,28 +1151,18 @@ def cmd_commit_push(args, cfg: dict) -> int:
     subcommand that can smuggle in --force, -f, --force-with-lease, --delete,
     or a refspec, so a force-push or branch-delete is impossible through it.
     """
-    inside = run_git(["rev-parse", "--is-inside-work-tree"], check=False).strip()
-    if inside != "true":
-        raise CliError(EXIT_USAGE, "Not a git repository.")
+    _require_git_repo()
 
     # symbolic-ref (not rev-parse --abbrev-ref) so an unborn branch -- staged
     # but never yet committed, the state every caller starts commit-push from
     # -- resolves to its name instead of failing; it still fails on a true
     # detached HEAD, which is exactly the case we must refuse.
-    branch = run_git(["symbolic-ref", "-q", "--short", "HEAD"], check=False).strip()
-    if not branch:
-        raise CliError(EXIT_USAGE, "Detached HEAD; checkout a branch first.")
+    branch = _require_current_branch()
 
-    if args.remote:
-        remote = args.remote
-    else:
-        upstream = run_git(
-            ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"], check=False
-        ).strip()
-        remote = upstream.split("/", 1)[0] if "/" in upstream else "origin"
-    remote_url = run_git(["remote", "get-url", remote], check=False).strip()
-    if not remote_url:
-        raise CliError(EXIT_USAGE, f"Remote '{remote}' not found.")
+    upstream = "" if args.remote else run_git(
+        ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"], check=False
+    ).strip()
+    remote, remote_url = _resolve_remote(args.remote, upstream)
 
     if branch in PROTECTED_BRANCHES and not args.allow_protected:
         raise CliError(
@@ -1372,9 +1386,7 @@ def _pr_base(args, cfg) -> str:
 
 
 def cmd_pr_desc(args, cfg: dict) -> int:
-    inside = run_git(["rev-parse", "--is-inside-work-tree"], check=False).strip()
-    if inside != "true":
-        raise CliError(EXIT_USAGE, "Not inside a git repository.")
+    _require_git_repo()
     base = _pr_base(args, cfg)
     if _run_git(["rev-parse", "--verify", "--quiet", base]).returncode != 0:
         raise CliError(EXIT_USAGE,
@@ -1439,12 +1451,8 @@ def cmd_pr_create(args, cfg: dict) -> int:
     is the only escalation and the skill adds it only when the user
     explicitly asked.
     """
-    inside = run_git(["rev-parse", "--is-inside-work-tree"], check=False).strip()
-    if inside != "true":
-        raise CliError(EXIT_USAGE, "Not a git repository.")
-    branch = run_git(["symbolic-ref", "-q", "--short", "HEAD"], check=False).strip()
-    if not branch:
-        raise CliError(EXIT_USAGE, "Detached HEAD; checkout a branch first.")
+    _require_git_repo()
+    branch = _require_current_branch()
     if branch in PROTECTED_BRANCHES:
         raise CliError(EXIT_USAGE,
                        f"Refusing to open a PR from '{branch}' as the head "
@@ -1479,11 +1487,7 @@ def cmd_pr_create(args, cfg: dict) -> int:
             "(use the gated push).",
         )
 
-    remote = args.remote or (upstream.split("/", 1)[0] if "/" in upstream
-                             else "origin")
-    remote_url = run_git(["remote", "get-url", remote], check=False).strip()
-    if not remote_url:
-        raise CliError(EXIT_USAGE, f"Remote '{remote}' not found.")
+    remote, remote_url = _resolve_remote(args.remote, upstream)
     host = _remote_host(remote_url)
     if "github" in host:
         cli = "gh"

@@ -377,6 +377,50 @@ class OllamaAskTests(unittest.TestCase):
         self.assertEqual(model, self.DEVSTRAL)
         self.assertEqual(source, "auto")
 
+    def test_require_git_repo_raises_outside_repo(self):
+        with tempfile.TemporaryDirectory() as td:
+            old = os.getcwd()
+            os.chdir(td)
+            try:
+                with self.assertRaises(ollama_ask.CliError) as ctx:
+                    ollama_ask._require_git_repo()
+            finally:
+                os.chdir(old)
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertEqual(str(ctx.exception), "Not inside a git repository.")
+
+    def test_require_current_branch_refuses_detached_head(self):
+        with tempfile.TemporaryDirectory() as td:
+            subprocess.run(["git", "init", "-q", td], check=True)
+            env_dir = Path(td)
+            (env_dir / "f.txt").write_text("x", encoding="utf-8")
+            subprocess.run(["git", "-C", td, "add", "."], check=True)
+            subprocess.run(["git", "-C", td, "-c", "user.email=t@t", "-c",
+                            "user.name=t", "commit", "-q", "-m", "seed"], check=True)
+            sha = subprocess.run(["git", "-C", td, "rev-parse", "HEAD"],
+                                 capture_output=True, text=True, check=True).stdout.strip()
+            subprocess.run(["git", "-C", td, "checkout", "-q", sha], check=True)
+            old = os.getcwd()
+            os.chdir(td)
+            try:
+                with self.assertRaises(ollama_ask.CliError) as ctx:
+                    ollama_ask._require_current_branch()
+            finally:
+                os.chdir(old)
+        self.assertEqual(ctx.exception.code, 2)
+
+    def test_resolve_remote_missing_remote_raises(self):
+        with tempfile.TemporaryDirectory() as td:
+            subprocess.run(["git", "init", "-q", td], check=True)
+            old = os.getcwd()
+            os.chdir(td)
+            try:
+                with self.assertRaises(ollama_ask.CliError) as ctx:
+                    ollama_ask._resolve_remote(None, "")
+            finally:
+                os.chdir(old)
+        self.assertEqual(str(ctx.exception), "Remote 'origin' not found.")
+
     def test_models_reports_skips(self):
         FakeOllamaHandler.models_response = FAKE_MODELS + [
             {"name": self.DEVSTRAL, "size": 15_177_374_099},
