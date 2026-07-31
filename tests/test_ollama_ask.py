@@ -2029,6 +2029,16 @@ class OllamaAskTests(unittest.TestCase):
         for needle in needles:
             self.assertIn(needle, normalized, msg=f"{needle!r} missing from {rel}")
 
+    def test_docker_skill_points_at_drafting_reference(self):
+        skill = (ROOT / "skills" / "ollama-docker" / "SKILL.md").read_text(
+            encoding="utf-8")
+        ref_path = ROOT / "skills" / "ollama-docker" / "DRAFTING.md"
+        self.assertIn("Read DRAFTING.md", skill)
+        self.assertTrue(ref_path.exists(), "DRAFTING.md missing")
+        ref = ref_path.read_text(encoding="utf-8")
+        self.assertIn("DOMAIN PREAMBLE", ref)
+        self.assertNotIn("DOMAIN PREAMBLE", skill)
+
 
 if __name__ == "__main__":
     unittest.main()

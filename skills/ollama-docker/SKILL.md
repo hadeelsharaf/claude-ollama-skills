@@ -77,31 +77,11 @@ yourself, or ask the user.
 6. **Local only.** Logs go to the local Ollama model and nowhere else. There is no cloud
    call and nothing to redact. Do NOT add a "mask then send" step.
 
-## Dockerfile / Compose drafting — reuse `draft-code`
+## Dockerfile / Compose drafting
 
-Reuse the existing `draft-code` subcommand. Do NOT build a new drafting command and do
-NOT use `ask` — `draft-code` already strips code fences, and its `--out` refuses to
-overwrite an existing file (a built-in review gate).
-
-`draft-code` has no `--system` flag (its system prompt is fixed and keyed by `--lang`).
-So the domain "system prompt" rides at the TOP of the `--spec` text as a terse,
-artifact-only preamble, and `--lang` selects the language:
-
-```
-python "$SCRIPT" draft-code --lang dockerfile --spec "<DOMAIN PREAMBLE>\n\n<user request + grounding facts>"
-```
-
-Use `--lang dockerfile` for a Dockerfile, `--lang yaml` for a compose file.
-
-**DOMAIN PREAMBLE (fixed text):** "Output ONLY the file contents. No prose, no markdown,
-no fences. Use a slim, version-pinned base image; a multi-stage build when it helps; a
-non-root user; a .dockerignore-friendly layout; and a HEALTHCHECK when sensible. If the
-request is unclear, pick the smallest safe default. Do not repeat a pattern that already
-failed."
-
-Print-and-review by default: `draft-code` prints the file, you review it, the user places
-it (or `--out <newfile>`, which refuses to clobber). Never pipe a drafted
-Dockerfile/compose straight into `docker build` / `docker compose up` unseen.
+Drafting a Dockerfile or docker-compose.yml? Read DRAFTING.md in this skill's
+folder FIRST — it carries the fixed domain preamble and the review gate. Do
+not draft from memory.
 
 ## Grounding rules (draft against REAL local state)
 
@@ -109,10 +89,6 @@ Dockerfile/compose straight into `docker build` / `docker compose up` unseen.
   names/ids/tags/services it returns — container names from `docker ps`, image tags from
   `docker images`, service names from `docker compose config` / `docker compose ps`. A
   guessed name is a name-typo disaster.
-- **Dockerfile/compose:** before drafting, read the working directory — any existing
-  Dockerfile, `docker-compose.yml`, and the language/manifest (`package.json`,
-  `requirements.txt`, `go.mod`, …), and run `docker compose config` if a compose file
-  exists. Feed those facts into `--spec` so the draft extends the real project.
 - If real state can't be read (Docker down → exit 3), say so and fall back — never draft
   against guesses.
 - One or two model calls per invocation (draft, or draft + one summarize). No autonomous
@@ -129,7 +105,7 @@ Dockerfile/compose straight into `docker build` / `docker compose up` unseen.
    the user's words clearly asked. Deny-list → rewrite narrow or refuse. Show the command +
    one-line explanation, then the normal permission prompt. Never chain extra commands.
 5. **Logs intent:** follow the logs → summarize flow above.
-6. **Dockerfile/compose intent:** follow the draft-code flow above; review; user places the file.
+6. **Dockerfile/compose intent:** follow DRAFTING.md; review; user places the file.
 7. Return the real command output / the reviewed artifact to the user.
 
 ## Rules (do not skip)
