@@ -85,6 +85,12 @@ CANNED_RESPONSES = {
     # containing this marker as a dropped chunk ("model error"), without
     # the multi-second sleep SLOWSTALL uses to trigger a stall-based drop.
     "ZQXDROPCHUNK": "",
+    # Whitespace-only draft for the plain-path judge (plain ask, commit-msg
+    # --style plain): non-empty on the wire, blank once .strip()ped.
+    "PLAINWHITESPACE": "   \n\t  ",
+    # Long enough to exceed any small --max-tokens cap * 4 * 6 chars, so the
+    # plain judge's length check rejects it on both attempts.
+    "PLAINTOOLONG": "z" * 400,
 }
 
 
@@ -529,6 +535,23 @@ class OllamaAskTests(unittest.TestCase):
         self.assertEqual(code, 6, msg=err)
         self.assertEqual(FakeOllamaHandler.generate_calls, 2)
 
+    def test_ask_plain_whitespace_response_two_calls_exit_6(self):
+        """Plain ask had zero output validation before this judge; a blank
+        draft twice in a row must now stop at exactly two calls and exit 6."""
+        FakeOllamaHandler.generate_calls = 0
+        code, out, err = self.run_cli("ask", "PLAINWHITESPACE say something")
+        self.assertEqual(code, 6, msg=err)
+        self.assertEqual(FakeOllamaHandler.generate_calls, 2)
+
+    def test_ask_plain_overlong_response_two_calls_exit_6(self):
+        """A draft far longer than the requested budget is rejected by the
+        plain judge's length cap, same one-retry-then-exit-6 policy."""
+        FakeOllamaHandler.generate_calls = 0
+        code, out, err = self.run_cli("ask", "PLAINTOOLONG say something",
+                                      "--max-tokens", "5")
+        self.assertEqual(code, 6, msg=err)
+        self.assertEqual(FakeOllamaHandler.generate_calls, 2)
+
     # -- draft-command ------------------------------------------------------
 
     def test_draft_command_outputs_json_with_command_key(self):
@@ -866,6 +889,17 @@ class OllamaAskTests(unittest.TestCase):
         subprocess.run(["git", "add", "."], cwd=repo, check=True)
         FakeOllamaHandler.generate_calls = 0
         code, out, err = self.run_cli("commit-msg")
+        self.assertEqual(code, 6, msg=err)
+        self.assertEqual(FakeOllamaHandler.generate_calls, 2)
+
+    def test_commit_msg_plain_whitespace_response_two_calls_exit_6(self):
+        """--style plain had zero output validation before this judge; a
+        blank draft twice in a row must stop at two calls and exit 6."""
+        repo = self._make_repo(staged=False)
+        (repo / "note.txt").write_text("PLAINWHITESPACE\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=repo, check=True)
+        FakeOllamaHandler.generate_calls = 0
+        code, out, err = self.run_cli("commit-msg", "--style", "plain")
         self.assertEqual(code, 6, msg=err)
         self.assertEqual(FakeOllamaHandler.generate_calls, 2)
 
@@ -1896,6 +1930,41 @@ class OllamaAskTests(unittest.TestCase):
                        cwd=work, check=True)
         code, out, err = self.run_cli("pr-desc")
         self.assertEqual(code, 6, msg=err)
+
+    def test_pr_desc_oversized_changeset_exits_2_before_any_model_call(self):
+        """>600 changed lines on the branch must refuse before generate() is
+        ever reached -- the gate is a pre-check, not a post-hoc judge."""
+        work = self._make_pr_repo()
+        big = "\n".join(f"line{i}" for i in range(700)) + "\n"
+        (work / "big.txt").write_text(big, encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=work, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "feat: add big file"],
+                       cwd=work, check=True)
+        FakeOllamaHandler.generate_calls = 0
+        code, out, err = self.run_cli("pr-desc")
+        self.assertEqual(code, 2, msg=err)
+        self.assertIn("changeset too large for a local draft", err)
+        self.assertEqual(FakeOllamaHandler.generate_calls, 0)
+
+    def test_pr_desc_changeset_at_line_threshold_passes_through(self):
+        """Exactly PR_DESC_MAX_LINES changed lines must NOT trip the gate --
+        it is a strict '>' comparison, not '>='."""
+        work = self._make_pr_repo()
+        # two.txt (from _make_pr_repo) already contributes 1 insertion; add
+        # 599 more so the branch total lands exactly on the 600-line limit.
+        content = "\n".join(f"line{i}" for i in range(599)) + "\n"
+        (work / "big.txt").write_text(content, encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=work, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "feat: add lines"],
+                       cwd=work, check=True)
+        shortstat = subprocess.run(
+            ["git", "diff", "--shortstat", "main...HEAD"], cwd=work,
+            capture_output=True, text=True, check=True).stdout
+        self.assertIn("600 insertions", shortstat)  # pin the fixture's math
+        code, out, err = self.run_cli("pr-desc")
+        self.assertEqual(code, 0, msg=err)
+        data = json.loads(out)
+        self.assertTrue(data["title"])
 
     # -- pr-create --------------------------------------------------------
 

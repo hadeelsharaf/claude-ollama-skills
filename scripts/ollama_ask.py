@@ -835,6 +835,30 @@ def cmd_warmup(args, cfg: dict) -> int:
     return EXIT_OK
 
 
+def _plain_max_tokens(task: str, args) -> int:
+    """Mirror generate()'s args-flag-first max_tokens resolution (a config
+    file's per-task override is ignored here on purpose -- it only ever
+    widens this cap, never tightens it, so skipping it is safe) to size the
+    plain-judge length cap for a task that has no other length signal."""
+    if args.max_tokens is not None:
+        return args.max_tokens
+    return TASK_DEFAULTS[task]["max_tokens"]
+
+
+def _plain_judge_factory(cap_tokens: int):
+    """Minimal judge for the two paths that had zero output validation:
+    plain `ask` and `commit-msg --style plain`. Not empty/whitespace, not
+    wildly over budget -- nothing about content, since plain mode has no
+    format contract to check."""
+    def judge(text, attempt):
+        if not text.strip():
+            return "Your last answer was empty. Answer the request directly."
+        if len(text) > cap_tokens * 4 * 6:
+            return "Your last answer was far too long. Be brief and direct."
+        return None
+    return judge
+
+
 def cmd_ask(args, cfg: dict) -> int:
     if args.stdin:
         prompt = sys.stdin.read()
@@ -858,7 +882,10 @@ def cmd_ask(args, cfg: dict) -> int:
             fail_message=lambda t: "Model did not return valid JSON.",
             response_format="json")
     else:
-        text = generate(args.task, prompt, args, cfg, system=args.system)
+        text = _generate_with_retry(
+            args.task, prompt, args, cfg, system=args.system or "",
+            judge=_plain_judge_factory(_plain_max_tokens(args.task, args)),
+            fail_message=lambda t: "Model output failed basic checks.")
     print(text)
     return EXIT_OK
 
@@ -1076,8 +1103,9 @@ def _staged_context(cfg: dict, args) -> tuple[str, str | None]:
 
 def _generate_with_retry(task, prompt, args, cfg, *, system, judge, fail_message,
                          response_format=None, max_tokens=None):
-    """The one-corrective-retry policy used by all six drafting paths (ask
-    --json-object, commit-msg, draft-command, draft-code, fix-lint, pr-desc).
+    """The one-corrective-retry policy used by every drafting path (ask
+    --json-object and plain, commit-msg conventional and plain,
+    draft-command, draft-code, fix-lint, pr-desc).
 
     judge(text, attempt) returns None to accept, or the corrective feedback
     to append to the system prompt for the single retry. After the second
@@ -1128,7 +1156,10 @@ def cmd_commit_msg(args, cfg: dict) -> int:
     stated = bool(args.ctype)
 
     if args.style != "conventional":
-        text = generate("commit", prompt, args, cfg, system=system)
+        text = _generate_with_retry(
+            "commit", prompt, args, cfg, system=system,
+            judge=_plain_judge_factory(_plain_max_tokens("commit", args)),
+            fail_message=lambda t: "Model output failed basic checks.")
         print(_clean_commit(text, args))
         return EXIT_OK
 
@@ -1184,6 +1215,12 @@ PROTECTED_BRANCHES = ("main", "master")
 # talk to a real CLI that can itself hang on network or an interactive prompt.
 PR_CLI_AUTH_TIMEOUT = 60
 PR_CLI_CREATE_TIMEOUT = 120
+
+# cmd_pr_desc refuses to draft past this size: a changeset this large is not
+# something a local model (or its judge) can meaningfully sanity-check, so
+# the caller writes the description itself instead of reviewing a guess.
+PR_DESC_MAX_FILES = 20
+PR_DESC_MAX_LINES = 600
 
 
 def cmd_commit_push(args, cfg: dict) -> int:
@@ -1567,6 +1604,16 @@ def cmd_pr_desc(args, cfg: dict) -> int:
                        "Commit first, or pass a different --base.")
     shortstat = run_git(["diff", "--shortstat", f"{base}...HEAD"],
                         check=False).strip()
+    m_files = re.search(r"(\d+) files? changed", shortstat or "")
+    m_ins = re.search(r"(\d+) insertions?", shortstat or "")
+    m_del = re.search(r"(\d+) deletions?", shortstat or "")
+    n_files = int(m_files.group(1)) if m_files else 0
+    n_lines = (int(m_ins.group(1)) if m_ins else 0) + \
+              (int(m_del.group(1)) if m_del else 0)
+    if n_files > PR_DESC_MAX_FILES or n_lines > PR_DESC_MAX_LINES:
+        raise CliError(EXIT_USAGE,
+                       "changeset too large for a local draft; write the "
+                       "description yourself.")
     text = f"Commits:\n{subjects}\nChange size: {shortstat or 'unknown'}"
     _USAGE_CTX["avoided_chars"] = len(text)   # what Claude would read instead
     check_budget(text, cfg, args)
