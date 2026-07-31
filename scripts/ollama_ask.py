@@ -844,22 +844,21 @@ def cmd_ask(args, cfg: dict) -> int:
         raise CliError(EXIT_USAGE, "Give a prompt argument or use --stdin.")
     check_budget(prompt + (args.system or ""), cfg, args)
 
-    response_format = "json" if args.json_object else None
-    text = generate(args.task, prompt, args, cfg,
-                    system=args.system, response_format=response_format)
     if args.json_object:
-        try:
-            json.loads(text)
-        except json.JSONDecodeError:
-            retry_system = ((args.system or "") +
-                            " Return ONLY one valid JSON object. No prose.").strip()
-            text = generate(args.task, prompt, args, cfg,
-                            system=retry_system, response_format="json")
+        def judge(text, attempt):
             try:
                 json.loads(text)
+                return None
             except json.JSONDecodeError:
-                eprint(f"raw output:\n{text}")
-                raise CliError(EXIT_BAD_OUTPUT, "Model did not return valid JSON.")
+                return "Return ONLY one valid JSON object. No prose."
+
+        text = _generate_with_retry(
+            args.task, prompt, args, cfg, system=args.system or "",
+            judge=judge,
+            fail_message=lambda t: "Model did not return valid JSON.",
+            response_format="json")
+    else:
+        text = generate(args.task, prompt, args, cfg, system=args.system)
     print(text)
     return EXIT_OK
 
@@ -1077,10 +1076,8 @@ def _staged_context(cfg: dict, args) -> tuple[str, str | None]:
 
 def _generate_with_retry(task, prompt, args, cfg, *, system, judge, fail_message,
                          response_format=None, max_tokens=None):
-    """The one-corrective-retry policy used by the five drafting subcommands
-    (commit-msg, draft-command, draft-code, fix-lint, pr-desc). cmd_ask's
-    --json-object retry remains a deliberate local exception, not routed
-    through this helper.
+    """The one-corrective-retry policy used by all six drafting paths (ask
+    --json-object, commit-msg, draft-command, draft-code, fix-lint, pr-desc).
 
     judge(text, attempt) returns None to accept, or the corrective feedback
     to append to the system prompt for the single retry. After the second
