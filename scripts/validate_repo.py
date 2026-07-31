@@ -68,9 +68,12 @@ def check_json(path: Path, required: list[str]) -> dict | None:
         fail(path, "file missing")
         return None
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
     except json.JSONDecodeError as exc:
         fail(path, f"invalid JSON: {exc}")
+        return None
+    except OSError as exc:
+        fail(path, f"unreadable: {exc}")
         return None
     missing = [key for key in required if key not in data]
     if missing:

@@ -1277,6 +1277,26 @@ class OllamaAskTests(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("ceiling", err.lower())
 
+    def test_summarize_reduce_terminates_when_output_never_shrinks(self):
+        """With --chunk-chars below what the model returns, the reduce loop
+        can never satisfy len(joined) <= chunk_chars; it must stop with a
+        best-effort summary instead of re-summarizing the same note forever.
+        Runs as a subprocess so a regression fails the timeout instead of
+        hanging the suite."""
+        big = "\n".join(f"event {i} on node-{i}" for i in range(60))
+        script = ROOT / "scripts" / "ollama_ask.py"
+        try:
+            result = subprocess.run(
+                [sys.executable, str(script), "summarize", "--kind", "log",
+                 "--no-dedupe", "--chunk-chars", "10", "--quiet"],
+                input=big, capture_output=True, text=True, timeout=60,
+                env=dict(os.environ),
+            )
+        except subprocess.TimeoutExpired:
+            self.fail("summarize hung: the reduce loop never terminated")
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertTrue(result.stdout.strip())
+
     def test_summarize_negative_tail_is_usage_error(self):
         """A negative --tail must be rejected as usage, not silently invert
         into 'drop the first N lines' via lines[-args.tail:]."""
@@ -1396,8 +1416,8 @@ class OllamaAskTests(unittest.TestCase):
         return int(result.stdout.strip()) if result.returncode == 0 else 0
 
     def _make_pr_repo(self, url="https://github.com/example/repo.git",
-                      upstream=True):
-        """Local repo with a fake origin, a main base, and a feature branch.
+                      upstream=True, remote="origin"):
+        """Local repo with a fake remote, a main base, and a feature branch.
         No network: the remote URL is never fetched; upstream is wired with
         update-ref + branch config, exactly what @{u} resolution needs."""
         work = Path(self._tmp) / "prrepo"
@@ -1414,17 +1434,17 @@ class OllamaAskTests(unittest.TestCase):
         g("add", ".")
         g("commit", "-q", "-m", "chore: seed")
         g("branch", "-m", "main")
-        g("update-ref", "refs/remotes/origin/main", "HEAD")
-        g("symbolic-ref", "refs/remotes/origin/HEAD",
-          "refs/remotes/origin/main")
+        g("update-ref", f"refs/remotes/{remote}/main", "HEAD")
+        g("symbolic-ref", f"refs/remotes/{remote}/HEAD",
+          f"refs/remotes/{remote}/main")
         g("checkout", "-q", "-b", "feature")
         (work / "two.txt").write_text("SECRET_FILE_CONTENT\n", encoding="utf-8")
         g("add", ".")
         g("commit", "-q", "-m", "feat: add two")
-        g("remote", "add", "origin", url)
+        g("remote", "add", remote, url)
         if upstream:
-            g("update-ref", "refs/remotes/origin/feature", "HEAD")
-            g("config", "branch.feature.remote", "origin")
+            g("update-ref", f"refs/remotes/{remote}/feature", "HEAD")
+            g("config", "branch.feature.remote", remote)
             g("config", "branch.feature.merge", "refs/heads/feature")
         os.chdir(work)
         return work
@@ -1691,6 +1711,27 @@ class OllamaAskTests(unittest.TestCase):
         self.assertEqual(code, 6, msg=err)
 
     # -- pr-create --------------------------------------------------------
+
+    def test_pr_desc_resolves_base_from_upstream_remote(self):
+        """A fork clone can have no 'origin' at all; the base must come from
+        the remote the branch actually tracks, not a hardcoded origin."""
+        self._make_pr_repo(remote="upstream")
+        code, out, err = self.run_cli("pr-desc")
+        self.assertEqual(code, 0, msg=err)
+        data = json.loads(out)
+        self.assertIn("title", data)
+
+    def test_pr_create_remote_flag_used_for_base_resolution(self):
+        """pr-create accepts --remote; base resolution must honour it instead
+        of reading refs/remotes/origin/HEAD unconditionally."""
+        self._make_pr_repo(remote="upstream")
+        capture = self._install_fake_cli("gh")
+        code, out, err = self.run_cli("pr-create", "--remote", "upstream",
+                                      "--title", "feat: add two",
+                                      "--body", "Adds two.")
+        self.assertEqual(code, 0, msg=err)
+        argv = capture.read_text(encoding="utf-8", errors="replace")
+        self.assertIn("--base main", argv.replace('"', ""))
 
     def test_pr_create_draft_by_default(self):
         self._make_pr_repo()

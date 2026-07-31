@@ -88,5 +88,39 @@ class ValidateRepoFailurePaths(unittest.TestCase):
         self.assertTrue(out.isascii())
 
 
+class CheckJsonTests(unittest.TestCase):
+    def setUp(self):
+        self._root = validate_repo.ROOT
+        self._failures = validate_repo.FAILURES
+        validate_repo.FAILURES = []
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        validate_repo.ROOT = self.root
+
+    def tearDown(self):
+        validate_repo.ROOT = self._root
+        validate_repo.FAILURES = self._failures
+        self.tmp.cleanup()
+
+    def test_manifest_with_utf8_bom_passes(self):
+        """PowerShell 5.1 Set-Content writes a BOM; a valid manifest must not
+        fail CI for it (every other reader in the repo uses utf-8-sig)."""
+        path = self.root / "plugin.json"
+        path.write_bytes(b"\xef\xbb\xbf" + json.dumps({"name": "x"}).encode())
+        with redirect_stdout(io.StringIO()):
+            data = validate_repo.check_json(path, ["name"])
+        self.assertEqual(data, {"name": "x"})
+        self.assertEqual(validate_repo.FAILURES, [])
+
+    def test_unreadable_manifest_fails_cleanly(self):
+        """An unreadable file must be a normal FAIL, not a traceback."""
+        path = self.root / "plugin.json"
+        path.mkdir()   # reading a directory raises OSError on every platform
+        with redirect_stdout(io.StringIO()):
+            data = validate_repo.check_json(path, ["name"])
+        self.assertIsNone(data)
+        self.assertEqual(len(validate_repo.FAILURES), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

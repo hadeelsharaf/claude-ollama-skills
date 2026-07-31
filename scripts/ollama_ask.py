@@ -1431,17 +1431,24 @@ PR_DESC_SYSTEM = (
 
 
 def _pr_base(args, cfg) -> str:
-    """Resolve the PR base branch: --base flag, else the remote default branch."""
+    """Resolve the PR base branch: --base flag, else the default branch of
+    the remote the PR targets (--remote, else the branch upstream's remote,
+    else origin) -- the same precedence _resolve_remote uses."""
     if getattr(args, "base", None):
         return args.base
+    upstream = run_git(["rev-parse", "--abbrev-ref", "--symbolic-full-name",
+                        "@{u}"], check=False).strip()
+    remote = (getattr(args, "remote", None)
+              or (upstream.split("/", 1)[0] if "/" in upstream else "origin"))
     head = run_git(["symbolic-ref", "-q", "--short",
-                    "refs/remotes/origin/HEAD"], check=False).strip()
-    if head.startswith("origin/"):
-        return head[len("origin/"):]
+                    f"refs/remotes/{remote}/HEAD"], check=False).strip()
+    if head.startswith(remote + "/"):
+        return head[len(remote) + 1:]
     raise CliError(
         EXIT_USAGE,
-        "Cannot resolve the remote default branch (refs/remotes/origin/HEAD "
-        "is unset). Pass --base <branch> explicitly.",
+        f"Cannot resolve the default branch of remote '{remote}' "
+        f"(refs/remotes/{remote}/HEAD is unset). Pass --base <branch> "
+        "explicitly.",
     )
 
 
@@ -1801,10 +1808,16 @@ def _final_cap(args, cfg) -> int:
 
 def _reduce(notes, args, cfg, final_system, chunk_chars) -> str:
     level = notes
+    prev_len = None
     while True:
         joined = "\n".join(level)
         if len(joined) <= chunk_chars:
             return generate("summarize", joined, args, cfg, system=final_system)
+        if len(level) == 1 or (prev_len is not None and len(joined) >= prev_len):
+            # No pass can shrink this further (e.g. --chunk-chars below what
+            # the model returns): best-effort final pass instead of looping.
+            return generate("summarize", joined, args, cfg, system=final_system)
+        prev_len = len(joined)
         nxt = []
         for k in range(0, len(level), 10):
             batch = "\n".join(level[k:k + 10])
