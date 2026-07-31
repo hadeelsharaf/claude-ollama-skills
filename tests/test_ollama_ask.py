@@ -8,6 +8,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -80,6 +81,10 @@ CANNED_RESPONSES = {
         {"command": "docker system prune -af", "explanation": "", "caution": "none"}),
     "READONLYPIPECMD": json.dumps(
         {"command": "git log --oneline | grep fix", "explanation": "", "caution": "none"}),
+    # Empty response forces cmd_summarize's map stage to treat the chunk
+    # containing this marker as a dropped chunk ("model error"), without
+    # the multi-second sleep SLOWSTALL uses to trigger a stall-based drop.
+    "ZQXDROPCHUNK": "",
 }
 
 
@@ -1471,6 +1476,58 @@ class OllamaAskTests(unittest.TestCase):
         code, _, err = self.run_stdin("SLOWSTALL only", "summarize",
                                       "--kind", "log", "--stall-seconds", "1")
         self.assertEqual(code, 5)
+
+    # -- coverage line --------------------------------------------------
+
+    COVERAGE_RE = re.compile(
+        r"coverage: chunks=(\d+)/(\d+) dropped=(\d+) "
+        r"input_lines=(\d+) input_bytes=(\d+)")
+
+    def test_summarize_coverage_line_single_shot(self):
+        code, out, err = self.run_stdin("line one\nline two\nline three\n",
+                                        "summarize", "--kind", "log")
+        self.assertEqual(code, 0, msg=err)
+        self.assertIn("coverage: chunks=1/1 dropped=0", err)
+        self.assertNotIn("coverage:", out)
+
+    def test_summarize_coverage_line_multi_chunk_all_succeed(self):
+        big = "\n".join(f"event number {i} happened on host node-{i}" for i in range(400))
+        code, out, err = self.run_stdin(big, "summarize", "--kind", "log", "--no-dedupe")
+        self.assertEqual(code, 0, msg=err)
+        self.assertNotIn("coverage:", out)
+        match = self.COVERAGE_RE.search(err)
+        self.assertIsNotNone(match, msg=err)
+        processed, total, dropped, input_lines, input_bytes = (
+            int(g) for g in match.groups())
+        self.assertGreater(total, 1)  # confirms this is actually the map-reduce path
+        self.assertEqual(processed, total)
+        self.assertEqual(dropped, 0)
+        self.assertGreater(input_lines, 0)
+        self.assertGreater(input_bytes, 0)
+
+    def test_summarize_coverage_line_dropped_chunk(self):
+        # ZQXDROPCHUNK's canned response is empty, which cmd_summarize treats
+        # as a dropped chunk ("model error"); placed mid-run so it lands in
+        # exactly one of several map chunks.
+        lines = [f"normal log line {i} on host abc" for i in range(300)]
+        lines[150] = "ZQXDROPCHUNK marker line"
+        code, out, err = self.run_stdin("\n".join(lines), "summarize",
+                                        "--kind", "log", "--no-dedupe")
+        self.assertEqual(code, 0, msg=err)
+        match = self.COVERAGE_RE.search(err)
+        self.assertIsNotNone(match, msg=err)
+        processed, total, dropped, _input_lines, _input_bytes = (
+            int(g) for g in match.groups())
+        self.assertEqual(dropped, 1)
+        self.assertEqual(processed, total - 1)
+
+    def test_map_tokens_default_is_120(self):
+        args = ollama_ask.build_parser().parse_args(["summarize"])
+        self.assertEqual(args.map_tokens, 120)
+
+    def test_map_prompt_is_fragment_style(self):
+        self.assertIn("3-6 fragments", ollama_ask.MAP_PROMPT)
+        self.assertIn("No sentences", ollama_ask.MAP_PROMPT)
 
     # -- fixtures (kubectl / docker stand-ins) ------------------------------
 

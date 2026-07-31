@@ -1729,8 +1729,9 @@ _KIND_WORDS = {
 }
 
 MAP_PROMPT = (
-    "You summarize one excerpt of {kind}. Write at most {map_tokens} tokens as short\n"
-    "bullet points, each a plain fact taken ONLY from this excerpt. Rules:\n"
+    "You extract facts from one excerpt of {kind}. Write 3-6 fragments, one\n"
+    "fact each (component, event, count), at most {map_tokens} tokens total.\n"
+    "No sentences, no preamble. Rules:\n"
     "- Use only facts that appear in the excerpt. Never guess, infer, or add anything\n"
     "  that is not written there.\n"
     "- Copy every error, warning, or failure line VERBATIM inside quotes, exactly\n"
@@ -1926,6 +1927,8 @@ def cmd_summarize(args, cfg: dict) -> int:
         if not digest:
             raise CliError(EXIT_BAD_OUTPUT, "The summary came back empty.")
         print(digest)
+        print(f"coverage: chunks=1/1 dropped=0 input_lines={len(lines)} "
+              f"input_bytes={len(body)}", file=sys.stderr)
         return EXIT_OK
 
     chunks = _chunk_lines(lines, args.chunk_chars)
@@ -1962,6 +1965,9 @@ def cmd_summarize(args, cfg: dict) -> int:
     if not digest:
         raise CliError(EXIT_BAD_OUTPUT, "The final summary came back empty.")
     print("\n".join([digest] + markers))
+    print(f"coverage: chunks={total - len(drops)}/{total} "
+          f"dropped={len(drops)} input_lines={len(lines)} "
+          f"input_bytes={len(body)}", file=sys.stderr)
     return EXIT_OK
 
 
@@ -2093,7 +2099,7 @@ def build_parser() -> argparse.ArgumentParser:
                        help="keep only the last N input lines before pre-filter (0 = keep all)")
     p_sum.add_argument("--chunk-chars", type=int, default=3000, dest="chunk_chars",
                        help="max characters per map chunk (also the single-shot threshold)")
-    p_sum.add_argument("--map-tokens", type=int, default=80, dest="map_tokens",
+    p_sum.add_argument("--map-tokens", type=int, default=120, dest="map_tokens",
                        help="output token cap for each per-chunk (map) summary")
     p_sum.add_argument("--ceiling-chars", type=int, default=100000, dest="ceiling_chars",
                        help="refuse input larger than this after pre-filter (--force overrides)")
