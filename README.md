@@ -267,13 +267,48 @@ Yes — **negative**. In unattended, neutral-prompt sessions the plugin *cost*
 15-17% more cloud tokens than it saved. Three reasons, all visible in the
 data:
 
-- Ten skill descriptions load into every session (~2-3k tokens) whether or
-  not anything delegates.
+- Ten skill descriptions loaded into every session (~2-3k tokens on 0.4.0)
+  whether or not anything delegated.
 - Left to itself, the model delegates inconsistently (commit 2/3,
   summarize 0/3 here) — and un-delegated runs pay the overhead for nothing.
 - Without the plugin, Claude doesn't actually read whole inputs anyway: it
   greps and tails the 338k-char log strategically, so "Claude would have read
   everything" is not what unattended sessions do.
+
+### Re-measured after the 0.5.0 catalog cut
+
+0.5.0 halved the always-on catalog (ten skills → eight; descriptions 4,553 →
+2,583 chars ≈ 645 tokens, now enforced by a validator budget). Same
+experiment, same neutral prompts, n=3 per cell
+(`benchmarks/results/ab-published-0.5.0.json`):
+
+```
+task       arm      ok    tokens (mean)  cache read  cost USD  local tokens  delegated
+commit     without  3/3          20,661     280,264    0.4007             0  -
+commit     with     2/3          18,974     242,117    0.3558           918  1
+commit     with savings vs without: 8.2% (mean tokens, successful runs only)
+summarize  without  3/3          21,745     238,204    0.3895             0  -
+summarize  with     2/3          19,595     169,192    0.3345             0  0
+summarize  with savings vs without: 9.9% (mean tokens, successful runs only)
+
+All arms opus, cold folders; cache reads excluded from the consumed metric. The directed arm's prompt names the skill; the other two arms share one neutral prompt.
+```
+
+The first positive deltas this project has measured — read them with the
+same discipline as the negative ones above:
+
+- Savings are computed on successful runs only, and the with arm passed 2/3
+  on each task versus 3/3 without — unattended reliability is unchanged by
+  the catalog cut.
+- Only the commit saving coincides with a delivered delegation (1 run, 918
+  local tokens). The summarize arm delegated **zero** times, so its 9.9% is
+  the smaller catalog plus session noise — not local-model payoff.
+- n=3 with per-run spreads of 16k–29k tokens: treat the *sign* as the
+  finding (the plugin no longer costs more in neutral sessions), not the
+  exact percentages.
+- The session baseline itself grew since the 0.4.0 run (~16.5k → ~21k
+  tokens per session) — which is exactly why each release re-measures both
+  arms instead of comparing against old baselines.
 
 ### The confirmation arm: skills invoked deliberately
 

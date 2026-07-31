@@ -24,6 +24,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
   every session; `--budget` gate used in validation.
 - README: 0.5.0 changes table and a "Scoping the install" section (enable per
   project; disable for headless/CI).
+- Re-measured neutral A/B after the catalog cut, published as
+  `benchmarks/results/ab-published-0.5.0.json`: first positive deltas
+  (+8.2% commit, +9.9% summarize; successful runs only, n=3, read as sign
+  not magnitude — summarize saved without delegating).
 
 ## [0.4.0] - 2026-07-31
 
