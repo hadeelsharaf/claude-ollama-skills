@@ -55,7 +55,7 @@ rewording.
 
 1. Read-only git only. Allowed: `git branch --list` / `-a`, `git log --oneline`,
    `git shortlog -sn <range>`, `git log --pretty=format:"%h %ad %an %s" --date=short <range>`,
-   `git log --stat <range>` (capped), `git show --stat <commit>`.
+   `git log --stat <range>` (only if the text still fits the input budget below), `git show --stat <commit>`.
    Never run `git log -p`, `--patch`, `-U<n>`, `--word-diff`, `--full-diff`, or
    plain `git diff` — those print real code changes. This skill shows only
    history facts — who, when, which file, one-line subject. It never shows patch content.
@@ -83,7 +83,9 @@ never touches them. This skill never changes the repo: no `checkout`, `reset`,
 Prefer a bounded input (latest 50 commits, a date window, `--tail 2000`).
 `summarize` single-shots small inputs and map-reduces large ones; only over its
 `--ceiling-chars` (100,000) ceiling does it refuse — then narrow the input,
-raise the ceiling, or pass `--force` (slower, rougher).
+raise the ceiling, or pass `--force` (slower, rougher). The digest itself is
+capped at about 200 tokens by the summarize profile; pass --max-tokens <n> to
+raise it when a range genuinely needs a longer digest.
 
 ## Rules (do not skip)
 

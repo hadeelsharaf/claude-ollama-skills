@@ -5,6 +5,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ## [Unreleased]
 
+### Changed
+- Internal deepening, no behavior change: git preflight checks and the
+  one-corrective-retry drafting policy now each live in one place inside
+  `ollama_ask.py` (the duplicated copies had already drifted in wording);
+  the test fake server routes canned responses through a declared marker
+  table with a collision guard; `measure_catalog.py` shares
+  `validate_repo.py`'s frontmatter parser instead of carrying its own.
+
+### Added
+- `tests/test_validate_repo.py` — pins the description-cap and catalog-budget
+  failure paths, including that validator output stays ASCII.
+
 ## [0.5.0] - 2026-07-31
 
 ### Changed

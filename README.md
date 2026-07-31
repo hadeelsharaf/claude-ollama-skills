@@ -74,8 +74,10 @@ this plugin after 0.5.0; ~1,140 before). Two recommendations from our own
 measurements:
 
 - **Enable per project.** Enable the plugin at project scope
-  (`claude plugin enable ollama-skills` with project/local settings scope) in
-  the repos where you actually commit and digest logs, instead of globally.
+  (add it to the project's `.claude/settings.json` under `enabledPlugins`, or
+  run `claude plugin enable ollama-skills` and pick the project scope when
+  prompted) in the repos where you actually commit and digest logs, instead
+  of globally.
 - **Disable for headless/CI runs.** In our published A/B, one-shot
   `claude -p` sessions paid the catalog overhead without using the skills and
   came out net negative. If you script headless runs, disable the plugin for
