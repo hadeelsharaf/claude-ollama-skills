@@ -957,6 +957,13 @@ class OllamaAskTests(unittest.TestCase):
         self.assertNotIn("```", out)
         self.assertIn("print('hi')", out)
 
+    def test_draft_code_double_syntax_error_two_calls_exit_6(self):
+        FakeOllamaHandler.generate_calls = 0
+        code, out, err = self.run_cli("draft-code", "--spec", "plain request",
+                                      "--lang", "python")
+        self.assertEqual(code, 6, msg=err)
+        self.assertEqual(FakeOllamaHandler.generate_calls, 2)
+
     # -- fix-lint -----------------------------------------------------------
 
     def test_fix_lint_outputs_suggestion_and_never_writes(self):

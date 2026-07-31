@@ -1061,7 +1061,10 @@ def _staged_context(cfg: dict, args) -> tuple[str, str | None]:
 
 def _generate_with_retry(task, prompt, args, cfg, *, system, judge, fail_message,
                          response_format=None, max_tokens=None):
-    """The one-corrective-retry policy used by every drafting subcommand.
+    """The one-corrective-retry policy used by the five drafting subcommands
+    (commit-msg, draft-command, draft-code, fix-lint, pr-desc). cmd_ask's
+    --json-object retry remains a deliberate local exception, not routed
+    through this helper.
 
     judge(text, attempt) returns None to accept, or the corrective feedback
     to append to the system prompt for the single retry. After the second
@@ -1311,15 +1314,17 @@ def cmd_draft_code(args, cfg: dict) -> int:
     check_budget(spec, cfg, args)
     system = CODE_SYSTEM.format(lang=args.lang)
 
+    last = {}
+
     def judge(text, attempt):
         error = _syntax_check(strip_fences(text), args.lang)
-        if error is None:
+        last["error"] = error
+        if not error:
             return None
         return f"Your previous code had this syntax error:\n{error}\nFix it."
 
     def fail_message(text):
-        error = _syntax_check(strip_fences(text), args.lang)
-        return f"Draft still has a syntax error: {error[:200]}"
+        return f"Draft still has a syntax error: {(last.get('error') or '')[:200]}"
 
     raw = _generate_with_retry("code", spec, args, cfg, system=system,
                                judge=judge, fail_message=fail_message)

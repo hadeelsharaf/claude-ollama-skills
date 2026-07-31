@@ -6,11 +6,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 ## [Unreleased]
 
 ### Changed
-- Internal deepening, no behavior change: git preflight checks and the
-  one-corrective-retry drafting policy now each live in one place inside
-  `ollama_ask.py` (the duplicated copies had already drifted in wording);
-  the test fake server routes canned responses through a declared marker
-  table with a collision guard; `measure_catalog.py` shares
+- Internal deepening, no change to exit codes or stdout (two commands' "not a
+  git repository" error text is now unified, and drafting failure paths now
+  print a uniform raw-output dump, truncated to 300 chars, to stderr): git
+  preflight checks and the one-corrective-retry drafting policy now each live
+  in one place inside `ollama_ask.py` (the duplicated copies had already
+  drifted in wording); the test fake server routes canned responses through a
+  declared marker table with a collision guard; `measure_catalog.py` shares
   `validate_repo.py`'s frontmatter parser instead of carrying its own.
 
 ### Added
