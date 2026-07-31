@@ -16,6 +16,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 import fixtures  # noqa: E402
 import measure_ab  # noqa: E402
+import measure_catalog  # noqa: E402
 
 
 def fake_usage(consumed=1000, cache_read=0, cost=0.5):
@@ -196,3 +197,35 @@ class EvalCaseTests(unittest.TestCase):
             if p.is_file() and p.suffix in (".yaml", ".yml", ".md"))
         self.assertIn(fixtures.PROMPT_COMMIT, eval_texts)
         self.assertIn(fixtures.PROMPT_SUMMARIZE, eval_texts)
+
+
+class CatalogTests(unittest.TestCase):
+    """benchmarks/measure_catalog.py — catalog size accounting."""
+
+    def _make_tree(self, tmp, skill_desc, agent_desc):
+        skill = tmp / "skills" / "demo" / "SKILL.md"
+        skill.parent.mkdir(parents=True)
+        skill.write_text(
+            "---\nname: demo\ndescription: " + skill_desc +
+            "\n---\nbody line\n", encoding="utf-8")
+        agent = tmp / "agents" / "helper.md"
+        agent.parent.mkdir(parents=True)
+        agent.write_text(
+            "---\nname: helper\ndescription: " + agent_desc +
+            "\n---\nagent body\n", encoding="utf-8")
+
+    def test_catalog_rows_counts_desc_and_body(self):
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            self._make_tree(tmp, "Skill words. Use when needed.", "Agent words.")
+            rows = measure_catalog.catalog_rows(tmp)
+        kinds = sorted((r["kind"], r["name"]) for r in rows)
+        self.assertEqual(kinds, [("agent", "helper"), ("skill", "demo")])
+        skill_row = next(r for r in rows if r["kind"] == "skill")
+        self.assertEqual(skill_row["desc_chars"], len("Skill words. Use when needed."))
+        self.assertGreater(skill_row["body_chars"], 0)
+
+    def test_catalog_total_sums_descriptions_only(self):
+        rows = [{"kind": "skill", "name": "a", "desc_chars": 100, "body_chars": 9000},
+                {"kind": "agent", "name": "b", "desc_chars": 50, "body_chars": 4000}]
+        self.assertEqual(measure_catalog.catalog_total(rows), 150)
