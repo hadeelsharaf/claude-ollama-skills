@@ -1254,6 +1254,9 @@ SHELL_SYSTEM_TEMPLATE = (
 # deny-lists (test-enforced) so the two layers cannot drift apart.
 DENY_PATTERNS = [
     "rm -rf", "Remove-Item -Recurse -Force", "rd /s /q", "del /f /s /q",
+    # PowerShell aliases of Remove-Item: any of these with -Recurse is a
+    # recursive delete regardless of whether -Force also appears.
+    "rm -Recurse", "rd -Recurse", "ri -Recurse", "del -Recurse", "erase -Recurse",
     "git clean -fdx", "mkfs", "diskpart", "shutdown", "dd",
     "git push --force", "git commit --no-verify", "git filter-branch",
     "git reflog expire", "git branch -D",
@@ -1264,13 +1267,26 @@ DENY_PATTERNS = [
     "--privileged", "--pid=host", "--network=host", "--cap-add=ALL",
 ]
 
+# Precompiled once: (pattern, word-bounded case-insensitive regex). The
+# deny scan runs twice per call (see classify_command), so compiling once
+# at import time avoids recompiling the same 34 patterns on every scan.
+_DENY_RES = [
+    (pat, re.compile(r"(?<![\w-])" + re.escape(" ".join(pat.split())) + r"(?![\w-])",
+                      re.IGNORECASE))
+    for pat in DENY_PATTERNS
+]
+
 # Leading tokens a pipe segment may start with and still count read-only.
 # Multi-word entries match the segment's first words after normalization.
+# NOTE: "git branch" is deliberately NOT here — bare `git branch` is
+# harmless but `-f`/`-m`/`--set-upstream-to` rewrite refs, and this list
+# only gates on the leading verb, not the flags. `git status`/`git log`
+# already cover the read need.
 READONLY_ALLOW = [
     "ls", "dir", "pwd", "wc", "du", "df", "head", "tail", "grep",
     "findstr", "sort", "uniq", "cut", "tr", "file", "stat", "which",
     "whoami", "date", "uname", "cat",
-    "git status", "git log", "git diff", "git branch", "git show",
+    "git status", "git log", "git diff", "git show",
     "git remote -v", "docker ps", "docker images", "docker logs",
     "docker inspect", "docker version", "docker info",
     "ollama list", "ollama ps",
@@ -1278,18 +1294,38 @@ READONLY_ALLOW = [
     "Select-String", "Select-Object", "Measure-Object", "Where-Object",
 ]
 
-_WRITE_FLAGS = ("-o", "--output", "-i", "--in-place")
+# Write/output flags that disqualify a pipe segment even though its leading
+# verb is on READONLY_ALLOW (e.g. "sort -o out.txt"). Case-insensitive with
+# an optional "=value" attachment ("--output=out.txt"). Deliberately does
+# NOT include a bare "-i": that collides with harmless read flags like
+# "grep -i" / "sort -i" (case-insensitive matching, not in-place write);
+# "--in-place" (the unambiguous long form) is still covered. Accepted
+# consequence: "grep -o"/"-O" now over-blocks to review — the safe
+# direction, since review is already today's default outcome.
+_WRITE_FLAG_RE = re.compile(r"(?<!\S)(?:-o|-O|--output|--in-place)(?:=\S*)?(?!\S)",
+                             re.IGNORECASE)
 _DISQUALIFIERS = (";", "&&", "||", ">", "`", "$(")
 
 
 def classify_command(cmd: str) -> tuple:
     """Trust verdict for a drafted command: deny / read-only / review."""
+    # Line breaks hide a second command from the rest of this function,
+    # which normalizes all whitespace (including newlines) to single
+    # spaces; check the RAW string first, before any normalization erases
+    # the evidence. Treat them like ";" — a hard disqualifier.
+    if "\n" in cmd or "\r" in cmd:
+        return ("review", None)
     norm = " ".join(cmd.split())
     low = norm.lower()
-    for pat in DENY_PATTERNS:
-        p = " ".join(pat.split()).lower()
-        if re.search(r"(?<![\w-])" + re.escape(p) + r"(?![\w-])", low):
-            return ("deny", pat)
+    # Scan for deny patterns twice: once on the command as written, and
+    # once with every "|" collapsed to a space. A deny phrase split across
+    # a pipe (e.g. "docker system | prune -af") must not dodge the scan by
+    # accidentally looking like two unrelated pipeline segments.
+    pipeless = " ".join(low.replace("|", " ").split())
+    for scan in (low, pipeless):
+        for pat, rx in _DENY_RES:
+            if rx.search(scan):
+                return ("deny", pat)
     if any(tok in norm for tok in _DISQUALIFIERS):
         return ("review", None)
     for seg in norm.split("|"):
@@ -1300,8 +1336,7 @@ def classify_command(cmd: str) -> tuple:
         if not any(seg_low == a.lower() or seg_low.startswith(a.lower() + " ")
                    for a in READONLY_ALLOW):
             return ("review", None)
-        if any(re.search(r"(?<!\S)" + re.escape(f) + r"(?!\S)", seg)
-               for f in _WRITE_FLAGS):
+        if _WRITE_FLAG_RE.search(seg):
             return ("review", None)
     return ("read-only", None)
 

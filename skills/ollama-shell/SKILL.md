@@ -48,6 +48,7 @@ Use `python` on Windows, `python3` on macOS/Linux.
 - kubectl data / cluster destroyers: `kubectl delete namespace`, `kubectl delete pvc` / `pv`, `kubectl delete` with `--all` / `--all-namespaces` / `-l` / `--selector` / `--force --grace-period=0`, deleting a whole `deployment/statefulset/daemonset/job` the user did not name, any cluster-scoped write (nodes, PV, StorageClass, CRDs, ClusterRole/Binding, webhooks), `kubectl drain` / `cordon` / `taint`, `kubectl replace --force`, and `kubectl edit`
 - kubectl reach / secret grabs: printing Secret values (`get secret -o yaml/jsonpath`, base64-decoding), `kubectl create token`, `kubectl cp` of token/secret paths, editing kubeconfig, widening access with `--kubeconfig` / `--token` / `--as` / `--context <other>`; `kubectl config use-context` / `set-context` / `delete-context` is the user's action, never drafted
 - Git history / branch destroyers (beyond the ones above): `git rebase`, `git merge`, `git branch -D` / `-d`, `git tag -d`, `git push --force` / `--force-with-lease`, `git filter-branch`, `git reflog expire`, `git gc --prune=now`
+- PowerShell aliases of Remove-Item with recursion: `rm -Recurse`, `rd -Recurse`, `ri -Recurse`, `del -Recurse`, `erase -Recurse`
 
 A command on this list is not "probably fine". Rewrite a narrow, safe version
 yourself, or ask the user.

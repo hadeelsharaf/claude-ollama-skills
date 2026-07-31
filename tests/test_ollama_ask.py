@@ -585,6 +585,59 @@ class OllamaAskTests(unittest.TestCase):
         for pat in ollama_ask.DENY_PATTERNS:
             self.assertIn(pat, prose, f"deny pattern not in any skill prose: {pat}")
 
+    # -- classifier hardening (review round 1) -------------------------------
+
+    def test_write_flag_equals_and_short_case_forms_disqualify(self):
+        """CRITICAL 1: `--output=x` and `-O` (case variant of `-o`) must
+        disqualify a segment just like bare `-o`/`--output` already did."""
+        self.assertEqual(
+            ollama_ask.classify_command("sort --output=out.txt")[0], "review")
+        self.assertEqual(
+            ollama_ask.classify_command("sort -O out.txt")[0], "review")
+
+    def test_write_flag_check_does_not_snag_harmless_read_flags(self):
+        """`grep -i` is a case-insensitivity flag, not a write flag; it must
+        stay read-only (accepted trade-off: `grep -o`/`-O` now over-blocks
+        to review, since -o/-O are the actual write-flag spelling)."""
+        self.assertEqual(
+            ollama_ask.classify_command("grep -i pattern file.txt")[0], "read-only")
+
+    def test_newline_in_command_disqualifies_read_only(self):
+        """CRITICAL 2: whitespace normalization must not erase a line break
+        that hides a second command; \\n and \\r\\n both disqualify."""
+        self.assertEqual(
+            ollama_ask.classify_command("ls\nmv important.txt /dev/null")[0], "review")
+        self.assertEqual(
+            ollama_ask.classify_command("ls\r\nmv important.txt /dev/null")[0], "review")
+
+    def test_git_branch_write_forms_and_bare_form_are_review(self):
+        """CRITICAL 3: `git branch` was wrongly blanket-allowed; `-f`/`-m`/
+        `--set-upstream-to` rewrite refs, and even the bare form is no
+        longer auto-read-only (git status/log already cover the read need)."""
+        self.assertEqual(
+            ollama_ask.classify_command("git branch -f release main")[0], "review")
+        self.assertEqual(ollama_ask.classify_command("git branch")[0], "review")
+
+    def test_powershell_remove_item_aliases_deny(self):
+        """IMPORTANT 4: `rm`/`rd`/`ri`/`del`/`erase` are all PowerShell
+        aliases for Remove-Item; with -Recurse they are a recursive delete
+        regardless of whether -Force is also present."""
+        for cmd in (
+            "rm -Recurse -Force C:/x",
+            "rd -Recurse -Force x",
+            "ri -Recurse x",
+            "del -Recurse x",
+            "erase -Recurse x",
+        ):
+            with self.subTest(cmd=cmd):
+                self.assertEqual(ollama_ask.classify_command(cmd)[0], "deny")
+
+    def test_pipe_split_deny_bypass_closed(self):
+        """IMPORTANT 5: splitting a deny phrase across a `|` must not dodge
+        the deny scan; `docker system | prune -af` is a deny in spirit."""
+        self.assertEqual(
+            ollama_ask.classify_command("docker system | prune -af")[0], "deny")
+
     # -- commit-msg ---------------------------------------------------------
 
     def _make_repo(self, staged: bool) -> Path:
