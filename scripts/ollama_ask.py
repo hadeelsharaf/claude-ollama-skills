@@ -31,6 +31,7 @@ from __future__ import annotations
 import argparse
 import ctypes
 import fnmatch
+import ipaddress
 import json
 import os
 import platform
@@ -189,13 +190,28 @@ def installed_models(host: str) -> list:
     return _TAGS_CACHE[host]
 
 
-LOOPBACK_HOSTS = ("localhost", "127.", "[::1]", "0.0.0.0")
+def _host_is_local(host: str) -> bool:
+    """True only for genuinely local hosts: exactly 'localhost', or an IP
+    literal that is loopback/unspecified. Never a name-prefix test — a
+    lookalike like localhost.attacker.example must NOT count as local."""
+    bare = re.sub(r"^https?://", "", host).split("/")[0]
+    if bare.startswith("["):            # bracketed IPv6, port optional
+        bare = bare[1:].split("]", 1)[0]
+    elif bare.count(":") == 1:          # host:port — strip the port
+        bare = bare.rsplit(":", 1)[0]
+    # else: no colon, or 2+ colons (raw IPv6 literal) — use as-is
+    if bare.lower() == "localhost":
+        return True
+    try:
+        ip = ipaddress.ip_address(bare)
+    except ValueError:
+        return False
+    return ip.is_loopback or ip.is_unspecified
 
 
 def warn_if_remote(host: str) -> None:
     """A project .ollama-skills.json can set host — make data leaving loud."""
-    bare = re.sub(r"^https?://", "", host).split("/")[0].rsplit(":", 1)[0]
-    if not any(bare == h.rstrip(".") or bare.startswith(h) for h in LOOPBACK_HOSTS):
+    if not _host_is_local(host):
         eprint(f"WARNING: Ollama host is {host} — prompts and diffs will LEAVE "
                "this machine. Remove 'host' from .ollama-skills.json if that "
                "is not what you want.")

@@ -286,6 +286,48 @@ class OllamaAskTests(unittest.TestCase):
         self.assertEqual(data["tasks"]["commit"]["model"], "bom-model")
         self.assertEqual(data["tasks"]["commit"]["source"], "config")
 
+    # -- remote-host warning (privacy guard) ---------------------------------
+
+    def test_remote_warning_fires_for_localhost_lookalike_host(self):
+        """A host that merely STARTS WITH 'localhost' is not loopback; the
+        data-is-leaving warning must fire (prefix-bypass regression)."""
+        os.environ["OLLAMA_HOST"] = "http://localhost.attacker.example:11434"
+        code, _out, err = self.run_cli("stats")
+        self.assertEqual(code, 0, msg=err)
+        self.assertIn("WARNING", err)
+
+    def test_remote_warning_fires_for_127_prefixed_hostname(self):
+        """'127.' is only loopback as an IPv4 literal, not as a DNS-name
+        prefix like 127.0.0.1.evil.example."""
+        os.environ["OLLAMA_HOST"] = "http://127.0.0.1.evil.example:11434"
+        code, _out, err = self.run_cli("stats")
+        self.assertEqual(code, 0, msg=err)
+        self.assertIn("WARNING", err)
+
+    def test_no_remote_warning_for_bracketed_ipv6_loopback_without_port(self):
+        """http://[::1] (no port) must not false-warn; a false warning
+        trains users to ignore the real one."""
+        os.environ["OLLAMA_HOST"] = "http://[::1]"
+        code, _out, err = self.run_cli("stats")
+        self.assertEqual(code, 0, msg=err)
+        self.assertNotIn("WARNING", err)
+
+    def test_no_remote_warning_for_genuine_loopback_hosts(self):
+        for host in ("http://127.0.0.1:11434", "http://localhost:11434",
+                     "http://127.5.6.7:11434", "http://[::1]:11434",
+                     "http://0.0.0.0:11434"):
+            with self.subTest(host=host):
+                os.environ["OLLAMA_HOST"] = host
+                code, _out, err = self.run_cli("stats")
+                self.assertEqual(code, 0, msg=err)
+                self.assertNotIn("WARNING", err)
+
+    def test_remote_warning_fires_for_remote_host(self):
+        os.environ["OLLAMA_HOST"] = "http://192.168.1.50:11434"
+        code, _out, err = self.run_cli("stats")
+        self.assertEqual(code, 0, msg=err)
+        self.assertIn("WARNING", err)
+
     def test_resolve_model_autodetect_prefers_commit_list(self):
         data = self.resolved()
         self.assertEqual(data["tasks"]["commit"]["model"], "llama3.2:1b")
