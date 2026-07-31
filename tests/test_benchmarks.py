@@ -1,9 +1,6 @@
 """Hermetic tests for the A/B benchmark tooling. No network, no paid calls."""
 from __future__ import annotations
 
-import os
-import shutil
-import stat
 import subprocess
 import sys
 import tempfile
@@ -13,10 +10,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "benchmarks"))
 sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "tests"))
 
 import fixtures  # noqa: E402
 import measure_ab  # noqa: E402
 import measure_catalog  # noqa: E402
+from support import rmtree_force  # noqa: E402
 
 
 def fake_usage(consumed=1000, cache_read=0, cost=0.5):
@@ -27,13 +26,6 @@ def fake_usage(consumed=1000, cache_read=0, cost=0.5):
             "total_cost_usd": cost, "duration_ms": 1234,
             "result": "db-primary connection refused repeatedly; "
                       "worker-3 OOM killed; KeyError shard_map"}
-
-
-def rmtree_force(path: str) -> None:
-    def onerror(func, p, _exc):
-        os.chmod(p, stat.S_IWRITE)
-        func(p)
-    shutil.rmtree(path, onerror=onerror)
 
 
 def worktree_bytes(root: Path) -> dict:

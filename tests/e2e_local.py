@@ -10,8 +10,6 @@ Skips politely (exit 0) when RUN_OLLAMA_E2E is not set.
 from __future__ import annotations
 
 import os
-import shutil
-import stat
 import subprocess
 import sys
 import tempfile
@@ -20,13 +18,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = ROOT / "scripts" / "ollama_ask.py"
+sys.path.insert(0, str(ROOT / "tests"))
 
-
-def rmtree_force(path: str) -> None:
-    def onerror(func, p, _exc):
-        os.chmod(p, stat.S_IWRITE)
-        func(p)
-    shutil.rmtree(path, onerror=onerror)
+from support import rmtree_force  # noqa: E402
 
 
 def run_step(name: str, argv: list, cwd=None, stdin_text=None, env=None) -> str:

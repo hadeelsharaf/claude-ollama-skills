@@ -10,7 +10,6 @@ import json
 import os
 import shutil
 import socket
-import stat
 import subprocess
 import sys
 import tempfile
@@ -23,8 +22,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "tests"))
 
 import ollama_ask  # noqa: E402
+from support import rmtree_force  # noqa: E402
 
 FAKE_MODELS = [
     {"name": "qwen3:8b", "size": 5_000_000_000},
@@ -156,13 +157,6 @@ class FakeOllamaHandler(BaseHTTPRequestHandler):
         }
         self.wfile.write(json.dumps(final).encode() + b"\n")
         self.wfile.flush()
-
-
-def rmtree_force(path: str) -> None:
-    def onerror(func, p, _exc):
-        os.chmod(p, stat.S_IWRITE)
-        func(p)
-    shutil.rmtree(path, onerror=onerror)
 
 
 class QuietServer(ThreadingHTTPServer):
