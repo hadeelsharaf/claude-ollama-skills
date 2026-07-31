@@ -18,17 +18,18 @@ worker.
 > CPU-only machines are slow with big models — the defaults here are tuned for that
 > (see the measured numbers below). Fully offline options: [docs/ADVANCED.md](docs/ADVANCED.md).
 
-## What's new in v0.4
+## What's new in v0.5
 
-- **Usage ledger + `stats`**: every local call is recorded (counts only, never
-  content) and `stats` shows real local tokens vs estimated cloud tokens
-  avoided — honest numbers, including the published A/B experiment below.
-- **Author-intent commit drafts**: `commit-msg --type <t> --hint "<one line>"`
-  passes what the caller already knows; drafts on directed commits now land
-  usable far more often.
-- **`ollama-logs` skill** (tenth skill): private digests of plain log files.
-- **A/B benchmark + eval suite**: `benchmarks/` and `evals/` measure the
-  plugin instead of asserting about it.
+- **`ollama-digest` skill**: merges `ollama-logs` and `ollama-git-history` into
+  one catalog entry for log/text-file and git-history digests — same
+  workflows and safety rules as before.
+- **Kubernetes support parked**: `ollama-k8s` removed until local-delegation
+  cost savings are proven; last shipped in 0.4.0 (tag `ollama-skills--v0.4.0`).
+- **Catalog trimmed and budget-enforced**: always-on skill/agent descriptions
+  drop from 4,553 to 2,583 chars (~1,140 → ~645 tokens per session);
+  `validate_repo.py` now enforces per-description caps and a total catalog
+  budget so the overhead cannot silently regrow
+  (`python benchmarks/measure_catalog.py` reports the current spend).
 
 Earlier releases: see [CHANGELOG.md](CHANGELOG.md).
 
@@ -66,6 +67,20 @@ Then paste the routing block from
 CLAUDE.md — research shows delegation only happens reliably when CLAUDE.md says when
 to delegate.
 
+## Scoping the install
+
+Skill descriptions are loaded into every session's context (~645 tokens for
+this plugin after 0.5.0; ~1,140 before). Two recommendations from our own
+measurements:
+
+- **Enable per project.** Enable the plugin at project scope
+  (`claude plugin enable ollama-skills` with project/local settings scope) in
+  the repos where you actually commit and digest logs, instead of globally.
+- **Disable for headless/CI runs.** In our published A/B, one-shot
+  `claude -p` sessions paid the catalog overhead without using the skills and
+  came out net negative. If you script headless runs, disable the plugin for
+  them.
+
 ## First-time setup (5 minutes, fresh machine)
 
 1. Install [Ollama](https://ollama.com) and start it (`ollama serve`, or the desktop app).
@@ -88,15 +103,23 @@ Just ask Claude in plain words:
 | "pre-commit is failing, fix it" | `ollama-precommit` skill (deterministic fixers first) |
 | "zip the logs folder" | `ollama-shell` skill (drafted command + safety check + permission prompt) |
 | "write a small parser for X with the local model" | `ollama-code` skill (draft → line-by-line review) |
-| "summarize errors in app.log" | `ollama-logs` skill (file body → local digest; Claude never reads the file) |
+| "summarize errors in app.log" / "what changed on this branch this week?" | `ollama-digest` skill (log file, text, or git range → local digest; Claude never reads the raw input) |
 | "explain why this container keeps crashing" | `ollama-docker` skill (logs → local summarize, checked) |
-| "why is this pod crashlooping?" | `ollama-k8s` skill (describe+events+logs → local summarize; context echoed) |
-| "what changed on this branch this week?" | `ollama-git-history` skill (compact log → local summarize) |
 | "open a PR for this branch" | `ollama-pr` skill (local model drafts the description; created as a draft PR via gh/glab) |
 
 Skills can also be invoked directly: `/ollama-skills:ollama-commit`.
 Background agents (run on cheap haiku): `@agent-ollama-skills:ollama-coder`,
 `@agent-ollama-skills:ollama-git`, `@agent-ollama-skills:ollama-ops`.
+
+### Changed in 0.5.0
+
+| Before (≤0.4.0) | Now |
+|---|---|
+| `ollama-logs`, `ollama-git-history` | `ollama-digest` |
+| `ollama-k8s` | removed — parked until local-delegation cost savings are proven; last shipped in 0.4.0 (tag `ollama-skills--v0.4.0`) |
+
+Same workflows and safety rules for the merged skills; less than 60% of the
+old always-on catalog cost.
 
 Everything goes through one bundled script — you can drive it by hand too:
 
@@ -358,13 +381,14 @@ itself and says so** — a failed delegation never blocks work.
 
 ```
 .claude-plugin/    plugin + marketplace manifests
-skills/            ten SKILL.md folders (ask, commit, precommit, shell, code, logs, docker, k8s, git-history, pr)
+skills/            eight SKILL.md folders (ask, code, commit, digest, docker, pr, precommit, shell)
 agents/            three subagents (coder, git, ops) — model: haiku
 scripts/           ollama_ask.py (the one runtime file) + validate_repo.py
 config/            example config
 templates/         CLAUDE.md routing snippet
 tests/             unit tests (fake Ollama server) + opt-in real e2e
-benchmarks/        A/B token-consumption runner (paid, opt-in, never in CI)
+benchmarks/        A/B token-consumption runner (paid, opt-in, never in CI);
+                   measure_catalog.py (free, stdlib, safe anywhere)
 evals/             claude plugin eval quality cases (paid, opt-in, never in CI)
 docs/              DESIGN, RESEARCH, ADVANCED, SECURITY, skill-tests
 .github/workflows  CI: unit tests (Ubuntu+Windows), validation, opt-in e2e

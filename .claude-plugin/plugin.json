@@ -2,7 +2,7 @@
   "name": "ollama-skills",
   "displayName": "Ollama Skills",
   "version": "0.4.0",
-  "description": "Skills and agents that delegate small tasks to local Ollama models: commit messages, PR descriptions with gated draft-PR creation, shell and code drafts, and log/Kubernetes/git digests. Private data stays on your machine; Claude reviews every draft.",
+  "description": "Skills and agents that delegate small tasks to local Ollama models: commit messages, PR descriptions with gated draft-PR creation, shell and code drafts, and log/text/git-history digests. Private data stays on your machine; Claude reviews every draft.",
   "author": { "name": "Hadeel Sharaf" },
   "homepage": "https://github.com/hadeelsharaf/claude-ollama-skills",
   "repository": "https://github.com/hadeelsharaf/claude-ollama-skills",

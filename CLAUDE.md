@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A **Claude Code plugin** (`ollama-skills`) that delegates small, mechanical subtasks to a
 local Ollama model: commit messages, shell command drafts, small code, lint-fix
-suggestions, and log/k8s/git digests. Claude plans and reviews; the local model drafts.
+suggestions, and log/text/git-history digests. Claude plans and reviews; the local model drafts.
 The privacy win is the point — big private inputs (staged diffs, file bodies, container
 logs) are read by the local script and never enter Claude's context; only a small drafted
 result comes back.
@@ -26,15 +26,14 @@ python scripts/validate_repo.py             # manifests + skill/agent frontmatte
 Use `python` on Windows, `python3` on macOS/Linux. Both commands above must pass before a
 PR — that is exactly what `.github/workflows/ci.yml` runs (Ubuntu + Windows).
 
-Opt-in end-to-end runs need a real local Ollama and are gated by env vars:
+Opt-in end-to-end runs need a real local Ollama and are gated by an env var:
 
 ```bash
 RUN_OLLAMA_E2E=1 python tests/e2e_local.py          # real model; prints per-step timings
-RUN_K8S_E2E=1   python tests/e2e_k8s.py             # also needs a kind cluster (scripts/kind-up.sh)
 OLLAMA_SKILLS_DEBUG=1 python scripts/ollama_ask.py ...   # model/timeout/options trace on stderr
 ```
 
-Both e2e scripts exit 0 with a "skipped" message when their env var is unset, so they are
+This e2e script exits 0 with a "skipped" message when its env var is unset, so it is
 safe to run blind.
 
 `benchmarks/measure_ab.py` is **PAID**: ~18 headless opus sessions at defaults; never run
@@ -51,7 +50,7 @@ Three layers, coupled by an **exit-code contract** rather than by imports:
    (`POST /api/generate`, `stream: true`, `think: false`); the socket read timeout *is* the
    stall detector. Task profiles (`TASK_DEFAULTS` for `commit|shell|code|general|summarize`)
    set max tokens, temperature, and `num_ctx`.
-2. **`skills/*/SKILL.md`** — ten skills. Each is a prompt contract telling Claude which
+2. **`skills/*/SKILL.md`** — eight skills. Each is a prompt contract telling Claude which
    subcommand to run, how to review the draft, which commands are deny-listed, and what to
    do on each exit code. Skills are the safety layer; the script only enforces what a
    script can (branch gating, input budgets, syntax checks).
@@ -95,15 +94,20 @@ models --json` prints the resolved model and its source for every task.
 - **Frontmatter stays single-line `key: value` pairs.** `validate_repo.py` ships a
   hand-rolled stdlib parser with no YAML support; lists or multi-line strings fail it.
 - **Skill prose is unit-tested.** `test_denylist_covers_*`,
-  `test_git_history_skill_bans_patches`, `test_push_safety_wording_present`, and
-  `test_pr_skill_safety_wording_present` assert on
+  `test_git_history_skill_bans_patches`, `test_digest_skill_bans_reading_the_file`,
+  `test_digest_skill_keeps_both_privacy_rules`, `test_removed_skills_are_gone`,
+  `test_push_safety_wording_present`, and `test_pr_skill_safety_wording_present` assert on
   exact substrings inside markdown files (`docker system prune`, `--privileged`,
   `kubectl drain`, `--force-with-lease`, `never the model`, `never shows patch content`,
   …). Rewording a skill's safety section is a test-touching change, by design — the tests
   exist so a silent reword can't quietly remove a guardrail.
+- **Catalog budget is enforced, not aspirational.** The constants live in
+  `validate_repo.py` (`DESC_CAP_SKILL`, `DESC_CAP_AGENT`, `CATALOG_BUDGET`) — never raise
+  them casually; `python benchmarks/measure_catalog.py` reports the current spend per
+  skill/agent and the total.
 - **Privacy invariant:** skills forbid Claude from reading what was delegated —
   no `git diff --cached` (only `--stat`), no `git log -p`/`--patch` in
-  `ollama-git-history`. Preserve that when editing workflows.
+  `ollama-digest`. Preserve that when editing workflows.
 - **`commit-push` can never force-push or delete a branch.** Its argv is built from fixed
   literals plus `--message`/`--remote`/`--allow-protected`; there is no flag that can
   smuggle in `--force` or a refspec. `main`/`master` require `--allow-protected`, which

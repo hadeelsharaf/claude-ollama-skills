@@ -5,6 +5,26 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ## [Unreleased]
 
+### Changed
+- Merged `ollama-logs` + `ollama-git-history` into `ollama-digest` — same
+  workflows and safety rules, one catalog entry instead of two.
+- Trimmed every skill and agent description; the always-on catalog drops from
+  4,553 to 2,583 chars (~1,140 → ~645 tokens per session).
+- `validate_repo.py` now enforces per-description caps and a total catalog
+  budget (2,700 chars) so the overhead cannot silently regrow.
+
+### Removed
+- `ollama-k8s` (skill, kind e2e harness, `RUN_K8S_E2E`) — parked until
+  local-delegation cost savings are proven; last shipped in 0.4.0
+  (tag `ollama-skills--v0.4.0`). The kubectl safety deny-list entries in
+  `ollama-shell` and the ops agent remain.
+
+### Added
+- `benchmarks/measure_catalog.py` — stdlib report of what the plugin adds to
+  every session; `--budget` gate used in validation.
+- README: 0.5.0 changes table and a "Scoping the install" section (enable per
+  project; disable for headless/CI).
+
 ## [0.4.0] - 2026-07-31
 
 ### Added

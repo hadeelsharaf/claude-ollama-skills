@@ -1,8 +1,7 @@
 # Paste this into your project's CLAUDE.md (routing rules for local delegation)
 
-Research on delegation projects shows one thing clearly: without explicit routing
-rules in CLAUDE.md, the cloud model just does everything itself. Paste the block
-below (edit to taste).
+Research shows one thing clearly: without explicit routing rules in CLAUDE.md,
+the cloud model just does everything itself. Paste the block below (edit to taste).
 
 ```markdown
 ## Local model delegation (ollama-skills)
@@ -13,16 +12,17 @@ Delegate to the local Ollama model when the task is SMALL and MECHANICAL:
   (keeps the diff on this machine; never read the full diff yourself).
 - Pre-commit or linter failures → use the ollama-precommit skill
   (deterministic fixers first; local model only for simple leftovers).
-- Simple file/system chores (copy, move, clean, zip, list, run a script)
-  → use the ollama-shell skill, or the ollama-ops agent for batches.
+- Simple file/system chores (copy, move, zip, run a script) → use the
+  ollama-shell skill, or ollama-ops for batches.
 - Small self-contained code (one function, one small file, boilerplate, a test)
   → use the ollama-code skill, or the ollama-coder agent in the background.
 - Opening a PR/MR for the current branch → use the ollama-pr skill (drafted
   description, draft PR by default).
-- Summarizing a log or big text file → use the ollama-logs skill (the file
-  body stays local).
-- Other small private text work → use the ollama-ask skill.
-- Checking the local model setup / which models are available → use the ollama-ask skill (health).
+- Summarizing a log/text file or git history → use the ollama-digest skill
+  (stays local).
+- Other small private text work, or checking the local model setup/models
+  → use the ollama-ask skill.
+- For headless or CI runs, disable the ollama-skills plugin — the catalog costs tokens even when unused.
 
 Do NOT delegate: multi-file changes, debugging, design decisions, security-relevant
 code, anything needing real reasoning or project-wide context.
