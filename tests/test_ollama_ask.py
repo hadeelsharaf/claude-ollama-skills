@@ -514,6 +514,7 @@ class OllamaAskTests(unittest.TestCase):
         json.loads(out)  # must parse
 
     def test_ask_json_double_bad_two_calls_exit_6(self):
+        FakeOllamaHandler.generate_calls = 0
         code, out, err = self.run_cli("ask", "INVALID_JSON_PLEASE give json",
                                       "--json-object")
         self.assertEqual(code, 6, msg=err)
