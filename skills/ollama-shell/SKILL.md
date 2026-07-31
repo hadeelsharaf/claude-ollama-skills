@@ -9,6 +9,8 @@ argument-hint: "<task in plain words>"
 The local model turns plain words into a command. You are the safety gate. The
 command runs only after YOUR check and the normal permission prompt.
 
+The loop is ground -> draft -> judge.
+
 ## Script
 
 Set `SCRIPT` = `${CLAUDE_PLUGIN_ROOT}/scripts/ollama_ask.py`
@@ -56,10 +58,10 @@ yourself, or ask the user.
    wrong, too broad, or subtly destructive while looking clean.
 2. The user's words are the spec; the draft is just a guess at it. When they
    disagree, follow the user's words.
-3. **Fallback rule:** exit 3/4/5/6 → write the command yourself right away and say
-   the local model was skipped and why. One retry max.
-4. Use only the flags shown in this skill. If you need a flag that is not
-   documented, it does not exist — do not invent one.
+3. **Fallback rule:** exit 3/4/5/6 → write the command yourself right away and tell
+   the user in one line why the local model was skipped. One retry max.
+4. Use only the commands and flags shown in this skill. If a flag is not documented
+   here, it does not exist — do not invent one.
 
 ## Troubleshooting
 

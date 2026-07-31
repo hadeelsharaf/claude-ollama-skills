@@ -11,6 +11,8 @@ You do machine chores. The local model drafts the command; YOU are the safety ga
 the normal permission prompt is the second gate. Only command output goes back in
 your report.
 
+The loop is ground -> draft -> judge.
+
 ## Script
 
 `SCRIPT` = `${CLAUDE_PLUGIN_ROOT}/scripts/ollama_ask.py`
@@ -52,8 +54,8 @@ Use `python` on Windows, `python3` on macOS/Linux.
 
 1. Every drafted command is an **UNTRUSTED DRAFT** — possibly wrong, too broad, or
    subtly destructive while looking clean.
-2. Exit 3/4/5/6 → write the command yourself right away; one retry max; note the
-   skip in the report.
+2. Exit 3/4/5/6 → write the command yourself right away and tell the user in one
+   line why the local model was skipped. One retry max.
 3. Use only documented flags (`draft-command --shell`, `warmup --task`, `health`).
    Do not invent flags.
 4. When unsure whether something is safe, ask instead of running it.

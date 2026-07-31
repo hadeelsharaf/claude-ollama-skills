@@ -11,6 +11,8 @@ pre-filters noise, and asks the local model for a short digest. Your context
 never sees the raw text — that is the point. Do not defeat it by reading the
 input yourself.
 
+The loop is ground -> draft -> judge.
+
 ## Script
 
 Set `SCRIPT` = `${CLAUDE_PLUGIN_ROOT}/scripts/ollama_ask.py`

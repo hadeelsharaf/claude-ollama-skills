@@ -8,6 +8,8 @@ description: Draft small, self-contained code (one function, one small file, boi
 The local model drafts SMALL code. You review every line, fix small problems, and
 only then write the file. Big or cross-file work is your job, not the local model's.
 
+The loop is ground -> draft -> judge.
+
 ## Script
 
 Set `SCRIPT` = `${CLAUDE_PLUGIN_ROOT}/scripts/ollama_ask.py`
@@ -41,7 +43,8 @@ Use `python` on Windows, `python3` on macOS/Linux.
    sharper spec, then write the code yourself.
 3. **Fallback rule:** exit 3/4/5/6 → write the code yourself right away and tell
    the user in one line why the local model was skipped.
-4. Use only the flags shown in this skill; do not invent flags.
+4. Use only the commands and flags shown in this skill. If a flag is not documented
+   here, it does not exist — do not invent one.
 
 ## Troubleshooting
 

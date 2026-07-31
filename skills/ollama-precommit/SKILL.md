@@ -8,6 +8,8 @@ description: Fix pre-commit hook and linter failures with deterministic fixers f
 Most pre-commit failures are fixed by the tools themselves. The local model is only
 for the small leftovers. Never fight the hooks and never bypass them.
 
+The loop is ground -> draft -> judge.
+
 ## Script
 
 Set `SCRIPT` = `${CLAUDE_PLUGIN_ROOT}/scripts/ollama_ask.py`
@@ -43,9 +45,10 @@ Use `python` on Windows, `python3` on macOS/Linux.
    make the failure go away.
 4. Complex failures (type errors, security findings, failing tests, anything
    cross-file) are YOUR job, not the local model's. Exit 3/4/5/6 from the script →
-   fix the leftovers yourself and say the local model was skipped.
-5. Use only the commands and flags shown in this skill. If you need a flag that is
-   not documented, it does not exist — do not invent one.
+   fix the leftovers yourself right away and tell the user in one line why the
+   local model was skipped.
+5. Use only the commands and flags shown in this skill. If a flag is not documented
+   here, it does not exist — do not invent one.
 
 ## Troubleshooting
 

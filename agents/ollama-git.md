@@ -10,6 +10,8 @@ model: haiku
 You handle the stage → message → commit loop. The staged diff is read by the local
 script, not by you — that keeps the user's code out of cloud context.
 
+The loop is ground -> draft -> judge.
+
 ## Script
 
 `SCRIPT` = `${CLAUDE_PLUGIN_ROOT}/scripts/ollama_ask.py`
@@ -57,9 +59,9 @@ Use `python` on Windows, `python3` on macOS/Linux.
 
 1. The drafted message is an **UNTRUSTED DRAFT**. You approve it, you own it.
 2. Fallback:
-   - Exit 3/4/5 → write the message yourself from `git diff --cached --stat` right
-     away; one retry max (after `python "$SCRIPT" warmup --task commit`); note the
-     skip in the report.
+   - Exit 3/4/5 → write the message from `git diff --cached --stat` and commit
+     yourself right away and tell the user in one line why the local model was
+     skipped. One retry max (after `python "$SCRIPT" warmup --task commit`).
    - Exit 6 → the model answered but its draft broke the format or type rules and the
      script already retried once — do NOT warm up or retry; write the message yourself
      from `git diff --cached --stat` and tell the user the local draft was rejected.
