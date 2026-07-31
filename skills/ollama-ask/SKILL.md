@@ -24,7 +24,7 @@ Use `python` on Windows, `python3` on macOS/Linux.
    `python "$SCRIPT" ask "YOUR PROMPT" --task general`
    - Long or multi-line prompt? Pipe it: `... ask --stdin` and write the prompt to stdin.
    - Need machine-readable output? Add `--json-object`.
-   - Task profiles change the model and budgets: `--task commit|shell|code|general`.
+   - Task profiles change the model and budgets: `--task commit|shell|code|general|summarize`.
 4. Read the output. Judge it. Use it only if it is correct for the user's request.
 
 ## Which model answers?

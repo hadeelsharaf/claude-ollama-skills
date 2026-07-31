@@ -407,7 +407,8 @@ auto-detect from installed models.
 
 Exit codes: `0` ok · `2` bad usage / over budget · `3` Ollama unreachable ·
 `4` model missing / none fits free RAM · `5` stall/timeout · `6` output failed validation ·
-`7` protected branch refused · `8` git/gh/glab command failed.
+`7` protected branch refused · `8` git/gh/glab command failed ·
+`1` unexpected error · `130` interrupted (Ctrl-C).
 Skills use these to fall back: **if the local model fails, Claude does the task
 itself and says so** — a failed delegation never blocks work.
 

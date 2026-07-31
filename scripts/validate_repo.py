@@ -148,6 +148,35 @@ def check_agent(path: Path, desc_tracker: list[tuple[int, Path]] | None = None) 
             desc_tracker.append((len(description), path))
 
 
+def check_exit_code_sync(script: Path, readme: Path) -> None:
+    """CLAUDE.md: the exit-code contract lives in four places that must stay
+    in sync. This pins the machine-checkable pair — the script's constants and
+    module docstring against the README's exit-code list. The skills' fallback
+    wording is covered by the prose tests."""
+    src = script.read_text(encoding="utf-8-sig")
+    doc = re.search(r"Exit codes:(.*?)\"\"\"", src, re.DOTALL)
+    if not doc:
+        fail(script, "module docstring lost its 'Exit codes:' section")
+        return
+    doc_codes = {int(n) for n in re.findall(r"\b(\d+)\b", doc.group(1))}
+    const_codes = {int(n) for n in re.findall(r"(?m)^EXIT_[A-Z_]+ = (\d+)", src)}
+    missing_in_doc = sorted(const_codes - doc_codes)
+    if missing_in_doc:
+        fail(script, f"exit codes missing from the module docstring: {missing_in_doc}")
+        return
+    readme_text = readme.read_text(encoding="utf-8-sig")
+    para = re.search(r"Exit codes:(.*?)\n\r?\n", readme_text, re.DOTALL)
+    if not para:
+        fail(readme, "README lost its 'Exit codes:' list")
+        return
+    readme_codes = {int(n) for n in re.findall(r"`(\d+)`", para.group(1))}
+    missing = sorted(doc_codes - readme_codes)
+    if missing:
+        fail(readme, f"exit codes missing from the README list: {missing}")
+        return
+    ok(readme, "exit codes in sync with the script")
+
+
 def main() -> int:
     check_json(ROOT / ".claude-plugin" / "plugin.json", ["name", "version", "description"])
     check_json(ROOT / ".claude-plugin" / "marketplace.json", ["name", "owner", "plugins"])
@@ -178,6 +207,10 @@ def main() -> int:
             ok(core, "compiles")
         except py_compile.PyCompileError as exc:
             fail(core, f"does not compile: {exc}")
+
+    readme = ROOT / "README.md"
+    if core.exists() and readme.exists():
+        check_exit_code_sync(core, readme)
 
     # Check total catalog budget
     total_desc = sum(length for length, _ in desc_tracker)

@@ -1277,6 +1277,14 @@ class OllamaAskTests(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("ceiling", err.lower())
 
+    def test_summarize_negative_tail_is_usage_error(self):
+        """A negative --tail must be rejected as usage, not silently invert
+        into 'drop the first N lines' via lines[-args.tail:]."""
+        code, _, err = self.run_stdin("a\nb\nc\n", "summarize",
+                                      "--kind", "log", "--tail", "-500")
+        self.assertEqual(code, 2, msg=err)
+        self.assertIn("--tail", err)
+
     def test_summarize_ceiling_force_allows(self):
         code, out, err = self.run_stdin("x" * 500, "summarize",
                                         "--ceiling-chars", "100", "--force")
@@ -1590,6 +1598,24 @@ class OllamaAskTests(unittest.TestCase):
                     "scripts/kind-up.sh"):
             self.assertFalse((ROOT / rel).exists(),
                              msg=f"{rel} should have been removed in 0.5.0")
+
+    # -- docs/contract sync --------------------------------------------------
+
+    def test_readme_exit_code_list_is_complete(self):
+        """CLAUDE.md: the exit-code contract stays in sync across four places;
+        the README list (the doc users actually read) must include every code,
+        including the two non-constant ones."""
+        text = (ROOT / "README.md").read_text(encoding="utf-8")
+        for needle in ("`1` unexpected", "`130` interrupted"):
+            self.assertIn(needle, text, msg=f"{needle!r} missing from README")
+
+    def test_ask_skill_documents_summarize_task_profile(self):
+        """build_parser, TASK_DEFAULTS, and the README all know 'summarize';
+        the base skill says undocumented flags do not exist, so omitting it
+        here steers big-input asks onto the wrong budgets."""
+        body = (ROOT / "skills" / "ollama-ask" / "SKILL.md").read_text(
+            encoding="utf-8")
+        self.assertIn("--task commit|shell|code|general|summarize", body)
 
     def test_commit_push_born_attached_branch_succeeds(self):
         # The common real-world shape the other commit-push tests miss: a

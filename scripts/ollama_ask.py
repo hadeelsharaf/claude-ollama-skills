@@ -1813,6 +1813,9 @@ def _reduce(notes, args, cfg, final_system, chunk_chars) -> str:
 
 
 def cmd_summarize(args, cfg: dict) -> int:
+    if args.tail < 0:
+        raise CliError(EXIT_USAGE,
+                       "--tail must be zero or a positive number of lines")
     text = _summarize_read(args)
     _USAGE_CTX["avoided_chars"] = len(text)   # raw input, before pre-filter
     lines = text.splitlines()
