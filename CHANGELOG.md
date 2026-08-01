@@ -5,6 +5,29 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ## [Unreleased]
 
+### Added
+- A project homepage at <https://hadeelsharaf.github.io/claude-ollama-skills/>,
+  built from `site/` — one hand-written `index.html` plus `style.css`, with no
+  build step and no dependencies, matching the rest of the repo. Deployed by
+  `.github/workflows/pages.yml`, which uploads the directory as-is and fails
+  the run if `package.json`/`Gemfile`/`_config.yml` ever appear under `site/`.
+  It triggers on push to `main`, not the default `draft` branch, so the public
+  page describes the version installed users actually have; that also means
+  homepage copy ships at release time, and the page's hard-coded version
+  string is now part of a release bump.
+- README hero block with an animated terminal (`assets/hero.svg`). Two rules
+  keep the card from ever rendering blank: every animated element carries its
+  final state as a plain attribute, so a SMIL-stripping renderer shows the
+  full transcript, and the animation itself starts on that completed frame —
+  it holds, clears, retypes, and lands back on it, making keyTime 0 and 1
+  identical. Caught by rendering it: the first version screenshotted empty.
+- The homepage leads with the privacy property rather than token savings, and
+  its "Honest limits" section repeats — with a link to the A/B data — that
+  four measured rounds show no reliable cloud-token saving for unattended
+  neutral-prompt sessions. The one figure it does headline (176x less text
+  into cloud context) is labelled as a single recorded ledger call, not an
+  average.
+
 ## [0.7.0] - 2026-08-01
 
 One combined release: 0.6.0 was prepared but never shipped (its release gate
