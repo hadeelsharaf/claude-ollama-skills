@@ -255,7 +255,7 @@ Every draft is an UNTRUSTED DRAFT until its tier's gate passes. The gates:
 | commit message (conventional + `--hint`) | script validation (exit 0) - used verbatim; one regenerate if it contradicts the hint |
 | shell / docker command | script classifier: deny -> refused (exit 6); `classification: read-only` -> run without review; else full review |
 | code / lint fix | a test you wrote first + green suite after applying |
-| log / git digest | `coverage:` line clean + at most two probe commands |
+| log / git digest | `coverage:` line clean + at most three probe commands |
 | PR description | small changesets only (exit 2 gates size); reviewed against commit subjects + shortstat; PRs open as drafts and `--ready` needs the user's explicit words |
 | plain `ask` / plain commit style | always reviewed - these are the flexible escape hatches |
 

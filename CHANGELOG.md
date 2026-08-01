@@ -52,7 +52,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
   records draft fates in the usage ledger (counts only).
 - Skills and agents encode the tiers as canonical pinned sentences:
   conventional hinted commit drafts are used verbatim on exit 0, digests are
-  judged against the coverage line plus at most two probes, code drafts are
+  judged against the coverage line plus at most three probes, code drafts are
   test-gated, and read-only classified commands run without review.
 
 ## [0.5.0] - 2026-07-31
