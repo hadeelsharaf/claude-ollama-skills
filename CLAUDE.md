@@ -158,6 +158,16 @@ SECURITY (threat model), ADVANCED (fully-offline options, per-hardware budget ad
 RESEARCH, and skill-tests (RED→GREEN skill probes; note that Scenarios A–E are *predicted*
 reasoning outcomes, only F was run live).
 
+`site/` is the public homepage — one hand-written `index.html` plus `style.css`, **no
+build step and no dependencies**, same as the rest of the repo; `.github/workflows/pages.yml`
+uploads the directory as-is. It deploys on push to **`main`** (not the default `draft`
+branch) so the public page describes the version installed users actually have, which
+means homepage copy ships at release time, not on merge to draft. `assets/hero.svg` is the
+README's animated banner; every animated element there carries its final state as a plain
+attribute and animates *from* zero, so a renderer that strips SMIL still shows the whole
+frame — preserve that when editing it. Version numbers and measured claims appear in
+`site/index.html` too, so a release bump touches it alongside `plugin.json`.
+
 `docs/PLAN.md` and `docs/PLAN-v0.2.md` are **gitignored internal planning docs** — they may
 exist on a given machine but are not part of the repo, so never link to them from shipped
 docs. `docs/superpowers/` (specs, plans, benchmark notes) is likewise local-only — gitignored, kept on disk, never linked from shipped docs.

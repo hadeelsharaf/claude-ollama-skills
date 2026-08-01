@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 360" width="760" height="360" role="img" aria-labelledby="t d">
+  <title id="t">ollama-skills: your diff never leaves this machine</title>
+  <desc id="d">A terminal showing a 9,184-character staged diff sent to localhost:11434 and 0 characters sent to cloud context. The local model returns the commit message "feat(api): add retry helper". Claude reviewed 52 characters, not 9,184.</desc>
+
+  <!-- Two rules keep this card from ever rendering blank:
+       1. Every animated element carries its FINAL state as a plain attribute,
+          so a renderer that strips SMIL shows the complete transcript.
+       2. The animation itself STARTS on that same completed frame — it holds
+          ~6s, clears, retypes, and lands back on it at keyTime 1. So t=0 and
+          t=1 are identical (seamless loop) and a screenshot taken at t=0 shows
+          the whole transcript rather than an empty terminal. -->
+
+  <defs>
+    <clipPath id="card">
+      <rect x="8" y="8" width="744" height="344" rx="11"/>
+    </clipPath>
+    <clipPath id="typing">
+      <rect x="44" y="74" width="305" height="30">
+        <animate attributeName="width"
+                 values="305;305;0;0;305;305"
+                 keyTimes="0;0.55;0.58;0.60;0.68;1"
+                 dur="11s" repeatCount="indefinite"/>
+      </rect>
+    </clipPath>
+    <linearGradient id="glow" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1F6FEB" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#1F6FEB" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="760" height="360" fill="#0D1117"/>
+  <rect x="8" y="8" width="744" height="344" rx="11" fill="#161B22"/>
+
+  <g clip-path="url(#card)">
+    <rect x="8" y="8" width="744" height="150" fill="url(#glow)"/>
+    <rect x="8" y="8" width="744" height="38" fill="#1C2128"/>
+    <rect x="8" y="45" width="744" height="1" fill="#30363D"/>
+  </g>
+
+  <circle cx="30" cy="27" r="5.5" fill="#FF5F56"/>
+  <circle cx="50" cy="27" r="5.5" fill="#FFBD2E"/>
+  <circle cx="70" cy="27" r="5.5" fill="#27C93F"/>
+
+  <g font-family="ui-monospace, SFMono-Regular, Consolas, Menlo, monospace">
+
+    <text x="90" y="31" font-size="12.5" fill="#7D8590">ollama-skills — local delegation</text>
+
+    <!-- line 1: the typed prompt -->
+    <text x="30" y="94" font-size="15" fill="#4FC1FF">$</text>
+    <g clip-path="url(#typing)">
+      <text x="48" y="94" font-size="15" fill="#E6EDF3">claude "commit my staged changes"</text>
+    </g>
+    <rect x="353" y="80" width="9" height="19" fill="#4FC1FF">
+      <animate attributeName="x"
+               values="353;353;48;48;353;353"
+               keyTimes="0;0.55;0.58;0.60;0.68;1"
+               dur="11s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="1;0;1" dur="1.05s"
+               calcMode="discrete" repeatCount="indefinite"/>
+    </rect>
+
+    <!-- line 2: the local read -->
+    <g opacity="1">
+      <animate attributeName="opacity" values="1;1;0;0;1;1"
+               keyTimes="0;0.55;0.58;0.72;0.75;1"
+               dur="11s" repeatCount="indefinite"/>
+      <text x="44" y="142" font-size="15" fill="#7D8590">▸ git diff --cached</text>
+      <text x="712" y="142" font-size="15" fill="#E6EDF3" text-anchor="end">9,184 chars</text>
+    </g>
+
+    <!-- line 3: where it went -->
+    <g opacity="1">
+      <animate attributeName="opacity" values="1;1;0;0;1;1"
+               keyTimes="0;0.55;0.58;0.76;0.79;1"
+               dur="11s" repeatCount="indefinite"/>
+      <text x="76" y="174" font-size="15" fill="#7D8590">→ localhost:11434</text>
+      <text x="712" y="174" font-size="15" fill="#4FC1FF" text-anchor="end">[ local ]</text>
+    </g>
+
+    <!-- line 4: what the cloud saw -->
+    <g opacity="1">
+      <animate attributeName="opacity" values="1;1;0;0;1;1"
+               keyTimes="0;0.55;0.58;0.80;0.83;1"
+               dur="11s" repeatCount="indefinite"/>
+      <text x="76" y="206" font-size="15" fill="#7D8590">→ cloud context</text>
+      <text x="712" y="206" font-size="15" fill="#4FC1FF" text-anchor="end" xml:space="preserve">[   0   ]</text>
+    </g>
+
+    <!-- line 5: the draft coming back -->
+    <g opacity="1">
+      <animate attributeName="opacity" values="1;1;0;0;1;1"
+               keyTimes="0;0.55;0.58;0.85;0.88;1"
+               dur="11s" repeatCount="indefinite"/>
+      <text x="44" y="254" font-size="15" fill="#7D8590">←</text>
+      <text x="68" y="254" font-size="15" fill="#E6EDF3">feat(api): add retry helper</text>
+    </g>
+
+    <!-- line 6: the point -->
+    <g opacity="1">
+      <animate attributeName="opacity" values="1;1;0;0;1;1"
+               keyTimes="0;0.55;0.58;0.90;0.93;1"
+               dur="11s" repeatCount="indefinite"/>
+      <text x="44" y="302" font-size="15" fill="#3FB950">✓ Claude reviewed 52 chars, not 9,184.</text>
+    </g>
+
+  </g>
+</svg>

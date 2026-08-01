@@ -1,4 +1,32 @@
-# claude-ollama-skills
+<div align="center">
+
+<img src="assets/hero.svg" width="760"
+     alt="Terminal: a 9,184-character staged diff goes to localhost:11434 while 0 characters go to cloud context; the local model returns 'feat(api): add retry helper'; Claude reviewed 52 chars, not 9,184.">
+
+# Your diff never leaves this machine.
+
+**A Claude Code plugin that hands mechanical subtasks to a local Ollama model.**<br>
+Commit messages, PR descriptions, shell drafts, small code, log digests —<br>
+Claude plans and reviews; your local model drafts.
+
+[![version](https://img.shields.io/badge/version-0.7.0-1F6FEB?style=flat-square&labelColor=0D1117)](CHANGELOG.md)
+[![license](https://img.shields.io/badge/license-MIT-1F6FEB?style=flat-square&labelColor=0D1117)](LICENSE)
+[![python](https://img.shields.io/badge/python-3.9%2B-1F6FEB?style=flat-square&labelColor=0D1117)](https://www.python.org/)
+[![dependencies](https://img.shields.io/badge/dependencies-none-1F6FEB?style=flat-square&labelColor=0D1117)](#requirements)
+[![ci](https://img.shields.io/github/actions/workflow/status/hadeelsharaf/claude-ollama-skills/ci.yml?branch=main&style=flat-square&labelColor=0D1117&color=1F6FEB)](../../actions/workflows/ci.yml)
+
+**[Homepage](https://hadeelsharaf.github.io/claude-ollama-skills)** ·
+[Install](#install) · [Everyday use](#everyday-use) ·
+[Measurements](#measured-honestly-an-ab-experiment) · [Security](docs/SECURITY.md)
+
+</div>
+
+```
+/plugin marketplace add hadeelsharaf/claude-ollama-skills
+/plugin install ollama-skills@claude-ollama-skills
+```
+
+---
 
 Claude Code skills and agents that hand small tasks to a **local Ollama model**:
 commit messages, pre-commit fixes, simple shell chores, and small code drafts.
@@ -567,7 +595,10 @@ benchmarks/        A/B token-consumption runner (paid, opt-in, never in CI);
                    measure_catalog.py (free, stdlib, safe anywhere)
 evals/             claude plugin eval quality cases (paid, opt-in, never in CI)
 docs/              DESIGN, RESEARCH, ADVANCED, SECURITY, skill-tests
-.github/workflows  CI: unit tests (Ubuntu+Windows), validation, opt-in e2e
+site/              homepage: hand-written HTML + CSS, no build step
+assets/            hero.svg used by this README
+.github/workflows  CI: unit tests (Ubuntu+Windows), validation, opt-in e2e;
+                   pages: deploys site/ from main
 ```
 
 ## Development
