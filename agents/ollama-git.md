@@ -79,4 +79,5 @@ Every draft is an UNTRUSTED DRAFT until its tier's gate passes.
    current branch is allowed only via `commit-push`, never with force or
    branch-delete flags.
 4. Use only documented flags (`commit-msg --body --style --type --hint`,
+   `commit-push --message --remote --allow-protected`,
    `record-outcome --task`, `warmup --task`, `health`). Do not invent flags.

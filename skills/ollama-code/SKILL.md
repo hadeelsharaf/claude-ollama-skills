@@ -26,15 +26,21 @@ Use `python` on Windows, `python3` on macOS/Linux.
    `python "$SCRIPT" draft-code --spec-file <tempfile> --lang python`
    (`--lang javascript` also gets a syntax check when node is installed).
    Do not use `--out`: you review first, then place the code yourself (step 5).
-3. Review the draft line by line:
-   - Does it do exactly what the spec says? Edge cases handled?
-   - No secrets, no network calls, no file deletions the spec did not ask for.
-   - Style matches the surrounding project.
-4. Fix small problems yourself.
-5. Place the code with Write/Edit, run the project's quick check
-   (tests, linter, or at least import/compile).
-6. Tell the user what the local model drafted and what you changed. When the
-   draft's fate is decided, record it:
+3. **Apply/review gate.**
+   - A test you wrote yourself already covers this change: apply the draft
+     unread with Write/Edit, then run the suite. Green = done. Red = review
+     the draft line by line (below) or write the code yourself.
+   - No such test exists yet: write the failing test first, then apply and
+     run the suite the same way — or, when a test is not practical here,
+     review the draft line by line right now:
+     - Does it do exactly what the spec says? Edge cases handled?
+     - No secrets, no network calls, no file deletions the spec did not ask for.
+     - Style matches the surrounding project.
+4. Fix small problems yourself when you reviewed line by line.
+5. Place the code with Write/Edit (if not already placed above), run the
+   project's quick check (tests, linter, or at least import/compile).
+6. Tell the user what the local model drafted — and whether a test verified it
+   unread, or you reviewed and changed it. When the draft's fate is decided, record it:
    `python "$SCRIPT" record-outcome <used-as-is|edited|replaced|model-failed> --task code`.
 
 ## Rules (do not skip)

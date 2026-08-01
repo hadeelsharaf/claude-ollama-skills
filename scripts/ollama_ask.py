@@ -1357,6 +1357,12 @@ DENY_PATTERNS = [
     "docker container prune", "docker builder prune",
     "docker rm -f", "docker rmi -f", "docker compose down -v",
     "--privileged", "--pid=host", "--network=host", "--cap-add=ALL",
+    # Secret/credential reads and env dumps -- never auto-runnable, even
+    # though their leading verb (cat, Get-ChildItem) also reads harmless
+    # files. Final-review CRITICAL 1: these five must each appear verbatim
+    # in skills/ollama-shell/SKILL.md's secret-read deny line (test-enforced
+    # below, same as every other pattern in this list).
+    ".ssh", ".aws", ".env", "printenv", "Get-ChildItem Env:",
 ]
 
 # Precompiled once: (pattern, word-bounded case-insensitive regex). The
@@ -1374,15 +1380,25 @@ _DENY_RES = [
 # harmless but `-f`/`-m`/`--set-upstream-to` rewrite refs, and this list
 # only gates on the leading verb, not the flags. `git status`/`git log`
 # already cover the read need.
+# NOTE (final-review CRITICAL 1): `cat`, `Get-Content`, and `Get-Item` are
+# NOT here — each can read a secret file (`~/.ssh/id_rsa`, `.env`,
+# credential stores) just as easily as a harmless one, and this list has no
+# way to tell those apart from the leading verb alone. Bare `git diff` /
+# `git show` are NOT here either — they print full patch content, which can
+# be exactly the private code a diff/show is being drafted to check. Only
+# their summarizing, non-patch forms are allow-listed below (multi-word, so
+# `git diff --cached` does not match and falls to review).
 READONLY_ALLOW = [
     "ls", "dir", "pwd", "wc", "du", "df", "head", "tail", "grep",
     "findstr", "sort", "uniq", "cut", "tr", "file", "stat", "which",
-    "whoami", "date", "uname", "cat",
-    "git status", "git log", "git diff", "git show",
+    "whoami", "date", "uname",
+    "git status", "git log",
+    "git diff --stat", "git diff --name-only", "git diff --shortstat",
+    "git show --stat",
     "git remote -v", "docker ps", "docker images", "docker logs",
     "docker inspect", "docker version", "docker info",
     "ollama list", "ollama ps",
-    "Get-ChildItem", "Get-Item", "Get-Content", "Get-Command",
+    "Get-ChildItem", "Get-Command",
     "Select-String", "Select-Object", "Measure-Object", "Where-Object",
 ]
 
@@ -1396,7 +1412,16 @@ READONLY_ALLOW = [
 # direction, since review is already today's default outcome.
 _WRITE_FLAG_RE = re.compile(r"(?<!\S)(?:-o|-O|--output|--in-place)(?:=\S*)?(?!\S)",
                              re.IGNORECASE)
-_DISQUALIFIERS = (";", "&&", "||", ">", "`", "$(")
+# "&" alone also catches "&&" (it is a substring of it), so listing both
+# would be redundant; "<" is input redirection, same tier as ">" output
+# redirection. IMPORTANT 1 (final review).
+_DISQUALIFIERS = (";", "&", "||", ">", "<", "`", "$(")
+
+# A `git ...` segment carrying a word-bounded -p/--patch flag must never be
+# read-only, even though bare `git log` is: `git log -p` prints full code
+# patches, not just history facts. Bounded on both sides so it does not fire
+# on "--no-patch" or "--pretty=..." (CRITICAL 1, final review).
+_GIT_PATCH_FLAG_RE = re.compile(r"(?<!\S)(?:-p|--patch)(?!\S)")
 
 
 def classify_command(cmd: str) -> tuple:
@@ -1431,6 +1456,11 @@ def classify_command(cmd: str) -> tuple:
         if not seg:
             return ("review", None)
         seg_low = seg.lower()
+        # git log's own output can contain a full patch when -p/--patch is
+        # passed; check this before the allow-list membership test below,
+        # since "git log -p" would otherwise match "git log" and pass.
+        if seg_low.startswith("git ") and _GIT_PATCH_FLAG_RE.search(seg_low):
+            return ("review", None)
         if not any(seg_low == a.lower() or seg_low.startswith(a.lower() + " ")
                    for a in READONLY_ALLOW):
             return ("review", None)

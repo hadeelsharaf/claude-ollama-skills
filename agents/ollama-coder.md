@@ -25,12 +25,18 @@ Use `python` on Windows, `python3` on macOS/Linux.
    Too big or subtle → write it yourself and say so in the report.
 2. Write a precise spec (inputs, outputs, edge cases, language) to a temp file.
 3. `python "$SCRIPT" draft-code --spec-file <tempfile> --lang <language>`
-4. Review the draft line by line: matches the spec, edge cases, no secrets, no
+4. **Apply/review gate.** A test you wrote yourself already covers this
+   change: apply the draft unread with Write/Edit, run the suite — green =
+   done, red = review it line by line or write the code yourself. No such
+   test yet: write the failing test first and apply the same way, or review
+   the draft line by line: matches the spec, edge cases, no secrets, no
    network or file operations the spec did not ask for, fits project style.
-5. Fix small problems yourself. Place the code with Write/Edit.
+5. Fix small problems yourself when you reviewed line by line; place the code
+   with Write/Edit if not already placed above.
 6. Verify: run the project's quick check (test file, linter, or compile/import).
-7. Report (short): task → what the local model drafted → what you changed → how you
-   verified it → files touched. When the draft's fate is decided, record it:
+7. Report (short): task → what the local model drafted → what you changed (or
+   that a test verified it unread) → how you verified it → files touched. When
+   the draft's fate is decided, record it:
    `python "$SCRIPT" record-outcome <used-as-is|edited|replaced|model-failed> --task code`.
 
 ## Rules
