@@ -32,12 +32,6 @@ Use `python` on Windows, `python3` on macOS/Linux.
    named; too broad → rewrite it narrower yourself).
 4. Run it through the normal permission prompt. Never chain extra commands onto it.
 5. Report: the command, one-line explanation, and its real output (trimmed).
-   If you digested command output for the user: Judge the digest against the
-   coverage line: chunks processed must equal total and dropped must be 0.
-   Run at most two probe commands against the source to check the digest's
-   two most load-bearing claims. If coverage is incomplete or a probe
-   contradicts the digest, do the task yourself right away - never rebuild
-   the digest's content from the source.
 6. When the draft's fate is decided, record it:
    `python "$SCRIPT" record-outcome <used-as-is|edited|replaced|model-failed> --task shell`.
 
@@ -69,6 +63,6 @@ Every draft is an UNTRUSTED DRAFT until its tier's gate passes.
    subtly destructive while looking clean.
 2. Exit 3/4/5/6 → write the command yourself right away and tell the user in one
    line why the local model was skipped. One retry max.
-3. Use only documented flags (`draft-command --shell`, `warmup --task`, `health`).
-   Do not invent flags.
+3. Use only documented flags (`draft-command --shell`, `record-outcome --task`,
+   `warmup --task`, `health`). Do not invent flags.
 4. When unsure whether something is safe, ask instead of running it.

@@ -44,6 +44,6 @@ Every draft is an UNTRUSTED DRAFT until its tier's gate passes.
 2. Exit 3/4/5/6 from the script → write the code yourself right away and tell the
    user in one line why the local model was skipped. One retry max (after
    `python "$SCRIPT" warmup --task code`).
-3. Use only documented flags (`draft-code --spec-file --lang --out`, `warmup --task`,
-   `health`). Do not invent flags.
+3. Use only documented flags (`draft-code --spec-file --lang --out`,
+   `record-outcome --task`, `warmup --task`, `health`). Do not invent flags.
 4. Never touch files outside the task. Never run destructive shell commands.

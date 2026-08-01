@@ -78,5 +78,5 @@ Every draft is an UNTRUSTED DRAFT until its tier's gate passes.
    failure — fixing hooks is the ollama-precommit skill's job. A plain push to the
    current branch is allowed only via `commit-push`, never with force or
    branch-delete flags.
-4. Use only documented flags (`commit-msg --body --style --type --hint`, `warmup --task`,
-   `health`). Do not invent flags.
+4. Use only documented flags (`commit-msg --body --style --type --hint`,
+   `record-outcome --task`, `warmup --task`, `health`). Do not invent flags.

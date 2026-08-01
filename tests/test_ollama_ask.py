@@ -2543,8 +2543,9 @@ class TrustTierProseTests(unittest.TestCase):
                     "coverage is incomplete or a probe contradicts the "
                     "digest, do the task yourself right away - never "
                     "rebuild the digest's content from the source.")
-        for rel in ("skills/ollama-digest/SKILL.md", "skills/ollama-docker/SKILL.md",
-                    "agents/ollama-ops.md"):
+        # ollama-ops has no digest path (it only drafts/runs shell chores via
+        # draft-command) -- family 2 does not apply there; see fix round 1.
+        for rel in ("skills/ollama-digest/SKILL.md", "skills/ollama-docker/SKILL.md"):
             body = self._normalized(rel)
             self.assertIn(needle_a, body, msg=f"coverage sentence missing from {rel}")
             self.assertIn(needle_b, body, msg=f"probe sentence missing from {rel}")
