@@ -8,8 +8,9 @@ argument-hint: "<path or git range> [--kind log|text]"
 
 The bundled script reads the input locally (a file, or text piped over stdin),
 pre-filters noise, and asks the local model for a short digest. Your context
-never sees the raw text — that is the point. Do not defeat it by reading the
-input yourself.
+never sees the raw text wholesale — that is the point. Do not defeat it by
+reading the input yourself; your judge is the coverage line plus at most
+three probe commands (see the Rules).
 
 The loop is ground -> draft -> judge.
 
@@ -32,8 +33,8 @@ Use `python` on Windows, `python3` on macOS/Linux.
      the ceiling and the user wants it all.
    - Log lines noisier than useful? Pre-filter and dedupe are on by default;
      `--no-dedupe` keeps repeats when counts matter.
-3. Judge the digest against cheap context only: the file's name and size, and
-   what the user said they expect to find. Then answer in your own words.
+3. Judge the digest per the Rules: the coverage line first, then at most
+   three probe commands. Then answer in your own words.
 
 **Privacy rule (file path):** the file body is exactly what you are delegating
 away — do not read the file yourself (no `cat`, `Get-Content`, `head`, `tail`,

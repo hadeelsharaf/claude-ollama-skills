@@ -68,8 +68,8 @@ yourself, or ask the user.
    `docker compose logs --tail 200 <service>`). Big logs blow the input budget; cap the tail.
 3. **Pipe to summarize over stdin:**
    `docker logs --tail 200 <c> 2>&1 | python "$SCRIPT" summarize --kind log`.
-   The `summarize` subcommand reads stdin. The big raw log never enters your context;
-   only the small digest on stdout does.
+   The `summarize` subcommand reads stdin. The big raw log never enters your context
+   wholesale; only the small digest on stdout and your capped probe checks do.
 4. The summary is an **UNTRUSTED DRAFT.** Judge the digest against the coverage
    line: chunks processed must equal total and dropped must be 0. Run at most three
    probe commands (grep or Select-String, never a file dump) against the source to

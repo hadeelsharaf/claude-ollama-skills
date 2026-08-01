@@ -8,7 +8,8 @@ worker.
 **Why:**
 
 - **Privacy** — your staged diff and code stay on your machine for delegated tasks.
-  Only the small drafted result enters Claude's context.
+  Only the small drafted result enters Claude's context (digests: plus at most
+  three targeted probe checks — never the raw input wholesale).
 - **Fewer cloud tokens** — bulk mechanical text work happens locally.
 - **Offline subtasks** — the drafting part works without cloud access.
 
@@ -109,7 +110,7 @@ Just ask Claude in plain words:
 | "pre-commit is failing, fix it" | `ollama-precommit` skill (deterministic fixers first) |
 | "zip the logs folder" | `ollama-shell` skill (drafted command + safety check + permission prompt) |
 | "write a small parser for X with the local model" | `ollama-code` skill (draft → line-by-line review) |
-| "summarize errors in app.log" / "what changed on this branch this week?" | `ollama-digest` skill (log file, text, or git range → local digest; Claude never reads the raw input) |
+| "summarize errors in app.log" / "what changed on this branch this week?" | `ollama-digest` skill (log file, text, or git range → local digest; Claude never reads the raw input wholesale — its judge is capped at three grep probes) |
 | "explain why this container keeps crashing" | `ollama-docker` skill (logs → local summarize, checked) |
 | "open a PR for this branch" | `ollama-pr` skill (local model drafts the description; created as a draft PR via gh/glab) |
 
@@ -419,7 +420,8 @@ summarize  with savings vs without: -17.5% (mean tokens, successful runs only)
   auto-accept -> gated commit-push -> `record-outcome used-as-is`.
 - **Audit, digest half: PARTIAL.** Neither delegating summarize session
   re-ran the digest or rebuilt it from the source (0.6.0's failure mode,
-  gone), but both exceeded the two-probe cap (3 and 4 targeted probes)
+  gone), but both exceeded the then-two-probe cap (3 and 4 targeted probes;
+  the shipped cap is three, set from exactly this data)
   and both recorded their digest as `replaced` — the draft informed the
   answer but did not stand as it. The bounded judge bent the curve; it
   did not fully hold.
@@ -486,9 +488,10 @@ This repo's own development ledger shows that picture: at publication time,
 47 delegated calls, ~36,700 real local tokens, roughly 33,000 cloud tokens
 avoided net — and counting, since every dogfooded commit (including the one
 that shipped this section) adds to it. Plus the part no token count
-captures: **the diff and log bodies never entered cloud context at all**.
-That privacy property, and full-coverage digests of files an unattended
-model would only sample, are the honest headline.
+captures: **the diff and log bodies never entered cloud context wholesale**
+— a digest's judge is capped at three grep probes, and commit diffs are
+never read at all. That privacy property, and full-coverage digests of
+files an unattended model would only sample, are the honest headline.
 
 ### Making local delegation cost-effective
 
