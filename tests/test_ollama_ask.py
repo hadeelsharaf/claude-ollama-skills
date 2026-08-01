@@ -2427,6 +2427,45 @@ class OllamaAskTests(unittest.TestCase):
                          {"commit": {"used-as-is": 1, "edited": 1}})
         self.assertNotIn("outcome", data["per_cmd"])
 
+    def test_stats_text_shows_draft_outcomes_section(self):
+        os.chdir(self._tmp)   # not a repo -> ledger falls back to HOME (= _tmp)
+        os.environ.pop("OLLAMA_SKILLS_NO_USAGE", None)
+        self.assertEqual(
+            self.run_cli("record-outcome", "used-as-is", "--task", "commit")[0], 0)
+        self.assertEqual(
+            self.run_cli("record-outcome", "edited", "--task", "commit")[0], 0)
+        code, out, err = self.run_cli("stats")
+        self.assertEqual(code, 0, msg=err)
+        self.assertIn("Draft outcomes:", out)
+        self.assertIn("commit: edited 1, used-as-is 1", out)
+
+    def test_stats_text_omits_draft_outcomes_section_without_outcome_rows(self):
+        self._write_stats_fixture()   # fixture has no outcome rows
+        code, out, err = self.run_cli("stats")
+        self.assertEqual(code, 0, msg=err)
+        self.assertNotIn("Draft outcomes:", out)
+
+    def test_stats_outcome_missing_keys_str_wrapped_no_crash(self):
+        """A synthetic outcome row missing task/verdict must not raise
+        (sorted() would TypeError on real None mixed with str) - the str()
+        wrapper turns missing keys into the literal "None" instead."""
+        os.chdir(self._tmp)
+        path = Path(self._tmp) / "usage.jsonl"
+        ts = ollama_ask.datetime.now(ollama_ask.timezone.utc).isoformat(
+            timespec="seconds")
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps({"v": 1, "ts": ts, "cmd": "outcome"}) + "\n")
+        (Path(self._tmp) / ".ollama-skills.json").write_text(
+            json.dumps({"usage_log_path": str(path)}), encoding="utf-8")
+        code, out, err = self.run_cli("stats", "--json")
+        self.assertEqual(code, 0, msg=err)
+        data = json.loads(out)
+        self.assertEqual(data["outcomes"], {"None": {"None": 1}})
+        code2, out2, err2 = self.run_cli("stats")
+        self.assertEqual(code2, 0, msg=err2)
+        self.assertIn("Draft outcomes:", out2)
+        self.assertIn("None: None 1", out2)
+
     def test_pr_skill_safety_wording_present(self):
         # A silent reword dropping draft-by-default or the deny-list would
         # defeat ollama-pr's safety story - pin the load-bearing wording as
