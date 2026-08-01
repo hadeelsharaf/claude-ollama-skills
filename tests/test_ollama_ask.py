@@ -1894,6 +1894,67 @@ class OllamaAskTests(unittest.TestCase):
             self.assertIn("--hint", text, msg=rel)
             self.assertIn("omit both", text, msg=rel)
 
+    # -- run_git locale-safe env override (pr-desc size gate) -----------------
+
+    def _spy_subprocess_run(self, matcher):
+        """Wrap ollama_ask.subprocess.run, recording the `env` kwarg of any
+        call whose argv satisfies `matcher`, while still delegating to the
+        real subprocess.run so the surrounding command completes normally.
+        Returns the list the caller should inspect after restoring."""
+        captured = []
+        orig_run = ollama_ask.subprocess.run
+
+        def spy(*args, **kwargs):
+            if args and matcher(args[0]):
+                captured.append(kwargs.get("env"))
+            return orig_run(*args, **kwargs)
+
+        ollama_ask.subprocess.run = spy
+        self.addCleanup(setattr, ollama_ask.subprocess, "run", orig_run)
+        return captured
+
+    def test_run_git_env_override_merges_over_os_environ(self):
+        """_run_git's optional `env` kwarg (introduced for the pr-desc
+        locale fix) must be LAYERED on top of the full process environment,
+        never replace it -- otherwise PATH and everything else git needs
+        would vanish for that call."""
+        captured = self._spy_subprocess_run(lambda argv: argv[:2] == ["git", "--version"])
+        ollama_ask._run_git(["--version"], env={"LC_ALL": "C", "LANGUAGE": "C"})
+        self.assertEqual(len(captured), 1)
+        env = captured[0]
+        self.assertIsNotNone(env)
+        self.assertEqual(env.get("LC_ALL"), "C")
+        self.assertEqual(env.get("LANGUAGE"), "C")
+        # Layered, not replaced: a key only present in the real environment
+        # (set by this test's own setUp) must have survived the merge.
+        self.assertEqual(env.get("OLLAMA_HOST"), os.environ["OLLAMA_HOST"])
+
+    def test_run_git_no_env_arg_omits_env_kwarg_entirely(self):
+        """Every OTHER git call in the file must see today's exact behavior:
+        no `env` kwarg reaches subprocess.run at all when the caller doesn't
+        opt in, so this stays a surgical, pure opt-in extension."""
+        captured = self._spy_subprocess_run(lambda argv: argv[:2] == ["git", "--version"])
+        ollama_ask._run_git(["--version"])
+        self.assertEqual(len(captured), 1)
+        self.assertIsNone(captured[0])
+
+    def test_pr_desc_shortstat_call_forces_c_locale(self):
+        """The one git call cmd_pr_desc's size gate depends on must force
+        LC_ALL=C / LANGUAGE=C: git's shortstat wording ('files changed',
+        'insertions(+)', 'deletions(-)') is gettext-translated, and on a
+        non-English git locale the gate's regexes would silently match
+        nothing -- reading 0 files / 0 lines and never refusing, regardless
+        of how large the real changeset is."""
+        self._make_pr_repo()
+        captured = self._spy_subprocess_run(lambda argv: "--shortstat" in argv)
+        code, out, err = self.run_cli("pr-desc")
+        self.assertEqual(code, 0, msg=err)
+        self.assertEqual(len(captured), 1)
+        env = captured[0]
+        self.assertIsNotNone(env)
+        self.assertEqual(env.get("LC_ALL"), "C")
+        self.assertEqual(env.get("LANGUAGE"), "C")
+
     # -- pr-desc --------------------------------------------------------------
 
     def test_pr_desc_returns_valid_json(self):
@@ -1965,6 +2026,52 @@ class OllamaAskTests(unittest.TestCase):
         self.assertEqual(code, 0, msg=err)
         data = json.loads(out)
         self.assertTrue(data["title"])
+
+    def test_pr_desc_changeset_over_line_threshold_by_one_trips(self):
+        """PR_DESC_MAX_LINES + 1 changed lines must trip the gate. Pins the
+        strict '>' boundary explicitly from the tripping side (600 passes
+        above, 601 trips here) instead of relying on the 600-pass/701-trip
+        tests to imply it only in combination."""
+        work = self._make_pr_repo()
+        # two.txt already contributes 1 insertion; add 600 more for 601.
+        content = "\n".join(f"line{i}" for i in range(600)) + "\n"
+        (work / "big.txt").write_text(content, encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=work, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "feat: add lines"],
+                       cwd=work, check=True)
+        shortstat = subprocess.run(
+            ["git", "diff", "--shortstat", "main...HEAD"], cwd=work,
+            capture_output=True, text=True, check=True).stdout
+        self.assertIn("601 insertions", shortstat)  # pin the fixture's math
+        FakeOllamaHandler.generate_calls = 0
+        code, out, err = self.run_cli("pr-desc")
+        self.assertEqual(code, 2, msg=err)
+        self.assertIn("changeset too large for a local draft", err)
+        self.assertEqual(FakeOllamaHandler.generate_calls, 0)
+
+    def test_pr_desc_oversized_file_count_exits_2_no_model_call(self):
+        """>PR_DESC_MAX_FILES changed files must also trip the gate,
+        independent of total line count: each added file here is a single
+        line, far under the 600-line threshold, so only n_files can be
+        responsible. Covers a branch a swapped/miscounted constant would
+        otherwise regress silently."""
+        work = self._make_pr_repo()
+        for i in range(21):
+            (work / f"f{i}.txt").write_text(f"line{i}\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=work, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "feat: add many files"],
+                       cwd=work, check=True)
+        shortstat = subprocess.run(
+            ["git", "diff", "--shortstat", "main...HEAD"], cwd=work,
+            capture_output=True, text=True, check=True).stdout
+        self.assertIn("22 files changed", shortstat)   # two.txt + 21 new
+        self.assertIn("22 insertions", shortstat)       # 1 line each, well
+                                                         # under the 600 cap
+        FakeOllamaHandler.generate_calls = 0
+        code, out, err = self.run_cli("pr-desc")
+        self.assertEqual(code, 2, msg=err)
+        self.assertIn("changeset too large for a local draft", err)
+        self.assertEqual(FakeOllamaHandler.generate_calls, 0)
 
     # -- pr-create --------------------------------------------------------
 

@@ -527,25 +527,36 @@ def gb(num_bytes) -> str:
     return f"{num_bytes / 1e9:.1f} GB"
 
 
-def _run_git(cmd_args) -> subprocess.CompletedProcess:
+def _run_git(cmd_args, env=None) -> subprocess.CompletedProcess:
     """Run git and return the raw CompletedProcess (caller inspects returncode).
 
     The one subprocess shape every git call in this file goes through, whether
     it wants a checked stdout string (run_git) or the raw returncode/stderr
     (cmd_commit_push, which must react to non-error returncodes like the 1
     that `diff --cached --quiet` uses to mean "changes present").
+
+    `env`, when given, is a pure opt-in: it is layered on top of the full
+    process environment (never replaces it, so PATH etc. still resolve) and
+    only affects this one call. Every other caller keeps today's behavior
+    exactly -- passing no `env` kwarg to subprocess.run at all. Introduced
+    for cmd_pr_desc's shortstat call, which must force the C locale so
+    gettext-translated shortstat wording ("files changed", "insertions(+)")
+    on a non-English git locale can never silently defeat the size gate.
     """
+    kwargs = {}
+    if env is not None:
+        kwargs["env"] = {**os.environ, **env}
     try:
         return subprocess.run(
             ["git"] + cmd_args, capture_output=True, text=True,
-            encoding="utf-8", errors="replace",
+            encoding="utf-8", errors="replace", **kwargs,
         )
     except FileNotFoundError:
         raise CliError(EXIT_USAGE, "git is not installed or not on PATH.")
 
 
-def run_git(cmd_args, check=True) -> str:
-    result = _run_git(cmd_args)
+def run_git(cmd_args, check=True, env=None) -> str:
+    result = _run_git(cmd_args, env=env)
     if check and result.returncode != 0:
         raise CliError(EXIT_USAGE, f"git {' '.join(cmd_args)} failed: {result.stderr.strip()}")
     return result.stdout
@@ -1602,8 +1613,13 @@ def cmd_pr_desc(args, cfg: dict) -> int:
         raise CliError(EXIT_USAGE,
                        f"No commits over '{base}' - nothing to describe. "
                        "Commit first, or pass a different --base.")
+    # Force the C locale for this one call: git's shortstat wording ("files
+    # changed", "insertions(+)", "deletions(-)") is gettext-translated, and
+    # on a non-English git locale the regexes below would silently match
+    # nothing, read n_files/n_lines as 0, and never trip the size gate.
     shortstat = run_git(["diff", "--shortstat", f"{base}...HEAD"],
-                        check=False).strip()
+                        check=False,
+                        env={"LC_ALL": "C", "LANGUAGE": "C"}).strip()
     m_files = re.search(r"(\d+) files? changed", shortstat or "")
     m_ins = re.search(r"(\d+) insertions?", shortstat or "")
     m_del = re.search(r"(\d+) deletions?", shortstat or "")
