@@ -42,6 +42,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 ### Added
 - `tests/test_validate_repo.py` — pins the description-cap and catalog-budget
   failure paths, including that validator output stays ASCII.
+- Trust tiers: every drafting path now has an explicit gate. `draft-command`
+  gains a script-side classifier (deny-list refusal on exit 6, read-only
+  drafts marked `classification: read-only` on stderr); `summarize` prints a
+  counts-only `coverage:` line and writes fragment-style chunk notes with a
+  120-token map budget (was 80, which truncated every note); `pr-desc`
+  refuses oversized changesets (exit 2); plain `ask` and plain commit style
+  gain a minimal length/non-empty judge; new `record-outcome` subcommand
+  records draft fates in the usage ledger (counts only).
+- Skills and agents encode the tiers as canonical pinned sentences:
+  conventional hinted commit drafts are used verbatim on exit 0, digests are
+  judged against the coverage line plus at most two probes, code drafts are
+  test-gated, and read-only classified commands run without review.
 
 ## [0.5.0] - 2026-07-31
 

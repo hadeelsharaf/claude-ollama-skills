@@ -246,6 +246,22 @@ Opt out any time: `OLLAMA_SKILLS_NO_USAGE=1` (env) or `"usage_log": false`
 (config). Move the file with `"usage_log_path": "<path>"` — note a custom path
 is not auto-added to `.git/info/exclude`, so add it to your own ignore rules.
 
+### Trust tiers
+
+Every draft is an UNTRUSTED DRAFT until its tier's gate passes. The gates:
+
+| Path | Gate before a draft is used |
+|---|---|
+| commit message (conventional + `--hint`) | script validation (exit 0) - used verbatim; one regenerate if it contradicts the hint |
+| shell / docker command | script classifier: deny -> refused (exit 6); `classification: read-only` -> run without review; else full review |
+| code / lint fix | a test you wrote first + green suite after applying |
+| log / git digest | `coverage:` line clean + at most two probe commands |
+| PR description | small changesets only (exit 2 gates size); draft PRs auto-accept, `--ready` requires review |
+| plain `ask` / plain commit style | always reviewed - these are the flexible escape hatches |
+
+The exit-code contract is unchanged. Draft fates are recorded (counts only)
+with `record-outcome <used-as-is|edited|replaced|model-failed> --task <task>`.
+
 ### Measured, honestly: an A/B experiment
 
 We ran the same two tasks (commit a staged multi-file change; summarize a

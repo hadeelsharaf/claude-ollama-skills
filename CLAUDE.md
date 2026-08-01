@@ -119,6 +119,12 @@ models --json` prints the resolved model and its source for every task.
   names; ledger writes are best-effort and must never break a command.
 - Nothing may bypass Claude Code's permission prompts.
 - Conventional Commits for this repo's own history; every behavior change gets a test.
+- **Trust tiers are enforced, not aspirational.** `draft-command` refuses
+  deny-list matches (exit 6) and marks read-only drafts on stderr;
+  `summarize` prints a counts-only `coverage:` line; `pr-desc` refuses
+  oversized changesets (exit 2); `record-outcome` writes counts-only verdict
+  rows. The canonical tier sentences in skills/agents are pin-tested -
+  rewording them is a test-touching change, by design.
 
 ## Cross-platform details worth knowing
 
