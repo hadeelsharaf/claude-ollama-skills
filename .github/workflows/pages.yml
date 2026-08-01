@@ -1,0 +1,60 @@
+name: pages
+
+# Deploys the static homepage in site/ to GitHub Pages.
+#
+# Trigger is `main`, not the default branch (`draft`), on purpose: the public
+# page should describe the version installed users actually have, which is what
+# `main` carries. Use workflow_dispatch to preview any branch before release.
+#
+# No build step and no dependency install — site/ is hand-written HTML + CSS and
+# is uploaded as-is, matching the rest of this repo's stdlib-only ethos.
+#
+# ONE-TIME MANUAL SETUP: repo Settings -> Pages -> Source: "GitHub Actions".
+# The first run fails without it.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two deploys race; let an in-flight one finish rather than cancelling.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify the site is self-contained
+        run: |
+          test -f site/index.html || { echo "site/index.html missing"; exit 1; }
+          test -f site/style.css  || { echo "site/style.css missing"; exit 1; }
+          # No build tooling should ever creep in here.
+          for f in package.json Gemfile _config.yml; do
+            if [ -e "site/$f" ]; then
+              echo "site/$f present - the homepage must stay build-free"; exit 1
+            fi
+          done
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

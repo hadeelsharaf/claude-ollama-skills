@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ollama-skills — your diff never leaves this machine</title>
+<meta name="description" content="A Claude Code plugin that hands mechanical subtasks to a local Ollama model. Your staged diffs, log bodies and file contents stay on your machine; Claude reviews the short draft that comes back.">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230D1117'/><text x='16' y='23' font-family='monospace' font-size='19' fill='%234FC1FF' text-anchor='middle'>%3E_</text></svg>">
+
+<meta property="og:title" content="ollama-skills — your diff never leaves this machine">
+<meta property="og:description" content="A Claude Code plugin that hands mechanical subtasks to a local Ollama model. Claude plans and reviews; your local model drafts.">
+<meta property="og:type" content="website">
+</head>
+<body>
+
+<div class="wrap">
+
+  <!-- ============ HERO ============ -->
+  <section class="hero">
+    <p class="eyebrow">Claude Code plugin · v0.7.0</p>
+
+    <h1>Your diff never<br>leaves <span class="accent">this machine</span>.</h1>
+
+    <p class="lede">
+      <strong>ollama-skills</strong> hands the mechanical subtasks — commit messages, PR
+      descriptions, shell drafts, small code, log digests — to a <strong>local Ollama
+      model</strong>. Claude plans and reviews. Your local model drafts. The bulky private
+      input is read on your machine and never enters cloud context.
+    </p>
+
+    <ul class="chips">
+      <li class="chip"><b>8</b> skills</li>
+      <li class="chip"><b>3</b> background agents</li>
+      <li class="chip"><b>1</b> Python file, stdlib only</li>
+      <li class="chip"><b>0</b> dependencies to install</li>
+    </ul>
+
+    <div class="term" role="img"
+         aria-label="Terminal transcript: the user asks Claude to commit staged changes. A 9,184-character diff is sent to localhost:11434, with 0 characters going to cloud context. The local model returns the commit message 'feat(api): add retry helper'. Claude reviewed 52 characters, not 9,184.">
+      <div class="term-bar">
+        <span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span>
+        <span class="term-title">ollama-skills — local delegation</span>
+      </div>
+      <div class="term-body" aria-hidden="true">
+        <span class="term-line"><span class="prompt">$</span> <span class="cmd typed">claude "commit my staged changes"</span><span class="caret"></span></span>
+        <span class="term-line l1 gap"><span class="dim">  ▸ git diff --cached</span>                <span class="cmd">9,184 chars</span></span>
+        <span class="term-line l2"><span class="dim">      → localhost:11434</span>                <span class="blue">[ local ]</span></span>
+        <span class="term-line l3"><span class="dim">      → cloud context</span>                  <span class="blue">[   0   ]</span></span>
+        <span class="term-line l4 gap"><span class="dim">  ←</span> <span class="cmd">feat(api): add retry helper</span></span>
+        <span class="term-line l5 gap"><span class="ok">  ✓ Claude reviewed 52 chars, not 9,184.</span></span>
+      </div>
+    </div>
+
+    <div class="install">
+      <div class="iline"><span class="prompt">/</span><span class="c">plugin marketplace add hadeelsharaf/claude-ollama-skills</span></div>
+      <div class="iline"><span class="prompt">/</span><span class="c">plugin install ollama-skills@claude-ollama-skills</span></div>
+    </div>
+
+    <p class="hero-links">
+      <a href="https://github.com/hadeelsharaf/claude-ollama-skills">GitHub</a>
+      <span class="sep">·</span>
+      <a href="https://github.com/hadeelsharaf/claude-ollama-skills#readme">Docs</a>
+      <span class="sep">·</span>
+      <a href="https://github.com/hadeelsharaf/claude-ollama-skills/blob/main/docs/SECURITY.md">Threat model</a>
+      <span class="sep">·</span>
+      <a href="https://github.com/hadeelsharaf/claude-ollama-skills/blob/main/LICENSE">MIT</a>
+    </p>
+  </section>
+
+  <!-- ============ PROOF ============ -->
+  <section>
+    <p class="eyebrow">What it keeps off the wire</p>
+
+    <div class="figure-row">
+      <span class="hero-figure">176×</span>
+      <span class="hero-figure-label">less text reached cloud context on a single recorded commit.</span>
+    </div>
+
+    <p class="figure-note">
+      From one real line of this repo's own usage ledger: the local model read a
+      9,184-character staged diff and returned a 52-character commit message.
+      That is one call, not an average — the ledger records counts only, and you
+      can read yours with <code>ollama_ask.py stats</code>.
+    </p>
+
+    <ul class="stats">
+      <li class="stat">
+        <span class="stat-value">9,184</span>
+        <span class="stat-label">characters of diff read locally, on your machine</span>
+      </li>
+      <li class="stat">
+        <span class="stat-value">52</span>
+        <span class="stat-label">characters Claude actually read back</span>
+      </li>
+      <li class="stat">
+        <span class="stat-value">0</span>
+        <span class="stat-label">lines of diff body in cloud context — Claude sees <code>--stat</code> only</span>
+      </li>
+    </ul>
+  </section>
+
+  <!-- ============ CARDS ============ -->
+  <section>
+    <p class="eyebrow">Why it is built this way</p>
+
+    <ul class="cards">
+      <li class="card">
+        <h3>Private by default</h3>
+        <p>Staged diffs, log bodies and file contents go to <code>localhost:11434</code>.
+        The skills forbid Claude from reading what was delegated — no
+        <code>git diff --cached</code>, no <code>git log -p</code>. A digest's judge is
+        capped at three targeted probes.</p>
+      </li>
+      <li class="card">
+        <h3>Nothing to install</h3>
+        <p>One Python file, standard library only, 3.9+. No pip packages, no build
+        step, no API key, no telemetry. The usage ledger stores counts — never prompt
+        content, paths, or repo names, and a unit test enforces that.</p>
+      </li>
+      <li class="card">
+        <h3>Never trusted blind</h3>
+        <p>Every draft is an <strong>untrusted draft</strong> until its trust tier's gate
+        passes. Drafted commands hit a deny-list and still go through Claude Code's
+        normal permission prompt. Nothing here bypasses permissions.</p>
+      </li>
+      <li class="card">
+        <h3>Fails safe, always</h3>
+        <p>An explicit exit-code contract covers every failure: Ollama unreachable,
+        model missing, stalled, or output rejected. On any of them Claude does the
+        task itself and says so. A failed delegation never blocks your work.</p>
+      </li>
+    </ul>
+  </section>
+
+  <!-- ============ HANDOFF ============ -->
+  <section>
+    <p class="eyebrow">What you can hand off</p>
+    <h2>Ask in plain words</h2>
+    <p class="section-lede">
+      Skills route automatically once you paste the plugin's snippet into your
+      CLAUDE.md — or invoke one directly with
+      <code>/ollama-skills:ollama-commit</code>.
+    </p>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th scope="col">You say</th><th scope="col">What runs</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="say">“check the local model setup”</td>
+              <td class="runs"><b>ollama-ask</b> — version, installed models, free RAM, size warnings</td></tr>
+          <tr><td class="say">“commit my staged changes, use the local model”</td>
+              <td class="runs"><b>ollama-commit</b> — the diff never enters Claude's context</td></tr>
+          <tr><td class="say">“pre-commit is failing, fix it”</td>
+              <td class="runs"><b>ollama-precommit</b> — deterministic fixers first, then a drafted patch</td></tr>
+          <tr><td class="say">“zip the logs folder”</td>
+              <td class="runs"><b>ollama-shell</b> — drafted command, deny-list check, permission prompt</td></tr>
+          <tr><td class="say">“write a small parser for X”</td>
+              <td class="runs"><b>ollama-code</b> — draft, then line-by-line review behind a test</td></tr>
+          <tr><td class="say">“summarize errors in app.log”</td>
+              <td class="runs"><b>ollama-digest</b> — log, text or git range; Claude never reads the raw input wholesale</td></tr>
+          <tr><td class="say">“why does this container keep crashing?”</td>
+              <td class="runs"><b>ollama-docker</b> — container logs digested locally, then checked</td></tr>
+          <tr><td class="say">“open a PR for this branch”</td>
+              <td class="runs"><b>ollama-pr</b> — drafted description, opened as a <em>draft</em> PR via gh or glab</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============ HONEST ============ -->
+  <section>
+    <p class="eyebrow">Read this before you install</p>
+    <h2>Honest limits</h2>
+
+    <div class="callout">
+      <p><strong>Claude Code itself still needs the internet.</strong> These skills make
+      <em>subtasks</em> local, not Claude.</p>
+
+      <p><strong>Small local models are weak.</strong> That is why every skill forces
+      Claude to review their output as an untrusted draft before anything is used.</p>
+
+      <p><strong>It does not reliably save cloud tokens in unattended sessions.</strong>
+      Four rounds of A/B measurement — published in full, negative results included —
+      show deltas smaller than the run-to-run noise, so we make no token-saving claim
+      for neutral-prompt headless runs. The privacy property is the honest headline;
+      savings show up in interactive sessions with several delegations.
+      <a href="https://github.com/hadeelsharaf/claude-ollama-skills#measured-honestly-an-ab-experiment">Read the measurements →</a></p>
+
+      <p><strong>CPU-only machines are slow with big models.</strong> The defaults here are
+      tuned for that, from measured numbers.
+      <a href="https://github.com/hadeelsharaf/claude-ollama-skills/blob/main/docs/ADVANCED.md">Per-hardware advice →</a></p>
+    </div>
+  </section>
+
+  <!-- ============ START ============ -->
+  <section>
+    <p class="eyebrow">Five minutes, fresh machine</p>
+    <h2>Quick start</h2>
+    <p class="section-lede">
+      Needs <a href="https://ollama.com">Ollama</a> running locally, Python 3.9+, git,
+      and Claude Code 2.x. The PR skill additionally wants <code>gh</code> or
+      <code>glab</code>, authenticated.
+    </p>
+
+    <ol class="steps">
+      <li><strong>Install Ollama</strong> and start it — <code>ollama serve</code>, or the desktop app.</li>
+      <li><strong>Pull two small models:</strong> <code>ollama pull gemma2:2b</code> and
+          <code>ollama pull qwen2.5-coder:1.5b</code>. Any Ollama model works; these are
+          the tested defaults.</li>
+      <li><strong>Install the plugin</strong> with the two commands at the top of this page.</li>
+      <li><strong>Paste the routing snippet</strong> into your project's CLAUDE.md — delegation
+          only happens reliably when CLAUDE.md says when to delegate.</li>
+      <li><strong>Say “check the local model setup”</strong> in Claude Code. You should see your
+          Ollama version, installed models with sizes, and free RAM — with a warning
+          beside any model too big for your machine.</li>
+    </ol>
+  </section>
+
+  <footer>
+    <p class="foot-links">
+      <a href="https://github.com/hadeelsharaf/claude-ollama-skills">Source</a>
+      <a href="https://github.com/hadeelsharaf/claude-ollama-skills/blob/main/CHANGELOG.md">Changelog</a>
+      <a href="https://github.com/hadeelsharaf/claude-ollama-skills/blob/main/docs/SECURITY.md">Security</a>
+      <a href="https://github.com/hadeelsharaf/claude-ollama-skills/blob/main/CONTRIBUTING.md">Contributing</a>
+    </p>
+    <p>MIT licensed. Not affiliated with Anthropic or Ollama.</p>
+  </footer>
+
+</div>
+</body>
+</html>

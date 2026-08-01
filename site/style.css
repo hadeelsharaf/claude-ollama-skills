@@ -1,0 +1,361 @@
+/* ollama-skills homepage — hand-written, no build step, no dependencies.
+   Palette validated with the dataviz palette checker against surface #0D1117:
+   every text token clears WCAG AA (dim 5.07:1, accent 9.38:1, link 7.49:1). */
+
+:root {
+  --bg: #0D1117;
+  --surface: #161B22;
+  --surface-2: #1C2128;
+  --border: #30363D;
+  --border-soft: #21262D;
+  --text: #E6EDF3;
+  --dim: #7D8590;
+  --blue: #4FC1FF;
+  --link: #58A6FF;
+  --green: #3FB950;
+  --amber: #D29922;
+  --red: #FF7B72;
+
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+  --maxw: 880px;
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.65;
+  /* faint blue wash behind the hero, fading out down the page */
+  background-image: radial-gradient(ellipse 80% 420px at 50% -80px, rgba(31, 111, 235, 0.16), transparent 70%);
+  background-repeat: no-repeat;
+}
+
+.wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 20px; }
+
+a { color: var(--link); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+code, kbd, pre { font-family: var(--mono); }
+
+code {
+  background: var(--surface-2);
+  border: 1px solid var(--border-soft);
+  border-radius: 5px;
+  padding: 0.12em 0.4em;
+  font-size: 0.88em;
+}
+
+h1, h2, h3 { font-family: var(--mono); line-height: 1.25; letter-spacing: -0.01em; }
+
+/* ---------- section rhythm ---------- */
+
+section { padding: 60px 0; border-top: 1px solid var(--border-soft); }
+section:first-of-type { border-top: 0; }
+
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin: 0 0 14px;
+}
+.eyebrow::before { content: "// "; color: var(--blue); }
+
+h2 { font-size: 24px; margin: 0 0 8px; }
+.section-lede { color: var(--dim); margin: 0 0 28px; max-width: 62ch; }
+
+/* ---------- hero ---------- */
+
+.hero { padding-top: 68px; padding-bottom: 56px; }
+
+.hero h1 {
+  font-size: clamp(30px, 5.4vw, 46px);
+  margin: 0 0 18px;
+  letter-spacing: -0.02em;
+}
+.hero h1 .accent { color: var(--blue); }
+
+.lede {
+  font-size: 18px;
+  color: var(--dim);
+  max-width: 60ch;
+  margin: 0 0 30px;
+}
+.lede strong { color: var(--text); font-weight: 600; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 30px; padding: 0; list-style: none; }
+.chip {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--dim);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 11px;
+}
+.chip b { color: var(--blue); font-weight: 600; }
+
+/* ---------- terminal ---------- */
+
+.term {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 14px 40px rgba(1, 4, 9, 0.6);
+  margin: 0 0 30px;
+}
+
+.term-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+.dot { width: 11px; height: 11px; border-radius: 50%; flex: none; }
+.dot-r { background: #FF5F56; } .dot-y { background: #FFBD2E; } .dot-g { background: #27C93F; }
+.term-title {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--dim);
+  margin-left: 6px;
+}
+
+.term-body {
+  font-family: var(--mono);
+  font-size: 13.5px;
+  line-height: 1.85;
+  padding: 18px 18px 22px;
+  overflow-x: auto;
+  tab-size: 2;
+}
+
+.term-body .prompt { color: var(--blue); }
+.term-body .cmd { color: var(--text); }
+.term-body .dim { color: var(--dim); }
+.term-body .blue { color: var(--blue); }
+.term-body .ok { color: var(--green); }
+.term-body .warn { color: var(--amber); }
+
+/* Base state = the finished frame, and the animation's own frame 0 is that
+   same finished frame (see the keyframes below). So the card is never blank:
+   not when animation is unavailable, and not in a screenshot taken at t=0. */
+.term-line { display: block; opacity: 1; white-space: pre; }
+.term-line.gap { margin-top: 1.5em; }
+.typed { display: inline-block; overflow: hidden; white-space: nowrap; vertical-align: bottom; width: auto; }
+
+.caret {
+  display: inline-block;
+  width: 8px;
+  height: 1.05em;
+  background: var(--blue);
+  vertical-align: text-bottom;
+  margin-left: 1px;
+  animation: caret 1.05s steps(1) infinite;
+}
+
+@keyframes caret { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+
+/* One 11s cycle, and it STARTS on the completed frame: the transcript holds
+   for the first ~6s, clears, then retypes and lands back on the same frame at
+   100%. That makes t=0 identical to t=100% (seamless loop) and guarantees a
+   screenshot or a paused renderer shows the full transcript, never a blank. */
+@keyframes type { 0%, 55% { width: 33ch; } 58%, 60% { width: 0; } 68%, 100% { width: 33ch; } }
+
+@keyframes r1 { 0%, 55% { opacity: 1; } 58%, 72% { opacity: 0; } 75%, 100% { opacity: 1; } }
+@keyframes r2 { 0%, 55% { opacity: 1; } 58%, 76% { opacity: 0; } 79%, 100% { opacity: 1; } }
+@keyframes r3 { 0%, 55% { opacity: 1; } 58%, 80% { opacity: 0; } 83%, 100% { opacity: 1; } }
+@keyframes r4 { 0%, 55% { opacity: 1; } 58%, 85% { opacity: 0; } 88%, 100% { opacity: 1; } }
+@keyframes r5 { 0%, 55% { opacity: 1; } 58%, 90% { opacity: 0; } 93%, 100% { opacity: 1; } }
+
+.term-body .typed { animation: type 11s steps(33, end) infinite; }
+.term-line.l1 { animation: r1 11s ease-out infinite; }
+.term-line.l2 { animation: r2 11s ease-out infinite; }
+.term-line.l3 { animation: r3 11s ease-out infinite; }
+.term-line.l4 { animation: r4 11s ease-out infinite; }
+.term-line.l5 { animation: r5 11s ease-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .term-body .typed, .term-line, .caret { animation: none; }
+  .term-line { opacity: 1; transform: none; }
+  .typed { width: auto; }
+}
+
+/* ---------- install block ---------- */
+
+.install {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--blue);
+  border-radius: 8px;
+  padding: 14px 16px;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.9;
+  overflow-x: auto;
+  margin: 0 0 18px;
+}
+.install .iline { white-space: pre; }
+.install .prompt { color: var(--blue); user-select: none; }
+.install .c { color: var(--text); }
+
+.hero-links { font-size: 14px; color: var(--dim); }
+.hero-links a { margin-right: 4px; }
+.sep { margin: 0 8px; color: var(--border); }
+
+/* ---------- proof: hero figure + stat tiles ---------- */
+
+.figure-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 18px;
+  margin: 0 0 8px;
+}
+.hero-figure {
+  font-family: var(--mono);
+  font-size: clamp(48px, 9vw, 76px);
+  font-weight: 600;
+  line-height: 1;
+  color: var(--blue);
+  letter-spacing: -0.03em;
+}
+.hero-figure-label { font-size: 17px; color: var(--text); max-width: 30ch; }
+
+.figure-note { color: var(--dim); font-size: 14px; margin: 12px 0 30px; max-width: 66ch; }
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.stat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 16px 15px;
+}
+.stat-value {
+  font-family: var(--mono);
+  font-size: 27px;
+  font-weight: 600;
+  line-height: 1.15;
+  color: var(--text);
+  display: block;
+}
+.stat-label { font-size: 13.5px; color: var(--dim); display: block; margin-top: 5px; }
+
+/* ---------- value cards ---------- */
+
+.cards {
+  display: grid;
+  /* 330px floor keeps the four cards at 2x2 on the 880px column; a 260px
+     floor fits three across and leaves an orphan on row two. */
+  grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+}
+.card h3 {
+  font-size: 15px;
+  margin: 0 0 9px;
+  color: var(--text);
+}
+.card h3::before {
+  content: "▸";
+  color: var(--blue);
+  margin-right: 8px;
+}
+.card p { margin: 0; font-size: 14.5px; color: var(--dim); }
+
+/* ---------- tables ---------- */
+
+.table-scroll { overflow-x: auto; }
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 14.5px;
+  min-width: 520px;
+}
+th, td {
+  text-align: left;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border-soft);
+  vertical-align: top;
+}
+th {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dim);
+  font-weight: 500;
+  border-bottom: 1px solid var(--border);
+}
+tbody tr:last-child td { border-bottom: 0; }
+td.say { color: var(--text); }
+td.runs { color: var(--dim); }
+td.runs b { color: var(--blue); font-weight: 500; font-family: var(--mono); font-size: 13px; }
+
+/* ---------- honest callout ---------- */
+
+.callout {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--amber);
+  border-radius: 8px;
+  padding: 18px 20px;
+}
+.callout p { margin: 0 0 12px; color: var(--dim); font-size: 15px; }
+.callout p:last-child { margin-bottom: 0; }
+.callout strong { color: var(--text); }
+
+/* ---------- steps ---------- */
+
+.steps { margin: 0; padding-left: 22px; color: var(--dim); }
+.steps li { margin-bottom: 10px; }
+.steps li::marker { color: var(--blue); font-family: var(--mono); }
+.steps strong { color: var(--text); font-weight: 600; }
+
+/* ---------- footer ---------- */
+
+footer {
+  border-top: 1px solid var(--border-soft);
+  padding: 30px 0 50px;
+  color: var(--dim);
+  font-size: 14px;
+}
+footer .foot-links a { margin-right: 16px; }
+footer p { margin: 12px 0 0; }
+
+/* ---------- narrow screens ---------- */
+
+@media (max-width: 620px) {
+  section { padding: 44px 0; }
+  .hero { padding-top: 48px; }
+  .term-body { font-size: 12px; padding: 14px; }
+  .figure-row { gap: 10px; }
+}
