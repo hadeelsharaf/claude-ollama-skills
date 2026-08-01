@@ -22,13 +22,19 @@ Use `python` on Windows, `python3` on macOS/Linux.
 1. `python "$SCRIPT" draft-command "<the task in plain words>"`
    (add `--shell bash` or `--shell powershell` to override the OS default).
 2. Parse the JSON: `command`, `explanation`, `caution`.
-3. **Safety check — run through this list yourself.** The model's own `caution`
-   field does NOT count; models often say "none" for dangerous commands.
-4. Scope check: does the command touch ONLY what the user named? Wildcards or
-   parent folders beyond the target = rewrite it yourself, narrower.
+3. **Safety check.** If the script prints classification: read-only, you may
+   run the draft without review. Any other draft gets your full review
+   against the task and the deny list before it runs. That review includes
+   the scope check below. The model's own `caution` field does NOT count;
+   models often say "none" for dangerous commands.
+4. Scope check (for any draft that needs review): does the command touch
+   ONLY what the user named? Wildcards or parent folders beyond the target =
+   rewrite it yourself, narrower.
 5. Show the user the command and the one-line explanation, then run it through the
    normal permission prompt. Never chain it with other commands.
-6. Return the command's real output to the user.
+6. Return the command's real output to the user. When the draft's fate is
+   decided, record it:
+   `python "$SCRIPT" record-outcome <used-as-is|edited|replaced|model-failed> --task shell`.
 
 ## Deny-list — rewrite or refuse, never run as-is
 
@@ -54,6 +60,8 @@ A command on this list is not "probably fine". Rewrite a narrow, safe version
 yourself, or ask the user.
 
 ## Rules (do not skip)
+
+Every draft is an UNTRUSTED DRAFT until its tier's gate passes.
 
 1. The drafted command is an **UNTRUSTED DRAFT** from a small model. It can be
    wrong, too broad, or subtly destructive while looking clean.

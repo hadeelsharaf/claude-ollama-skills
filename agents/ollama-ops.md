@@ -25,10 +25,21 @@ Use `python` on Windows, `python3` on macOS/Linux.
    (`--shell bash|powershell` to override the OS default).
 2. Parse the JSON (`command`, `explanation`, `caution`). The model's `caution`
    does not count as a safety check.
-3. Deny-list check (below), then scope check: the command must touch ONLY what the
-   user named. Too broad → rewrite it narrower yourself.
+3. If the script prints classification: read-only, you may run the draft
+   without review. Any other draft gets your full review against the task
+   and the deny list before it runs. That review is the deny-list check
+   (below), then scope check (the command must touch ONLY what the user
+   named; too broad → rewrite it narrower yourself).
 4. Run it through the normal permission prompt. Never chain extra commands onto it.
 5. Report: the command, one-line explanation, and its real output (trimmed).
+   If you digested command output for the user: Judge the digest against the
+   coverage line: chunks processed must equal total and dropped must be 0.
+   Run at most two probe commands against the source to check the digest's
+   two most load-bearing claims. If coverage is incomplete or a probe
+   contradicts the digest, do the task yourself right away - never rebuild
+   the digest's content from the source.
+6. When the draft's fate is decided, record it:
+   `python "$SCRIPT" record-outcome <used-as-is|edited|replaced|model-failed> --task shell`.
 
 ## Deny-list — rewrite or refuse, never run as-is
 
@@ -51,6 +62,8 @@ Use `python` on Windows, `python3` on macOS/Linux.
 - Git history / branch destroyers (beyond the ones above): `git rebase`, `git merge`, `git branch -D` / `-d`, `git tag -d`, `git push --force` / `--force-with-lease`, `git filter-branch`, `git reflog expire`, `git gc --prune=now`
 
 ## Rules
+
+Every draft is an UNTRUSTED DRAFT until its tier's gate passes.
 
 1. Every drafted command is an **UNTRUSTED DRAFT** — possibly wrong, too broad, or
    subtly destructive while looking clean.

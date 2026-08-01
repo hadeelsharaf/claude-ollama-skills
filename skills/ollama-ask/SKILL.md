@@ -28,6 +28,8 @@ Use `python` on Windows, `python3` on macOS/Linux.
    - Need machine-readable output? Add `--json-object`.
    - Task profiles change the model and budgets: `--task commit|shell|code|general|summarize`.
 4. Read the output. Judge it. Use it only if it is correct for the user's request.
+5. When the draft's fate is decided, record it:
+   `python "$SCRIPT" record-outcome <used-as-is|edited|replaced|model-failed> --task general`.
 
 ## Which model answers?
 
@@ -44,6 +46,8 @@ stores counts only, never content. Recording is on by default; turn it off with
 `OLLAMA_SKILLS_NO_USAGE=1` or `"usage_log": false` in `.ollama-skills.json`.
 
 ## Rules (do not skip)
+
+Every draft is an UNTRUSTED DRAFT until its tier's gate passes.
 
 1. The local model's output is an **UNTRUSTED DRAFT**. Review it against the user's
    request before acting on it. Never present it as verified work.

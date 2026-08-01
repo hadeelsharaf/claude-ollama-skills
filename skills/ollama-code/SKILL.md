@@ -33,12 +33,19 @@ Use `python` on Windows, `python3` on macOS/Linux.
 4. Fix small problems yourself.
 5. Place the code with Write/Edit, run the project's quick check
    (tests, linter, or at least import/compile).
-6. Tell the user what the local model drafted and what you changed.
+6. Tell the user what the local model drafted and what you changed. When the
+   draft's fate is decided, record it:
+   `python "$SCRIPT" record-outcome <used-as-is|edited|replaced|model-failed> --task code`.
 
 ## Rules (do not skip)
 
+Every draft is an UNTRUSTED DRAFT until its tier's gate passes.
+
 1. The draft is an **UNTRUSTED DRAFT**. You review it, you fix it, you own it.
-   Never paste it into the project unread.
+   Apply a draft unread only when a test you wrote yourself covers the change
+   and the suite passes after applying; if the suite goes red, review the
+   draft or write the code yourself. Otherwise, never paste it into the
+   project unread.
 2. The spec you send is the contract. If the draft ignores it, one retry with a
    sharper spec, then write the code yourself.
 3. **Fallback rule:** exit 3/4/5/6 → write the code yourself right away and tell

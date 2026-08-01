@@ -2496,5 +2496,103 @@ class OllamaAskTests(unittest.TestCase):
         self.assertNotIn("DOMAIN PREAMBLE", skill)
 
 
+class TrustTierProseTests(unittest.TestCase):
+    """Pin the trust-tier canonical sentences (Task 5 of the trust-policy
+    wave) byte-identical in every file the plan names. These sentences
+    encode WHEN a draft may be trusted without full review (or must never
+    be); a silent reword would silently loosen or tighten a trust tier
+    without any test catching it."""
+
+    ALL_11 = (
+        "skills/ollama-ask/SKILL.md",
+        "skills/ollama-commit/SKILL.md",
+        "skills/ollama-shell/SKILL.md",
+        "skills/ollama-code/SKILL.md",
+        "skills/ollama-digest/SKILL.md",
+        "skills/ollama-docker/SKILL.md",
+        "skills/ollama-pr/SKILL.md",
+        "skills/ollama-precommit/SKILL.md",
+        "agents/ollama-git.md",
+        "agents/ollama-coder.md",
+        "agents/ollama-ops.md",
+    )
+
+    @staticmethod
+    def _body(rel):
+        return (ROOT / rel).read_text(encoding="utf-8")
+
+    @classmethod
+    def _normalized(cls, rel):
+        # The canonical sentences are pinned byte-identical as CONTINUOUS
+        # TEXT, but SKILL.md/agents prose wraps long lines at ~70-80 cols for
+        # readability (same convention as test_pr_skill_safety_wording_present).
+        # Normalizing whitespace lets the wrapped markdown match the
+        # single-line canonical sentence without weakening the pin.
+        return " ".join(cls._body(rel).split())
+
+    def test_family1_untrusted_draft_gate_sentence_in_all_11(self):
+        needle = "Every draft is an UNTRUSTED DRAFT until its tier's gate passes."
+        for rel in self.ALL_11:
+            self.assertIn(needle, self._normalized(rel), msg=f"missing from {rel}")
+
+    def test_family2_digest_coverage_and_probe_rule(self):
+        needle_a = ("Judge the digest against the coverage line: chunks "
+                    "processed must equal total and dropped must be 0.")
+        needle_b = ("Run at most two probe commands against the source to "
+                    "check the digest's two most load-bearing claims. If "
+                    "coverage is incomplete or a probe contradicts the "
+                    "digest, do the task yourself right away - never "
+                    "rebuild the digest's content from the source.")
+        for rel in ("skills/ollama-digest/SKILL.md", "skills/ollama-docker/SKILL.md",
+                    "agents/ollama-ops.md"):
+            body = self._normalized(rel)
+            self.assertIn(needle_a, body, msg=f"coverage sentence missing from {rel}")
+            self.assertIn(needle_b, body, msg=f"probe sentence missing from {rel}")
+
+    def test_family3_commit_auto_accept_and_regen_rule(self):
+        needle_a = ("A conventional draft that exits 0 is used verbatim - "
+                    "do not compare it against the stat output.")
+        needle_b = ("If the draft plainly contradicts your hint, regenerate "
+                    "once with a sharper hint and use what comes back; "
+                    "never hand-edit a draft.")
+        for rel in ("skills/ollama-commit/SKILL.md", "agents/ollama-git.md"):
+            body = self._normalized(rel)
+            self.assertIn(needle_a, body, msg=f"auto-accept sentence missing from {rel}")
+            self.assertIn(needle_b, body, msg=f"regenerate sentence missing from {rel}")
+
+    def test_family4_shell_classification_gate(self):
+        needle_a = ("If the script prints classification: read-only, you "
+                    "may run the draft without review.")
+        needle_b = ("Any other draft gets your full review against the "
+                    "task and the deny list before it runs.")
+        for rel in ("skills/ollama-shell/SKILL.md", "skills/ollama-docker/SKILL.md",
+                    "agents/ollama-ops.md"):
+            body = self._normalized(rel)
+            self.assertIn(needle_a, body, msg=f"read-only gate missing from {rel}")
+            self.assertIn(needle_b, body, msg=f"full-review sentence missing from {rel}")
+
+    def test_family5_code_apply_unread_gate(self):
+        needle = ("Apply a draft unread only when a test you wrote "
+                  "yourself covers the change and the suite passes after "
+                  "applying; if the suite goes red, review the draft or "
+                  "write the code yourself.")
+        for rel in ("skills/ollama-code/SKILL.md", "agents/ollama-coder.md",
+                    "skills/ollama-precommit/SKILL.md"):
+            self.assertIn(needle, self._normalized(rel), msg=f"missing from {rel}")
+
+    def test_family6_record_outcome_invariant_prefix_in_all_11(self):
+        # Sentence 6 varies per file (own --task value, own path form); only
+        # the shared invariant prefix is pinned across all 11 files.
+        needle = "When the draft's fate is decided, record it:"
+        for rel in self.ALL_11:
+            self.assertIn(needle, self._normalized(rel), msg=f"missing from {rel}")
+
+    def test_family7_pr_size_gate_rule(self):
+        needle = ("If pr-desc exits 2 for size, write the description "
+                  "yourself - a large changeset needs your synthesis, not "
+                  "a local draft.")
+        self.assertIn(needle, self._normalized("skills/ollama-pr/SKILL.md"))
+
+
 if __name__ == "__main__":
     unittest.main()

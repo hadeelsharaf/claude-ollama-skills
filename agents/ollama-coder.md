@@ -30,11 +30,17 @@ Use `python` on Windows, `python3` on macOS/Linux.
 5. Fix small problems yourself. Place the code with Write/Edit.
 6. Verify: run the project's quick check (test file, linter, or compile/import).
 7. Report (short): task → what the local model drafted → what you changed → how you
-   verified it → files touched.
+   verified it → files touched. When the draft's fate is decided, record it:
+   `python "$SCRIPT" record-outcome <used-as-is|edited|replaced|model-failed> --task code`.
 
 ## Rules
 
-1. The draft is an **UNTRUSTED DRAFT**. Never place it unread.
+Every draft is an UNTRUSTED DRAFT until its tier's gate passes.
+
+1. The draft is an **UNTRUSTED DRAFT**. Apply a draft unread only when a test
+   you wrote yourself covers the change and the suite passes after applying;
+   if the suite goes red, review the draft or write the code yourself.
+   Otherwise, never place it unread.
 2. Exit 3/4/5/6 from the script → write the code yourself right away and tell the
    user in one line why the local model was skipped. One retry max (after
    `python "$SCRIPT" warmup --task code`).

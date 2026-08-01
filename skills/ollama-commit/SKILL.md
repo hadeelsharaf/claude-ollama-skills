@@ -26,16 +26,22 @@ Use `python` on Windows, `python3` on macOS/Linux.
    If you authored or planned the staged change, pass what you already know:
    `--type <t>` and a one-line `--hint`. If you are drafting for changes you did
    not make, omit both.
-3. Judge the printed message with only cheap context:
-   - Format: first line matches `type: summary`, under 72 chars, allowed types:
-     feat, fix, build, chore, ci, docs, style, refactor, perf, test.
-   - Truth: compare against `git diff --cached --stat` (file names + sizes only).
-     The message must describe those files' change. If it names things not in the
-     stat list, it is wrong — fix it yourself.
+3. Judge the printed message:
+   - A conventional draft that exits 0 is used verbatim - do not compare it
+     against the stat output. If the draft plainly contradicts your hint,
+     regenerate once with a sharper hint and use what comes back; never
+     hand-edit a draft.
+   - A plain-style draft (`--style plain`) is not validated by the script,
+     so check it yourself: first line matches `type: summary`, under 72
+     chars, allowed types feat, fix, build, chore, ci, docs, style, refactor,
+     perf, test, and compare it against `git diff --cached --stat` (file
+     names + sizes only). If it names things not in the stat list, it is
+     wrong — fix it yourself.
 4. Show the user the final message and commit in the same turn:
    `git commit -m "<message>"`. The permission prompt on the git command IS
    the user's approval — do not stop to ask "shall I commit?" first.
-5. Report the commit hash.
+5. Report the commit hash. When the draft's fate is decided, record it:
+   `python "$SCRIPT" record-outcome <used-as-is|edited|replaced|model-failed> --task commit`.
 
 ## Push (only when the user asked to push)
 
@@ -55,6 +61,8 @@ Use `python` on Windows, `python3` on macOS/Linux.
     and do not retry blindly.
 
 ## Rules (do not skip)
+
+Every draft is an UNTRUSTED DRAFT until its tier's gate passes.
 
 1. The message is an **UNTRUSTED DRAFT**. You approve it, you own it. Edit it when it
    is vague, wrong, or too long — do not commit a bad message to save time.

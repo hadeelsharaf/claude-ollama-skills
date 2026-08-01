@@ -28,15 +28,22 @@ Use `python` on Windows, `python3` on macOS/Linux.
    `--type <t>` and a one-line `--hint`. If you are drafting for changes you did
    not make, omit both.
 3. Validate the printed message:
-   - First line matches `type: summary`, under 72 chars, type in:
-     feat, fix, build, chore, ci, docs, style, refactor, perf, test.
-   - Compare against `git diff --cached --stat` (names + sizes only — do NOT read
-     the full diff; that would defeat the privacy design). Message must describe
-     those files. Wrong or vague → fix the message yourself.
+   - A conventional draft that exits 0 is used verbatim - do not compare it
+     against the stat output. If the draft plainly contradicts your hint,
+     regenerate once with a sharper hint and use what comes back; never
+     hand-edit a draft.
+   - A plain-style draft (`--style plain`) is not validated by the script,
+     so check it yourself: first line matches `type: summary`, under 72
+     chars, type in feat, fix, build, chore, ci, docs, style, refactor, perf,
+     test, and compare against `git diff --cached --stat` (names + sizes
+     only — do NOT read the full diff; that would defeat the privacy
+     design). Wrong or vague → fix the message yourself.
 4. `git commit -m "<message>"` in the same turn — the permission prompt on
    the git command IS the user's approval; do not stop to ask first.
 5. Report: the final message, the commit hash (`git rev-parse --short HEAD`), and
-   whether the local model's draft was used, edited, or replaced.
+   whether the local model's draft was used, edited, or replaced. When the
+   draft's fate is decided, record it:
+   `python "$SCRIPT" record-outcome <used-as-is|edited|replaced|model-failed> --task commit`.
 
 ## Push (only when the user asked to push)
 
@@ -56,6 +63,8 @@ Use `python` on Windows, `python3` on macOS/Linux.
     and do not retry blindly.
 
 ## Rules
+
+Every draft is an UNTRUSTED DRAFT until its tier's gate passes.
 
 1. The drafted message is an **UNTRUSTED DRAFT**. You approve it, you own it.
 2. Fallback:
