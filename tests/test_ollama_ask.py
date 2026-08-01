@@ -2367,6 +2367,66 @@ class OllamaAskTests(unittest.TestCase):
         self.assertEqual(code, 0, msg=err)
         self.assertIn("No usage recorded yet", out)
 
+    # -- record-outcome --------------------------------------------------------
+
+    def test_record_outcome_appends_five_key_row(self):
+        repo = self._make_repo(staged=False)
+        os.environ.pop("OLLAMA_SKILLS_NO_USAGE", None)
+        code, out, err = self.run_cli(
+            "record-outcome", "used-as-is", "--task", "commit")
+        self.assertEqual(code, 0, msg=err)
+        self.assertIn("recorded: commit used-as-is", out)
+        records = self._read_ledger(repo)
+        self.assertEqual(len(records), 1)
+        rec = records[0]
+        self.assertEqual(set(rec.keys()), {"ts", "v", "cmd", "task", "verdict"})
+        self.assertEqual(rec["cmd"], "outcome")
+        self.assertEqual(rec["task"], "commit")
+        self.assertEqual(rec["verdict"], "used-as-is")
+
+    def test_record_outcome_invalid_verdict_exits_usage(self):
+        code, _out, _err = self.run_cli("record-outcome", "bogus-verdict")
+        self.assertEqual(code, 2)
+
+    def test_record_outcome_unwritable_ledger_still_exits_ok(self):
+        """A ledger path pointing at an existing directory raises on open();
+        the command must still exit 0 and print the recorded line (best-effort)."""
+        os.chdir(self._tmp)
+        os.environ.pop("OLLAMA_SKILLS_NO_USAGE", None)
+        blocked_dir = Path(self._tmp) / "blocked-as-file"
+        blocked_dir.mkdir()
+        (Path(self._tmp) / ".ollama-skills.json").write_text(
+            json.dumps({"usage_log_path": str(blocked_dir)}), encoding="utf-8")
+        code, out, err = self.run_cli(
+            "record-outcome", "edited", "--task", "general")
+        self.assertEqual(code, 0, msg=err)
+        self.assertIn("recorded: general edited", out)
+
+    def test_record_outcome_no_usage_env_still_exits_ok_and_skips_write(self):
+        repo = self._make_repo(staged=False)
+        # OLLAMA_SKILLS_NO_USAGE=1 is set by setUp already.
+        code, out, err = self.run_cli(
+            "record-outcome", "replaced", "--task", "shell")
+        self.assertEqual(code, 0, msg=err)
+        self.assertIn("recorded: shell replaced", out)
+        self.assertFalse((repo / ".ollama-skills-usage.jsonl").exists())
+
+    def test_stats_outcomes_section_and_excluded_from_per_cmd(self):
+        os.chdir(self._tmp)   # not a repo -> ledger falls back to HOME (= _tmp)
+        os.environ.pop("OLLAMA_SKILLS_NO_USAGE", None)
+        code1, _, err1 = self.run_cli(
+            "record-outcome", "used-as-is", "--task", "commit")
+        self.assertEqual(code1, 0, msg=err1)
+        code2, _, err2 = self.run_cli(
+            "record-outcome", "edited", "--task", "commit")
+        self.assertEqual(code2, 0, msg=err2)
+        code, out, err = self.run_cli("stats", "--json")
+        self.assertEqual(code, 0, msg=err)
+        data = json.loads(out)
+        self.assertEqual(data["outcomes"],
+                         {"commit": {"used-as-is": 1, "edited": 1}})
+        self.assertNotIn("outcome", data["per_cmd"])
+
     def test_pr_skill_safety_wording_present(self):
         # A silent reword dropping draft-by-default or the deny-list would
         # defeat ollama-pr's safety story - pin the load-bearing wording as

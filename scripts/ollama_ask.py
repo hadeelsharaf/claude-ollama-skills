@@ -18,6 +18,8 @@ Subcommands:
   fix-lint       Lint error + code window -> SEARCH/REPLACE suggestion (never applies).
   pr-create      Create a draft PR/MR via gh/glab with a reviewed title/body (gated).
   pr-desc        Branch commits vs base -> JSON {title, body} for a PR (local).
+  record-outcome Record a draft's fate (used-as-is/edited/replaced/model-failed)
+                 in the usage ledger, counts only.
   stats          Show recorded local usage and estimated cloud-token savings.
   summarize      Log/git/plain text -> short digest (map-reduce, local).
 
@@ -652,6 +654,27 @@ def _flush_usage(cfg: dict, code: int) -> None:
         debug(f"usage ledger skipped: {exc}")
 
 
+OUTCOME_VERDICTS = ("used-as-is", "edited", "replaced", "model-failed")
+
+
+def cmd_record_outcome(args, cfg: dict) -> int:
+    """Append a counts-only draft-fate row. Best-effort: never fails."""
+    row = {"ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+           "v": 1, "cmd": "outcome", "task": args.task,
+           "verdict": args.verdict}
+    if _usage_enabled(cfg):
+        try:
+            path, repo_root = _usage_path(cfg)
+            with open(path, "a", encoding="utf-8") as fh:
+                fh.write(json.dumps(row) + "\n")
+            if repo_root is not None:
+                _ensure_excluded()
+        except Exception as exc:
+            debug(f"usage ledger skipped: {exc}")
+    print(f"recorded: {args.task} {args.verdict}")
+    return EXIT_OK
+
+
 STATS_FOOTER = (
     "Local token counts are real (reported by Ollama). Cloud figures are chars/4\n"
     'estimates; "avoided" is a counterfactual and review overhead is not counted.'
@@ -698,6 +721,18 @@ def cmd_stats(args, cfg: dict) -> int:
             continue
         records.append(rec)
 
+    # Outcome rows (from record-outcome) are counts-only draft-fate votes,
+    # not model calls - keep them out of the call/token tallies below and
+    # tally them separately as {task: {verdict: count}}.
+    outcome_rows = [r for r in records if r.get("cmd") == "outcome"]
+    records = [r for r in records if r.get("cmd") != "outcome"]
+    outcomes: dict = {}
+    for rec in outcome_rows:
+        task = str(rec.get("task"))
+        verdict = str(rec.get("verdict"))
+        bucket = outcomes.setdefault(task, {})
+        bucket[verdict] = bucket.get(verdict, 0) + 1
+
     per_cmd: dict = {}
     for rec in records:
         row = per_cmd.setdefault(str(rec.get("cmd")), {
@@ -727,7 +762,8 @@ def cmd_stats(args, cfg: dict) -> int:
 
     if args.json:
         print(json.dumps({"path": str(path), "skipped_lines": skipped,
-                          "per_cmd": per_cmd, "total": total}, indent=2))
+                          "per_cmd": per_cmd, "total": total,
+                          "outcomes": outcomes}, indent=2))
     else:
         headers = ["cmd", "calls", "delivered", "local tokens",
                    "est. avoided", "est. returned", "net est. saved"]
@@ -750,6 +786,14 @@ def cmd_stats(args, cfg: dict) -> int:
             print(f"({skipped} malformed line(s) skipped)")
         print()
         print(STATS_FOOTER)
+        if outcomes:
+            print()
+            print("Draft outcomes:")
+            for task in sorted(outcomes):
+                parts = ", ".join(
+                    f"{verdict} {count}"
+                    for verdict, count in sorted(outcomes[task].items()))
+                print(f"  {task}: {parts}")
 
     if args.reset:
         backup = str(path) + ".bak"
@@ -2074,6 +2118,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_stats.add_argument("--reset", action="store_true",
                          help="rename the ledger to .bak after printing")
 
+    p_out = sub.add_parser("record-outcome", parents=[common],
+                           help="record a draft's fate in the usage ledger "
+                                "(counts only)")
+    p_out.add_argument("verdict", choices=list(OUTCOME_VERDICTS))
+    p_out.add_argument("--task", choices=TASKS, default="general")
+
     p_warm = sub.add_parser("warmup", parents=[common], help="load a model now")
     p_warm.add_argument("--task", choices=TASKS, default="general",
                         help="task profile for model choice and budgets")
@@ -2188,6 +2238,7 @@ HANDLERS = {
     "fix-lint": cmd_fix_lint,
     "pr-desc": cmd_pr_desc,
     "pr-create": cmd_pr_create,
+    "record-outcome": cmd_record_outcome,
     "summarize": cmd_summarize,
 }
 
