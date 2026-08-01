@@ -86,7 +86,7 @@ Prefer a bounded input (latest 50 commits, a date window, `--tail 2000`).
 `summarize` single-shots small inputs and map-reduces large ones; only over its
 `--ceiling-chars` (100,000) ceiling does it refuse — then narrow the input,
 raise the ceiling, or pass `--force` (slower, rougher). The digest itself is
-capped at about 200 tokens by the summarize profile; pass --max-tokens <n> to
+capped at about 400 tokens by the summarize profile; pass --max-tokens <n> to
 raise it when a range genuinely needs a longer digest.
 
 ## Rules (do not skip)
