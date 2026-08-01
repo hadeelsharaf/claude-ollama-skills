@@ -1654,6 +1654,13 @@ class OllamaAskTests(unittest.TestCase):
         self.assertIn("3-6 fragments", ollama_ask.MAP_PROMPT)
         self.assertIn("No sentences", ollama_ask.MAP_PROMPT)
 
+    def test_digest_prompts_protect_rare_events(self):
+        self.assertIn("appears only once outranks repeated traffic",
+                      ollama_ask.MAP_PROMPT)
+        for prompt in (ollama_ask.FINAL_PROMPT,
+                       ollama_ask.FINAL_PROMPT_NO_VERDICT):
+            self.assertIn("never drop a rare event", prompt)
+
     # -- fixtures (kubectl / docker stand-ins) ------------------------------
 
     def _fixture(self, *parts) -> str:
