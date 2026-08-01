@@ -65,7 +65,7 @@ TASK_DEFAULTS = {
     "shell": {"max_tokens": 192, "temperature": 0.0},
     "code": {"max_tokens": 512, "temperature": 0.2},
     "general": {"max_tokens": 256, "temperature": 0.3},
-    "summarize": {"max_tokens": 200, "temperature": 0.2, "num_ctx": 2048},
+    "summarize": {"max_tokens": 400, "temperature": 0.2, "num_ctx": 2048},
 }
 
 # First installed model whose name starts with a prefix wins (top first).
@@ -2009,7 +2009,7 @@ def _chunk_lines(lines, chunk_chars):
 def _final_cap(args, cfg) -> int:
     if args.max_tokens is not None:
         return args.max_tokens
-    return (cfg["tasks"].get("summarize") or {}).get("max_tokens", 200)
+    return (cfg["tasks"].get("summarize") or {}).get("max_tokens", 400)
 
 
 def _reduce(notes, args, cfg, final_system, chunk_chars) -> str:

@@ -1638,6 +1638,18 @@ class OllamaAskTests(unittest.TestCase):
         args = ollama_ask.build_parser().parse_args(["summarize"])
         self.assertEqual(args.map_tokens, 120)
 
+    def test_summarize_final_budget_default_is_400(self):
+        """Task 8 (digest-tune): the REDUCE step was the binding constraint,
+        squeezing ~16 chunks of good 120-token fragment notes into a
+        200-token digest -- too thin to stand as the answer. Raising the
+        default to 400 gives the final pass room. _final_cap's own fallback
+        (used when cfg lacks a 'summarize' task entry) tracks the same
+        number so the two defaults never drift apart."""
+        self.assertEqual(ollama_ask.TASK_DEFAULTS["summarize"]["max_tokens"], 400)
+        args = ollama_ask.build_parser().parse_args(["summarize"])
+        cfg = {"tasks": {}}
+        self.assertEqual(ollama_ask._final_cap(args, cfg), 400)
+
     def test_map_prompt_is_fragment_style(self):
         self.assertIn("3-6 fragments", ollama_ask.MAP_PROMPT)
         self.assertIn("No sentences", ollama_ask.MAP_PROMPT)
@@ -2617,12 +2629,14 @@ class TrustTierProseTests(unittest.TestCase):
     def test_family2_digest_coverage_and_probe_rule(self):
         needle_a = ("Judge the digest against the coverage line: chunks "
                     "processed must equal total and dropped must be 0.")
-        # Fix round (Task 7, I4): the probe sentence lost its privacy
-        # ambiguity -- "grep or Select-String, never a file dump" pins the
-        # probe to a search, never a full read of the source it is checking.
-        needle_b = ("Run at most two probe commands (grep or Select-String, "
+        # Task 8 (digest-tune): the A/B audit showed both delegating sessions
+        # already ran 3-4 probes against the old 2-probe cap -- the 2 was
+        # aspirational, not achievable. The cap is now officially 3, and the
+        # "two most load-bearing claims" count is dropped (the number was
+        # never the point; the load-bearing-claims coverage was).
+        needle_b = ("Run at most three probe commands (grep or Select-String, "
                     "never a file dump) against the source to check the "
-                    "digest's two most load-bearing claims. If coverage is "
+                    "digest's most load-bearing claims. If coverage is "
                     "incomplete or a probe contradicts the digest, do the "
                     "task yourself right away - never rebuild the digest's "
                     "content from the source.")
@@ -2632,6 +2646,18 @@ class TrustTierProseTests(unittest.TestCase):
             body = self._normalized(rel)
             self.assertIn(needle_a, body, msg=f"coverage sentence missing from {rel}")
             self.assertIn(needle_b, body, msg=f"probe sentence missing from {rel}")
+
+    def test_family2b_digest_acceptance_sentence(self):
+        # Task 8 (digest-tune): the A/B audit recorded both digests as
+        # "replaced" -- too thin to stand as the answer even when coverage
+        # and probes passed. This sentence names the positive case
+        # explicitly so a passing digest is reported, not silently redone.
+        needle = ("A digest that passes the coverage check and your probes "
+                  "IS the deliverable - report it as your answer, adding "
+                  "only what your probes surfaced.")
+        for rel in ("skills/ollama-digest/SKILL.md", "skills/ollama-docker/SKILL.md"):
+            self.assertIn(needle, self._normalized(rel),
+                          msg=f"acceptance sentence missing from {rel}")
 
     def test_family3_commit_auto_accept_and_regen_rule(self):
         needle_a = ("A conventional draft that exits 0 is used verbatim - "
