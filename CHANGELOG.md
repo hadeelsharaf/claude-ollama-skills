@@ -5,6 +5,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-08-01
+
+One combined release: 0.6.0 was prepared but never shipped (its release gate
+failed on the cost re-measure); its entries ship here together with the
+trust-tier wave that answered them.
+
 ### Removed
 - `summarize --kind events|describe` and the kubectl describe pre-filter —
   remnants of the kubernetes support parked in 0.5.0. kubectl output still
@@ -38,6 +44,20 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
   drifted in wording); the test fake server routes canned responses through a
   declared marker table with a collision guard; `measure_catalog.py` shares
   `validate_repo.py`'s frontmatter parser instead of carrying its own.
+- `ask --json-object` now uses the shared one-corrective-retry policy — the
+  last hand-rolled copy; the helper genuinely owns all six drafting paths.
+- Skill-craft pass: ollama-ask's description now routes setup/stats checks;
+  the CLAUDE.md routing snippet reuses each skill's leading words and gains
+  the missing ollama-docker bullet; every skill names its loop
+  (ground -> draft -> judge); fallback and flag rules are word-identical
+  across all skills and agents; ollama-docker's Dockerfile/compose drafting
+  reference moved to DRAFTING.md, loaded only on that branch.
+- Digest quality, measured then fixed twice: the final digest budget rises
+  from 200 to 400 tokens (the reduce step was the bottleneck), the probe cap
+  settles at three, map and reduce prompts prioritize rare single-occurrence
+  events ("an event that appears only once outranks repeated traffic"), and
+  a digest that passes its checks is the deliverable — the transcript audit
+  and the first-ever 3/3 digest validation round both ship in the README.
 
 ### Added
 - `tests/test_validate_repo.py` — pins the description-cap and catalog-budget

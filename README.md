@@ -18,18 +18,22 @@ worker.
 > CPU-only machines are slow with big models — the defaults here are tuned for that
 > (see the measured numbers below). Fully offline options: [docs/ADVANCED.md](docs/ADVANCED.md).
 
-## What's new in v0.5
+## What's new in v0.7
 
-- **`ollama-digest` skill**: merges `ollama-logs` and `ollama-git-history` into
-  one catalog entry for log/text-file and git-history digests — same
-  workflows and safety rules as before.
-- **Kubernetes support parked**: `ollama-k8s` removed until local-delegation
-  cost savings are proven; last shipped in 0.4.0 (tag `ollama-skills--v0.4.0`).
-- **Catalog trimmed and budget-enforced**: always-on skill/agent descriptions
-  drop from 4,553 to 2,583 chars (~1,140 → ~645 tokens per session);
-  `validate_repo.py` now enforces per-description caps and a total catalog
-  budget so the overhead cannot silently regrow
-  (`python benchmarks/measure_catalog.py` reports the current spend).
+- **Trust tiers** (see the table below): every drafting path has an explicit
+  gate — hinted commit drafts auto-accept on exit 0, drafted commands are
+  classified by the script itself (deny-list refusal on exit 6; provably
+  read-only pipelines run without review), digests get a coverage line plus
+  a three-probe judge cap, code drafts apply unread only behind a test.
+- **Digest quality, twice-fixed by measurement**: fragment-style chunk notes
+  (120-token budget, was 80 and truncating), a 400-token final digest (was
+  200), rare single-occurrence events prioritized — first-ever 3/3 digest
+  validation round, with a transcript audit in the results section below.
+- **`record-outcome`**: draft fates (used-as-is / edited / replaced /
+  model-failed) land in the usage ledger as counts, so review policy is
+  driven by data. `stats` tallies them.
+- v0.6.0 was prepared but never shipped (its release gate failed on the cost
+  re-measure); its internal-deepening and skill-craft work ships here.
 
 Earlier releases: see [CHANGELOG.md](CHANGELOG.md).
 
@@ -432,6 +436,16 @@ summarize  with savings vs without: -17.5% (mean tokens, successful runs only)
   proves is behavioral: the duplicate work is measurably reduced, the
   digests finally pass validation, and the machinery reports its own
   outcomes.
+
+The release itself was gated on a follow-up **directed audit** (prompt names
+the skill, so the tier must fire): after the digest budget rose to 400
+tokens and the prompts learned to prioritize rare events, the delegating
+session ran the tier textbook-clean — single invocation, one probe, digest
+accepted as `edited`, planted facts intact. Small print, stated plainly:
+that is n=1 delegating-run evidence (two sibling sessions hit local-model
+memory pressure and took the documented fallback, recording `model-failed`
+honestly), and the tier's accepted failure mode — a rare event slipping a
+passing digest — remains accepted, now with a ledger field counting it.
 
 ### The confirmation arm: skills invoked deliberately
 
