@@ -3,10 +3,11 @@ name: ollama-code
 description: Draft small, self-contained code (one function, one small file, boilerplate, a test) with a local Ollama model, then review and place it. Use when the user asks for a small offline code task or private code drafting.
 ---
 
-# ollama-code — small code drafts, reviewed line by line
+# ollama-code — small code drafts, gated before they land
 
-The local model drafts SMALL code. You review every line, fix small problems, and
-only then write the file. Big or cross-file work is your job, not the local model's.
+The local model drafts SMALL code. A draft lands only through its gate: apply it
+unread when a test you wrote yourself covers it and the suite passes; review every
+line otherwise. Big or cross-file work is your job, not the local model's.
 
 The loop is ground -> draft -> judge.
 
