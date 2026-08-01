@@ -383,6 +383,56 @@ engagement so far. Read it with the usual discipline:
   -15/-17, +8/+10, -11/-19: unattended neutral-prompt sessions show **no
   reliable token saving**, and we won't claim one.
 
+### Re-measured with the 0.7.0 trust tiers — and a new primary metric
+
+The 0.6.0 numbers sent us to the transcripts, which showed *why* delegation
+lost tokens: sessions re-derived every digest with their own grep passes on
+top of the delegation (duplicate review). 0.7.0 gave every path an explicit
+trust tier with a mechanical or bounded gate. Because four rounds have now
+shown the token deltas smaller than the cell-to-cell noise, this round adds
+a **transcript audit** as the primary metric: did the duplicate work
+actually disappear? Same experiment otherwise, n=3 per cell
+(`benchmarks/results/ab-published-0.7.0.json`):
+
+```
+task       arm      ok    tokens (mean)  cache read  cost USD  local tokens  delegated
+commit     without  3/3          18,981         n/a       n/a             0  -
+commit     with     2/3          20,558         n/a       n/a           924  1
+commit     with savings vs without: -8.3% (mean tokens, successful runs only)
+summarize  without  3/3          21,829         n/a       n/a             0  -
+summarize  with     3/3          25,653     214,427    0.4617        16,333  2
+summarize  with savings vs without: -17.5% (mean tokens, successful runs only)
+```
+
+- Provenance: the matrix was interrupted at 9/12 again; those rows keep
+  tokens and pass/fail (recovered from stdout and the fixtures' ledgers)
+  but lost cache and cost — the n/a columns. The missing summarize/with
+  cell was re-run at the same commit. Rows are flagged in the JSON.
+- **Audit, commit half: PASS.** Both delegating commit sessions used the
+  exit-0 draft verbatim with zero comparison turns afterward — the
+  auto-accept tier removed the duplicate review it targeted. One of them
+  ran the entire pipeline unattended for the first time: draft ->
+  auto-accept -> gated commit-push -> `record-outcome used-as-is`.
+- **Audit, digest half: PARTIAL.** Neither delegating summarize session
+  re-ran the digest or rebuilt it from the source (0.6.0's failure mode,
+  gone), but both exceeded the two-probe cap (3 and 4 targeted probes)
+  and both recorded their digest as `replaced` — the draft informed the
+  answer but did not stand as it. The bounded judge bent the curve; it
+  did not fully hold.
+- Reliability milestone: summarize/with passed **3/3 for the first time
+  in any round** (fragment-style 120-token chunk notes replaced the
+  80-token truncation that kept dropping planted facts). The one commit
+  failure delegated fine but finished wrong — plain `git commit` into
+  fixture git-identity friction — a workflow miss, not a draft defect.
+- Tokens stayed negative (commit -8.3% ok-only / -5.8% all runs;
+  summarize -17.5%), partly by design: every delegating session now pays
+  an extra `record-outcome` call, and the fourth straight round of deltas
+  sits inside the noise band. The honest conclusion stands — no
+  token-saving claim for unattended neutral sessions. What this round
+  proves is behavioral: the duplicate work is measurably reduced, the
+  digests finally pass validation, and the machinery reports its own
+  outcomes.
+
 ### The confirmation arm: skills invoked deliberately
 
 We then added a third arm — same tasks, same model, but the prompt names the
