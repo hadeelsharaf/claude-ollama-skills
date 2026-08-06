@@ -19,7 +19,8 @@ Subcommands:
   pr-create      Create a draft PR/MR via gh/glab with a reviewed title/body (gated).
   pr-desc        Branch commits vs base -> JSON {title, body} for a PR (local).
   record-outcome Record a draft's fate (used-as-is/edited/replaced/model-failed)
-                 in the usage ledger, counts only.
+                 in the usage ledger, counts only. Or fold it into the next
+                 delegating call with --outcome [--outcome-task <task>].
   stats          Show recorded local usage and estimated cloud-token savings.
   summarize      Log/git/plain text -> short digest (map-reduce, local).
 
@@ -656,21 +657,30 @@ def _flush_usage(cfg: dict, code: int) -> None:
 
 OUTCOME_VERDICTS = ("used-as-is", "edited", "replaced", "model-failed")
 
+# Subcommands without an args.task attribute still need a default task for
+# a folded --outcome row (spec 4.1: the subcommand's own task profile).
+OUTCOME_TASK_FALLBACK = {"commit-push": "commit", "pr-create": "general"}
+
+
+def _write_outcome_row(task: str, verdict: str, cfg: dict) -> None:
+    """Append one counts-only draft-fate row. Best-effort: never raises."""
+    row = {"ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+           "v": 1, "cmd": "outcome", "task": task, "verdict": verdict}
+    if not _usage_enabled(cfg):
+        return
+    try:
+        path, repo_root = _usage_path(cfg)
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(row) + "\n")
+        if repo_root is not None:
+            _ensure_excluded()
+    except Exception as exc:
+        debug(f"usage ledger skipped: {exc}")
+
 
 def cmd_record_outcome(args, cfg: dict) -> int:
     """Append a counts-only draft-fate row. Best-effort: never fails."""
-    row = {"ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-           "v": 1, "cmd": "outcome", "task": args.task,
-           "verdict": args.verdict}
-    if _usage_enabled(cfg):
-        try:
-            path, repo_root = _usage_path(cfg)
-            with open(path, "a", encoding="utf-8") as fh:
-                fh.write(json.dumps(row) + "\n")
-            if repo_root is not None:
-                _ensure_excluded()
-        except Exception as exc:
-            debug(f"usage ledger skipped: {exc}")
+    _write_outcome_row(args.task, args.verdict, cfg)
     print(f"recorded: {args.task} {args.verdict}")
     return EXIT_OK
 
@@ -2134,6 +2144,18 @@ def build_parser() -> argparse.ArgumentParser:
     common.add_argument("--quiet", action="store_true",
                         help="no progress dots (automatic when stderr is not a terminal)")
 
+    # --outcome lives on each delegating subparser directly, NOT on the
+    # shared `common` parent: the row's default task depends on which
+    # subcommand parsed it (same action-object trap as --task above).
+    def add_outcome_flags(sp):
+        sp.add_argument("--outcome", choices=list(OUTCOME_VERDICTS),
+                        help="first record the PREVIOUS draft's fate in the "
+                             "usage ledger (counts only)")
+        sp.add_argument("--outcome-task", choices=list(TASKS),
+                        dest="outcome_task",
+                        help="task for the --outcome row when the previous "
+                             "draft was a different task")
+
     parser = argparse.ArgumentParser(
         prog="ollama_ask.py",
         description="Delegate small tasks to a local Ollama model.",
@@ -2172,6 +2194,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_ask.add_argument("--system", help="system prompt")
     p_ask.add_argument("--json-object", action="store_true", dest="json_object",
                        help="force a JSON object answer")
+    add_outcome_flags(p_ask)
 
     p_commit = sub.add_parser("commit-msg", parents=[common],
                               help="staged diff -> Conventional Commit message")
@@ -2186,6 +2209,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_commit.add_argument("--hint", default=None,
                           help="one short line of author intent for the draft")
     p_commit.set_defaults(task="commit")
+    add_outcome_flags(p_commit)
 
     p_push = sub.add_parser("commit-push", parents=[common],
                             help="commit staged changes with a reviewed message "
@@ -2195,12 +2219,14 @@ def build_parser() -> argparse.ArgumentParser:
                         help="remote name (default: upstream or origin)")
     p_push.add_argument("--allow-protected", action="store_true",
                         help="permit pushing to main/master (only if the user insisted)")
+    add_outcome_flags(p_push)
 
     p_cmd = sub.add_parser("draft-command", parents=[common],
                            help="plain words -> shell command JSON")
     p_cmd.add_argument("task_text", help="the task in plain words")
     p_cmd.add_argument("--shell", choices=["powershell", "bash", "cmd", "sh"])
     p_cmd.set_defaults(task="shell")
+    add_outcome_flags(p_cmd)
 
     p_code = sub.add_parser("draft-code", parents=[common], help="small spec -> code")
     p_code.add_argument("--spec")
@@ -2208,6 +2234,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_code.add_argument("--lang", default="python")
     p_code.add_argument("--out", help="also write the code to this file")
     p_code.set_defaults(task="code")
+    add_outcome_flags(p_code)
 
     p_fix = sub.add_parser("fix-lint", parents=[common],
                            help="lint finding -> SEARCH/REPLACE suggestion")
@@ -2216,12 +2243,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_fix.add_argument("--error")
     p_fix.add_argument("--errors-file", dest="errors_file")
     p_fix.set_defaults(task="code")
+    add_outcome_flags(p_fix)
 
     p_prd = sub.add_parser("pr-desc", parents=[common],
                            help="branch commits -> PR title/body JSON (local)")
     p_prd.add_argument("--base",
                        help="base branch (default: remote default branch)")
     p_prd.set_defaults(task="general")
+    add_outcome_flags(p_prd)
 
     p_prc = sub.add_parser("pr-create", parents=[common],
                            help="create a draft PR/MR with a reviewed "
@@ -2237,6 +2266,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_prc.add_argument("--ready", action="store_true",
                        help="create ready-for-review instead of draft "
                             "(only if the user explicitly asked)")
+    add_outcome_flags(p_prc)
 
     p_sum = sub.add_parser("summarize", parents=[common],
                            help="digest log/git/plain text into a short draft")
@@ -2257,6 +2287,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_sum.add_argument("--no-dedupe", action="store_false", dest="dedupe",
                        help="do not collapse repeated near-identical lines (log)")
     p_sum.set_defaults(task="summarize", verdict=True, dedupe=True)
+    add_outcome_flags(p_sum)
 
     return parser
 
@@ -2301,6 +2332,15 @@ def main(argv=None) -> int:
         _USAGE_CTX["cmd"] = args.command
         _USAGE_CTX["avoided_chars"] = 0
         _USAGE_CTX["hinted"] = False
+        outcome = getattr(args, "outcome", None)
+        if getattr(args, "outcome_task", None) and not outcome:
+            eprint("--outcome-task requires --outcome")
+            return EXIT_USAGE
+        if outcome:
+            task = (getattr(args, "outcome_task", None)
+                    or getattr(args, "task", None)
+                    or OUTCOME_TASK_FALLBACK.get(args.command, "general"))
+            _write_outcome_row(task, outcome, cfg)
         code = HANDLERS[args.command](args, cfg)
     except CliError as exc:
         eprint(f"error: {exc}")

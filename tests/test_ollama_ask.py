@@ -2575,6 +2575,68 @@ class OllamaAskTests(unittest.TestCase):
         self.assertIn("Draft outcomes:", out2)
         self.assertIn("None: None 1", out2)
 
+    # -- outcome folding (--outcome / --outcome-task) ------------------------
+    #
+    # NOTE: the brief for this task sketched these as a separate
+    # `OutcomeFoldingTests(FakeServerCase)` class. Neither `FakeServerCase`
+    # nor any subclass of the fake-server test case exists in this file -
+    # every fake-server test lives as a method on `OllamaAskTests` itself,
+    # and subclassing it here would re-run its entire existing suite a
+    # second time (setUpClass/tearDownClass are inherited unchanged). Kept
+    # as plain methods on `OllamaAskTests` instead, next to the
+    # record-outcome tests they mirror; every assertion from the brief is
+    # preserved verbatim.
+
+    def test_outcome_row_written_before_the_calls_own_rows(self):
+        repo = self._make_repo(staged=False)
+        os.environ.pop("OLLAMA_SKILLS_NO_USAGE", None)
+        code, out, err = self.run_cli(
+            "draft-command", "list files", "--outcome", "used-as-is")
+        self.assertEqual(code, 0, msg=err)
+        records = self._read_ledger(repo)
+        self.assertEqual(records[0]["cmd"], "outcome")
+        self.assertEqual(records[0]["task"], "shell")   # subcommand's own task
+        self.assertEqual(records[0]["verdict"], "used-as-is")
+        self.assertTrue(any(r["cmd"] == "draft-command" for r in records[1:]))
+
+    def test_outcome_task_override(self):
+        repo = self._make_repo(staged=False)
+        os.environ.pop("OLLAMA_SKILLS_NO_USAGE", None)
+        code, _out, err = self.run_cli(
+            "ask", "hi", "--outcome", "edited", "--outcome-task", "commit")
+        self.assertEqual(code, 0, msg=err)
+        row = self._read_ledger(repo)[0]
+        self.assertEqual((row["task"], row["verdict"]), ("commit", "edited"))
+
+    def test_outcome_task_without_outcome_exits_2(self):
+        code, _out, err = self.run_cli(
+            "ask", "hi", "--outcome-task", "commit")
+        self.assertEqual(code, 2)
+        self.assertIn("--outcome-task requires --outcome", err)
+
+    def test_commit_push_outcome_defaults_to_commit_task(self):
+        work, _bare = self._make_push_repo()   # existing fixture helper
+        subprocess.run(["git", "branch", "-m", "work"], cwd=work, check=True)
+        os.environ.pop("OLLAMA_SKILLS_NO_USAGE", None)
+        code, _out, err = self.run_cli(
+            "commit-push", "--message", "feat: x", "--outcome", "used-as-is")
+        self.assertEqual(code, 0, msg=err)
+        row = self._read_ledger(work)[0]
+        self.assertEqual(row["task"], "commit")
+
+    def test_unwritable_ledger_never_changes_exit_or_stdout(self):
+        # point usage_log_path at a DIRECTORY so the append fails
+        os.chdir(self._tmp)
+        os.environ.pop("OLLAMA_SKILLS_NO_USAGE", None)
+        blocked_dir = Path(self._tmp) / "blocked-as-file"
+        blocked_dir.mkdir()
+        (Path(self._tmp) / ".ollama-skills.json").write_text(
+            json.dumps({"usage_log_path": str(blocked_dir)}), encoding="utf-8")
+        code, out, _err = self.run_cli(
+            "draft-command", "list files", "--outcome", "used-as-is")
+        self.assertEqual(code, 0, msg=out)
+        self.assertIn("ls", out)
+
     def test_pr_skill_safety_wording_present(self):
         # A silent reword dropping draft-by-default or the deny-list would
         # defeat ollama-pr's safety story - pin the load-bearing wording as
