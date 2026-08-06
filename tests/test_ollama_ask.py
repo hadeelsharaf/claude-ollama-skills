@@ -1902,16 +1902,14 @@ class OllamaAskTests(unittest.TestCase):
             self.assertIn(needle, body, msg=f"{needle!r} missing from {rel}")
 
     def test_git_history_skill_bans_patches(self):
-        """ollama-digest must keep its no-patch privacy rule; a silent
-        reword that dropped these needles would defeat the skill's purpose."""
+        """The no-patch privacy rule moved to GIT-HISTORY.md with the git
+        path (0.8 progressive disclosure); the pointer fires exactly when
+        Path 2 fires, so the words moved but the rule did not."""
         needles = [
             "git log -p", "--patch", "--word-diff", "--full-diff",
-            "never shows patch content",
-            # digest accuracy: on git input the VERDICT line invites invented
-            # error/warning counts (observed live 2026-07-29) — pin the flag.
-            "--no-verdict",
+            "never shows patch content", "--no-verdict",
         ]
-        rel = "skills/ollama-digest/SKILL.md"
+        rel = "skills/ollama-digest/GIT-HISTORY.md"
         body = (ROOT / rel).read_text(encoding="utf-8")
         for needle in needles:
             self.assertIn(needle, body, msg=f"{needle!r} missing from {rel}")
@@ -1926,11 +1924,23 @@ class OllamaAskTests(unittest.TestCase):
             self.assertIn(needle, body, msg=f"{needle!r} missing")
 
     def test_digest_skill_keeps_both_privacy_rules(self):
-        body = (ROOT / "skills" / "ollama-digest" / "SKILL.md").read_text(
+        # rule 1 binds Path 1 and stays in SKILL.md; rule 2 binds Path 2 and
+        # lives in GIT-HISTORY.md (loaded whenever Path 2 fires).
+        skill = (ROOT / "skills" / "ollama-digest" / "SKILL.md").read_text(
             encoding="utf-8")
-        for needle in ("do not read the file yourself",
-                       "never shows patch content", "--no-verdict"):
-            self.assertIn(needle, body, msg=f"{needle!r} missing")
+        self.assertIn("do not read the file yourself", skill)
+        ref = (ROOT / "skills" / "ollama-digest" / "GIT-HISTORY.md").read_text(
+            encoding="utf-8")
+        for needle in ("never shows patch content", "--no-verdict"):
+            self.assertIn(needle, ref, msg=f"{needle!r} missing")
+
+    def test_digest_skill_points_at_git_history_reference(self):
+        needle = ("History or release-notes ask: read GIT-HISTORY.md in this "
+                  "skill's folder first - it carries the exact git log forms "
+                  "and the patch ban.")
+        body = " ".join((ROOT / "skills" / "ollama-digest" / "SKILL.md")
+                        .read_text(encoding="utf-8").split())
+        self.assertIn(needle, body)
 
     def test_removed_skills_are_gone(self):
         for rel in ("skills/ollama-k8s", "skills/ollama-logs",
