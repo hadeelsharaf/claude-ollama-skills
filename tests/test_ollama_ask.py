@@ -607,8 +607,8 @@ class OllamaAskTests(unittest.TestCase):
 
     def test_every_deny_pattern_lives_in_skill_prose(self):
         prose = ""
-        for rel in ("skills/ollama-shell/SKILL.md", "skills/ollama-docker/SKILL.md",
-                    "agents/ollama-ops.md"):
+        for rel in ("skills/ollama-shell/DENYLIST.md",
+                    "skills/ollama-docker/SKILL.md"):
             prose += (ROOT / rel).read_text(encoding="utf-8")
         for pat in ollama_ask.DENY_PATTERNS:
             self.assertIn(pat, prose, f"deny pattern not in any skill prose: {pat}")
@@ -1885,10 +1885,11 @@ class OllamaAskTests(unittest.TestCase):
             "--all-namespaces", "kubectl drain", "kubectl edit",
             "kubectl config use-context", "git rebase", "git filter-branch",
         ]
-        for rel in ("skills/ollama-shell/SKILL.md", "agents/ollama-ops.md"):
-            body = (ROOT / rel).read_text(encoding="utf-8")
-            for needle in needles:
-                self.assertIn(needle, body, msg=f"{needle!r} missing from {rel}")
+        body = (ROOT / "skills/ollama-shell/DENYLIST.md").read_text(
+            encoding="utf-8")
+        for needle in needles:
+            self.assertIn(needle, body,
+                          msg=f"{needle!r} missing from shared DENYLIST.md")
 
     def test_denylist_covers_ollama_docker(self):
         needles = [
@@ -2724,6 +2725,22 @@ class TrustTierProseTests(unittest.TestCase):
                   "yourself - a large changeset needs your synthesis, not "
                   "a local draft.")
         self.assertIn(needle, self._normalized("skills/ollama-pr/SKILL.md"))
+
+    def test_family8_denylist_pointer_conditional(self):
+        # Progressive disclosure only saves tokens if the read is
+        # conditional; pin the condition AND the read instruction together.
+        head = ("If the script printed classification: read-only, run the "
+                "draft without review. Any other draft: Read")
+        tail = ("then the scope check (touches only what the user named) - "
+                "before running.")
+        for rel in ("skills/ollama-shell/SKILL.md", "agents/ollama-ops.md"):
+            body = self._normalized(rel)
+            self.assertIn(head, body, msg=f"conditional head missing from {rel}")
+            self.assertIn(tail, body, msg=f"pointer tail missing from {rel}")
+        self.assertIn("Read DENYLIST.md in this skill's folder first",
+                      self._normalized("skills/ollama-shell/SKILL.md"))
+        self.assertIn("skills/ollama-shell/DENYLIST.md",
+                      self._body("agents/ollama-ops.md"))
 
 
 if __name__ == "__main__":

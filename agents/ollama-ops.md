@@ -23,37 +23,21 @@ Use `python` on Windows, `python3` on macOS/Linux.
 
 1. `python "$SCRIPT" draft-command "<the chore in plain words>"`
    (`--shell bash|powershell` to override the OS default).
-2. Parse the JSON (`command`, `explanation`, `caution`). The model's `caution`
-   does not count as a safety check.
+2. Parse the JSON (`command`, `explanation`, `caution`).
 3. If the script prints classification: read-only, you may run the draft
    without review. Any other draft gets your full review against the task
-   and the deny list before it runs. That review is the deny-list check
-   (below), then scope check (the command must touch ONLY what the user
-   named; too broad → rewrite it narrower yourself).
-4. Run it through the normal permission prompt. Never chain extra commands onto it.
-5. Report: the command, one-line explanation, and its real output (trimmed).
-6. When the draft's fate is decided, record it:
+   and the deny list before it runs. The model's `caution` does not count
+   as a safety check.
+4. If the script printed classification: read-only, run the draft without
+   review. Any other draft: Read the shared deny-list first, then review the
+   draft - the deny-list check against that file, then the scope check
+   (touches only what the user named) - before running.
+   (plugin: `${CLAUDE_PLUGIN_ROOT}/skills/ollama-shell/DENYLIST.md`;
+   manual: `$OLLAMA_SKILLS_HOME/skills/ollama-shell/DENYLIST.md`)
+5. Run it through the normal permission prompt. Never chain extra commands onto it.
+6. Report: the command, one-line explanation, and its real output (trimmed).
+7. When the draft's fate is decided, record it:
    `python "$SCRIPT" record-outcome <used-as-is|edited|replaced|model-failed> --task shell`.
-
-## Deny-list — rewrite or refuse, never run as-is
-
-- Recursive delete outside the folder the user named (incl. `rd /s /q`, `del /f /s /q`)
-- `git clean -fdx` / `-fd` (deletes untracked files: configs, .env, notes)
-- Anything that discards uncommitted work: `git reset --hard`, `git checkout -- .`,
-  `git restore .`, `git stash drop|clear`
-- Disk/partition operations, registry edits, shutdown, service changes
-- Piping a download into a shell (`curl ... | sh`, `iwr ... | iex`)
-- Reading or sending secrets: credential files (`.ssh`, `.aws`, tokens), `.env`
-  files, env-var dumps (`printenv`, `Get-ChildItem Env:`)
-- Persistence: `schtasks /create`, `crontab`, editing `$PROFILE` / `.bashrc`
-- `git push --force`, `git commit --no-verify`
-- Mass permission changes (`chmod -R 777`, `icacls /reset /T`)
-- Elevation the user did not request (`sudo`, `Start-Process -Verb RunAs`)
-- Docker data / bulk destroyers: `docker system prune` (any flags), `docker volume rm` / `docker volume prune`, `docker network rm` / `docker network prune`, `docker image prune` / `docker container prune` / `docker builder prune`, `docker rm -f` / `docker rmi -f` (force), batch forms like `docker rm $(docker ps -aq)` / `docker stop $(docker ps -q)` / `docker kill $(...)`, and `docker compose down -v` / `--volumes` / `--rmi all`
-- Docker host-escape the user did not ask for: `--privileged`, `--pid=host`, `--network=host`, `--cap-add=ALL`, `--security-opt seccomp=unconfined`, bind-mounting host root (`-v /:/...`); plus `docker login` or mounting credential files (`~/.docker/config.json`, `~/.ssh`, `~/.aws`, `.env`) into a container; and `docker exec` running a destructive command inside a container
-- kubectl data / cluster destroyers: `kubectl delete namespace`, `kubectl delete pvc` / `pv`, `kubectl delete` with `--all` / `--all-namespaces` / `-l` / `--selector` / `--force --grace-period=0`, deleting a whole `deployment/statefulset/daemonset/job` the user did not name, any cluster-scoped write (nodes, PV, StorageClass, CRDs, ClusterRole/Binding, webhooks), `kubectl drain` / `cordon` / `taint`, `kubectl replace --force`, and `kubectl edit`
-- kubectl reach / secret grabs: printing Secret values (`get secret -o yaml/jsonpath`, base64-decoding), `kubectl create token`, `kubectl cp` of token/secret paths, editing kubeconfig, widening access with `--kubeconfig` / `--token` / `--as` / `--context <other>`; `kubectl config use-context` / `set-context` / `delete-context` is the user's action, never drafted
-- Git history / branch destroyers (beyond the ones above): `git rebase`, `git merge`, `git branch -D` / `-d`, `git tag -d`, `git push --force` / `--force-with-lease`, `git filter-branch`, `git reflog expire`, `git gc --prune=now`
 
 ## Rules
 
