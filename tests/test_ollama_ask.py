@@ -608,7 +608,7 @@ class OllamaAskTests(unittest.TestCase):
     def test_every_deny_pattern_lives_in_skill_prose(self):
         prose = ""
         for rel in ("skills/ollama-shell/DENYLIST.md",
-                    "skills/ollama-docker/SKILL.md"):
+                    "skills/ollama-docker/DENYLIST.md"):
             prose += (ROOT / rel).read_text(encoding="utf-8")
         for pat in ollama_ask.DENY_PATTERNS:
             self.assertIn(pat, prose, f"deny pattern not in any skill prose: {pat}")
@@ -1896,7 +1896,7 @@ class OllamaAskTests(unittest.TestCase):
             "docker system prune", "docker volume rm", "docker compose down -v",
             "--privileged", "cloud metadata endpoints", "docker rm $(docker ps -aq)",
         ]
-        rel = "skills/ollama-docker/SKILL.md"
+        rel = "skills/ollama-docker/DENYLIST.md"
         body = (ROOT / rel).read_text(encoding="utf-8")
         for needle in needles:
             self.assertIn(needle, body, msg=f"{needle!r} missing from {rel}")
@@ -2741,6 +2741,11 @@ class TrustTierProseTests(unittest.TestCase):
                       self._normalized("skills/ollama-shell/SKILL.md"))
         self.assertIn("skills/ollama-shell/DENYLIST.md",
                       self._body("agents/ollama-ops.md"))
+        # docker variant (added in Task 3)
+        docker = self._normalized("skills/ollama-docker/SKILL.md")
+        self.assertIn(head, docker)
+        self.assertIn(tail, docker)
+        self.assertIn("Read both DENYLIST.md files first", docker)
 
 
 if __name__ == "__main__":
