@@ -122,5 +122,70 @@ class CheckJsonTests(unittest.TestCase):
         self.assertEqual(len(validate_repo.FAILURES), 1)
 
 
+class CheckSkillRefsTests(unittest.TestCase):
+    def setUp(self):
+        self._root = validate_repo.ROOT
+        self._failures = validate_repo.FAILURES
+        validate_repo.FAILURES = []
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        validate_repo.ROOT = self.root
+
+    def tearDown(self):
+        validate_repo.ROOT = self._root
+        validate_repo.FAILURES = self._failures
+        self.tmp.cleanup()
+
+    def test_skill_body_missing_reference_file_fails_ascii(self):
+        p = _write_skill(self.root, "demo", "Use when testing refs.")
+        p.write_text(p.read_text(encoding="utf-8")
+                     + "\nRead DENYLIST.md in this skill's folder first.\n",
+                     encoding="utf-8")
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            validate_repo.check_skill(p)
+        self.assertEqual(len(validate_repo.FAILURES), 1)
+        self.assertIn("DENYLIST.md", buf.getvalue())
+        self.assertTrue(buf.getvalue().isascii())
+
+    def test_skill_body_existing_reference_file_passes(self):
+        p = _write_skill(self.root, "demo", "Use when testing refs.")
+        p.write_text(p.read_text(encoding="utf-8")
+                     + "\nRead DENYLIST.md in this skill's folder first.\n",
+                     encoding="utf-8")
+        # reference file: plain prose, no frontmatter, no UNTRUSTED DRAFT
+        (p.parent / "DENYLIST.md").write_text("- never `rm -rf`\n",
+                                              encoding="utf-8")
+        with redirect_stdout(io.StringIO()):
+            validate_repo.check_skill(p)
+        self.assertEqual(validate_repo.FAILURES, [])
+
+    def test_skill_body_whitelisted_tokens_ignored(self):
+        p = _write_skill(self.root, "demo", "Use when testing refs.")
+        p.write_text(p.read_text(encoding="utf-8")
+                     + "\nSee SKILL.md, CLAUDE.md, and README.md.\n",
+                     encoding="utf-8")
+        with redirect_stdout(io.StringIO()):
+            validate_repo.check_skill(p)
+        self.assertEqual(validate_repo.FAILURES, [])
+
+    def test_agent_body_repo_relative_reference_checked(self):
+        p = _write_agent(self.root, "helper", "Runs chores.")
+        p.write_text(p.read_text(encoding="utf-8")
+                     + "\nRead skills/ollama-shell/DENYLIST.md first.\n",
+                     encoding="utf-8")
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            validate_repo.check_agent(p)
+        self.assertEqual(len(validate_repo.FAILURES), 1)
+        validate_repo.FAILURES = []
+        ref = self.root / "skills" / "ollama-shell" / "DENYLIST.md"
+        ref.parent.mkdir(parents=True, exist_ok=True)
+        ref.write_text("- base list\n", encoding="utf-8")
+        with redirect_stdout(io.StringIO()):
+            validate_repo.check_agent(p)
+        self.assertEqual(validate_repo.FAILURES, [])
+
+
 if __name__ == "__main__":
     unittest.main()

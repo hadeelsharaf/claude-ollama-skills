@@ -26,6 +26,33 @@ CATALOG_BUDGET = 2700
 KEBAB = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 CONVENTIONAL_MODELS = {"haiku", "sonnet", "opus", "fable", "inherit"}
 
+# Reference files loaded at invocation time by a pointer in the body. A
+# pointer at a missing file loads nothing and fails silently, so every
+# UPPERCASE.md token in a skill body must exist in that skill's folder,
+# and every skills/<name>/UPPERCASE.md token in an agent body must exist
+# relative to the repo root. Self/doc mentions are whitelisted.
+REF_TOKEN_SKILL = re.compile(r"\b([A-Z][A-Z0-9-]*\.md)\b")
+REF_TOKEN_AGENT = re.compile(r"\bskills/[a-z0-9-]+/[A-Z][A-Z0-9-]*\.md\b")
+REF_WHITELIST = {"SKILL.md", "CLAUDE.md", "README.md"}
+
+
+def check_skill_refs(path: Path, body: str) -> list[str]:
+    missing = []
+    for token in set(REF_TOKEN_SKILL.findall(body)):
+        if token in REF_WHITELIST:
+            continue
+        if not (path.parent / token).is_file():
+            missing.append(token)
+    return sorted(missing)
+
+
+def check_agent_refs(body: str) -> list[str]:
+    missing = []
+    for token in set(REF_TOKEN_AGENT.findall(body)):
+        if not (ROOT / token).is_file():
+            missing.append(token)
+    return sorted(missing)
+
 
 def ok(path: Path, note: str = "") -> None:
     rel = path.relative_to(ROOT)
@@ -110,9 +137,13 @@ def check_skill(path: Path, desc_tracker: list[tuple[int, Path]] | None = None) 
     elif name != path.parent.name:
         fail(path, f"name {name!r} must match folder {path.parent.name!r}")
     else:
-        ok(path, f"skill '{name}'")
-        if desc_tracker is not None:
-            desc_tracker.append((len(description), path))
+        missing = check_skill_refs(path, body)
+        if missing:
+            fail(path, f"body references missing file(s): {missing}")
+        else:
+            ok(path, f"skill '{name}'")
+            if desc_tracker is not None:
+                desc_tracker.append((len(description), path))
 
 
 def check_agent(path: Path, desc_tracker: list[tuple[int, Path]] | None = None) -> None:
@@ -143,6 +174,9 @@ def check_agent(path: Path, desc_tracker: list[tuple[int, Path]] | None = None) 
         problems.append("missing 'tools'")
     if "UNTRUSTED DRAFT" not in body:
         problems.append("body must contain the untrusted-draft safety rule")
+    missing = check_agent_refs(body)
+    if missing:
+        problems.append(f"body references missing file(s): {missing}")
     if problems:
         fail(path, "; ".join(problems))
     else:
