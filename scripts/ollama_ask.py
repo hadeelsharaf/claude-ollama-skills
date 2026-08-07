@@ -2096,7 +2096,7 @@ def _parse_pytest(lines):
                 if key:
                     counts[key] += int(num)
             continue
-        short = _PYTEST_SHORT_RE.match(line.strip())
+        short = _PYTEST_SHORT_RE.match(line)
         if short:
             failing_ids.append(short.group(1))
             continue
@@ -2251,11 +2251,21 @@ TEST_MAP_PROMPT = (
 
 def _pack_blocks(blocks, chunk_chars):
     """Group whole failure blocks into chunks <= chunk_chars. A single
-    oversized block keeps its TAIL (runners print the assertion last)."""
+    oversized block keeps its TAIL (runners print the assertion last), but
+    the id line is re-prepended so a truncated block still lets the model
+    echo the id it was given. Returns (chunks, truncated) where truncated
+    is a list of (tid, kept_chars) for every block that was cut."""
     chunks, cur, cur_len = [], [], 0
+    truncated = []
     for tid, text in blocks:
         if len(text) > chunk_chars:
-            text = text[-chunk_chars:]
+            if tid and len(tid) < chunk_chars:
+                kept = chunk_chars - len(tid) - 1
+                text = tid + "\n" + text[-kept:]
+            else:
+                kept = chunk_chars
+                text = text[-chunk_chars:]
+            truncated.append((tid, kept))
         add = len(text) + 2
         if cur and cur_len + add > chunk_chars:
             chunks.append(cur)
@@ -2264,13 +2274,18 @@ def _pack_blocks(blocks, chunk_chars):
         cur_len += add
     if cur:
         chunks.append(cur)
-    return chunks
+    return chunks, truncated
 
 
 def _test_id_ok(candidate, valid_ids):
     candidate = candidate.strip()
-    return any(candidate == vid or candidate in vid or vid in candidate
-               for vid in valid_ids)
+    return any(
+        candidate == vid
+        or vid.endswith("::" + candidate)
+        or vid.endswith("." + candidate)
+        or candidate.endswith("::" + vid)
+        or candidate.endswith("." + vid)
+        for vid in valid_ids)
 
 
 def _validate_test_items(text, expected_n, valid_ids):
@@ -2376,7 +2391,7 @@ def _summarize_test(args, cfg, lines) -> int:
         return EXIT_OK
     cache: dict = {}
     args.model, _ = resolve_model("summarize", cfg, args.model, cache)
-    chunks = _pack_blocks(blocks, args.chunk_chars)
+    chunks, truncated = _pack_blocks(blocks, args.chunk_chars)
     total = len(chunks)
     valid_ids = set(parsed["failing_ids"]) | {tid for tid, _ in blocks if tid}
     items_out, drops, stall_only = [], [], True
@@ -2409,6 +2424,8 @@ def _summarize_test(args, cfg, lines) -> int:
     if missing > 0:
         out_lines.append(
             f"[{missing} failure block(s) missing from input (truncated?)]")
+    out_lines += [f"[block {tid} truncated to last {kept} chars]"
+                  for tid, kept in truncated]
     out_lines += [f"[chunk {i}/{total} dropped: {reason}]"
                   for i, reason in drops]
     print("\n".join(out_lines))

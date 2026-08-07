@@ -278,6 +278,13 @@ Ran 3 tests in 0.003s
 FAILED (unexpected successes=1)
 """
 
+# Finding F3: an indented traceback line that happens to start with
+# "ERROR " must not be mistaken for a short-summary row (which would both
+# pollute failing_ids and vanish from the block text).
+PYTEST_ONE_FAILURE_WITH_INDENTED_ERROR = PYTEST_ONE_FAILURE.replace(
+    "E       assert 4 == 5\n",
+    "E       assert 4 == 5\n    ERROR connection refused to db\n")
+
 
 class FakeOllamaHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.0"
@@ -1805,6 +1812,14 @@ class OllamaAskTests(unittest.TestCase):
         self.assertEqual(parsed["failing_ids"],
                          ["tests.test_math.MathTests.test_boom"])
 
+    def test_parse_pytest_indented_error_lines_stay_in_block(self):
+        parsed = ollama_ask._parse_test_summary(
+            PYTEST_ONE_FAILURE_WITH_INDENTED_ERROR.splitlines())
+        self.assertEqual(parsed["failing_ids"], ["tests/test_math.py::test_add"])
+        tid, text = parsed["blocks"][0]
+        self.assertEqual(tid, "tests/test_math.py::test_add")
+        self.assertIn("ERROR connection refused to db", text)
+
     def test_summarize_dedupe_collapses_repeats(self):
         repeated = "\n".join("ERROR connection refused to db" for _ in range(500))
         code, out, err = self.run_stdin(repeated, "summarize", "--kind", "log")
@@ -2104,14 +2119,23 @@ class OllamaAskTests(unittest.TestCase):
         self.assertEqual(FakeOllamaHandler.generate_calls, 0)
 
     def test_pack_blocks_truncates_oversized_block_keeping_tail(self):
-        chunks = ollama_ask._pack_blocks(
+        chunks, truncated = ollama_ask._pack_blocks(
             [("tid", "x" * 500 + "TAILMARK")], 200)
         self.assertEqual(len(chunks), 1)
         self.assertEqual(len(chunks[0]), 1)
         text = chunks[0][0][1]
         self.assertEqual(len(text), 200)
+        self.assertTrue(text.startswith("tid\n"))
         self.assertTrue(text.endswith("TAILMARK"))
-        self.assertEqual(text, ("x" * 500 + "TAILMARK")[-200:])
+        self.assertEqual(truncated, [("tid", 200 - len("tid") - 1)])
+
+    def test_test_id_ok_rejects_bare_substrings(self):
+        valid = {"tests/test_math.py::test_add"}
+        self.assertFalse(ollama_ask._test_id_ok("t", valid))
+        self.assertFalse(ollama_ask._test_id_ok("add", valid))
+        self.assertTrue(ollama_ask._test_id_ok("test_add", valid))
+        self.assertTrue(ollama_ask._test_id_ok(
+            "tests/test_math.py::test_add", valid))
 
     def test_draft_code_yaml_and_dockerfile_fence_free(self):
         for lang in ("yaml", "dockerfile"):
