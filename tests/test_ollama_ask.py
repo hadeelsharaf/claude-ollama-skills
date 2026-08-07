@@ -2786,9 +2786,12 @@ class TrustTierProseTests(unittest.TestCase):
         self.assertNotIn(needle, body)
 
     def test_family6_record_outcome_invariant_prefix_in_all_11(self):
-        # Sentence 6 varies per file (own --task value, own path form); only
-        # the shared invariant prefix is pinned across all 11 files.
-        needle = "When the draft's fate is decided, record it:"
+        # 0.8: outcome recording folds into the next script call; the
+        # dedicated record-outcome round trip is the fallback, not the norm.
+        # Sentence 6 varies per file (own --task value); only the shared
+        # invariant prefix is pinned across all 11 files.
+        needle = ("When the draft's fate is decided, record it on your next "
+                  "script call by adding `--outcome`")
         for rel in self.ALL_11:
             self.assertIn(needle, self._normalized(rel), msg=f"missing from {rel}")
 

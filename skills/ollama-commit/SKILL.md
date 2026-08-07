@@ -40,8 +40,12 @@ Use `python` on Windows, `python3` on macOS/Linux.
 4. Show the user the final message and commit in the same turn:
    `git commit -m "<message>"`. The permission prompt on the git command IS
    the user's approval — do not stop to ask "shall I commit?" first.
-5. Report the commit hash. When the draft's fate is decided, record it:
-   `python "$SCRIPT" record-outcome <used-as-is|edited|replaced|model-failed> --task commit`.
+5. Report the commit hash. When the draft's fate is decided, record it on
+   your next script call by adding
+   `--outcome` `<used-as-is|edited|replaced|model-failed>` (add
+   `--outcome-task <task>` if the next call is a different task); if no next
+   call comes, run:
+   `python "$SCRIPT" record-outcome <verdict> --task commit`.
 
 ## Push (only when the user asked to push)
 
@@ -56,6 +60,8 @@ Use `python` on Windows, `python3` on macOS/Linux.
 9. Run: `python "$SCRIPT" commit-push --message "<your reviewed message>"`. It commits the
    staged diff with your reviewed message and pushes in one step. For main / master, add
    `--allow-protected` ONLY if the user explicitly insisted after your warning.
+   The dominant path records for free:
+   `python "$SCRIPT" commit-push --message "<draft>" --outcome used-as-is`.
 10. Report the commit hash, the branch, the remote, and that the push succeeded. On exit 7
     (protected branch) stop and ask the user; on exit 8 (git failed) report the git error
     and do not retry blindly.

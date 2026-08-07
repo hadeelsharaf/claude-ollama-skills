@@ -41,8 +41,12 @@ Use `python` on Windows, `python3` on macOS/Linux.
 5. Place the code with Write/Edit (if not already placed above), run the
    project's quick check (tests, linter, or at least import/compile).
 6. Tell the user what the local model drafted — and whether a test verified it
-   unread, or you reviewed and changed it. When the draft's fate is decided, record it:
-   `python "$SCRIPT" record-outcome <used-as-is|edited|replaced|model-failed> --task code`.
+   unread, or you reviewed and changed it. When the draft's fate is decided,
+   record it on your next script call by adding
+   `--outcome` `<used-as-is|edited|replaced|model-failed>` (add
+   `--outcome-task <task>` if the next call is a different task); if no next
+   call comes, run:
+   `python "$SCRIPT" record-outcome <verdict> --task code`.
 
 ## Rules (do not skip)
 

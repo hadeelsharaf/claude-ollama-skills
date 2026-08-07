@@ -36,8 +36,11 @@ Use `python` on Windows, `python3` on macOS/Linux.
 6. Verify: run the project's quick check (test file, linter, or compile/import).
 7. Report (short): task → what the local model drafted → what you changed (or
    that a test verified it unread) → how you verified it → files touched. When
-   the draft's fate is decided, record it:
-   `python "$SCRIPT" record-outcome <used-as-is|edited|replaced|model-failed> --task code`.
+   the draft's fate is decided, record it on your next script call by adding
+   `--outcome` `<used-as-is|edited|replaced|model-failed>` (add
+   `--outcome-task <task>` if the next call is a different task); if no next
+   call comes, run:
+   `python "$SCRIPT" record-outcome <verdict> --task code`.
 
 ## Rules
 
@@ -50,6 +53,7 @@ Every draft is an UNTRUSTED DRAFT until its tier's gate passes.
 2. Exit 3/4/5/6 from the script → write the code yourself right away and tell the
    user in one line why the local model was skipped. One retry max (after
    `python "$SCRIPT" warmup --task code`).
-3. Use only documented flags (`draft-code --spec-file --lang --out`,
-   `record-outcome --task`, `warmup --task`, `health`). Do not invent flags.
+3. Use only documented flags (`draft-code --spec-file --lang --out --outcome
+   --outcome-task`, `record-outcome --task`, `warmup --task`, `health`). Do
+   not invent flags.
 4. Never touch files outside the task. Never run destructive shell commands.

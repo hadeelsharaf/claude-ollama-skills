@@ -100,8 +100,11 @@ not draft from memory.
 5. **Logs intent:** follow the logs → summarize flow above.
 6. **Dockerfile/compose intent:** follow DRAFTING.md; review; user places the file.
 7. Return the real command output / the reviewed artifact to the user. When the
-   draft's fate is decided, record it:
-   `python "$SCRIPT" record-outcome <used-as-is|edited|replaced|model-failed> --task shell`.
+   draft's fate is decided, record it on your next script call by adding
+   `--outcome` `<used-as-is|edited|replaced|model-failed>` (add
+   `--outcome-task <task>` if the next call is a different task); if no next
+   call comes, run:
+   `python "$SCRIPT" record-outcome <verdict> --task shell`.
 
 ## Rules (do not skip)
 

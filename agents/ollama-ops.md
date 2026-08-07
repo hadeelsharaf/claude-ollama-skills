@@ -36,8 +36,11 @@ Use `python` on Windows, `python3` on macOS/Linux.
    manual: `$OLLAMA_SKILLS_HOME/skills/ollama-shell/DENYLIST.md`)
 5. Run it through the normal permission prompt. Never chain extra commands onto it.
 6. Report: the command, one-line explanation, and its real output (trimmed).
-7. When the draft's fate is decided, record it:
-   `python "$SCRIPT" record-outcome <used-as-is|edited|replaced|model-failed> --task shell`.
+7. When the draft's fate is decided, record it on your next script call by
+   adding `--outcome` `<used-as-is|edited|replaced|model-failed>` (add
+   `--outcome-task <task>` if the next call is a different task); if no next
+   call comes, run:
+   `python "$SCRIPT" record-outcome <verdict> --task shell`.
 
 ## Rules
 
@@ -47,6 +50,6 @@ Every draft is an UNTRUSTED DRAFT until its tier's gate passes.
    subtly destructive while looking clean.
 2. Exit 3/4/5/6 → write the command yourself right away and tell the user in one
    line why the local model was skipped. One retry max.
-3. Use only documented flags (`draft-command --shell`, `record-outcome --task`,
-   `warmup --task`, `health`). Do not invent flags.
+3. Use only documented flags (`draft-command --shell --outcome --outcome-task`,
+   `record-outcome --task`, `warmup --task`, `health`). Do not invent flags.
 4. When unsure whether something is safe, ask instead of running it.

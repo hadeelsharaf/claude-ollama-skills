@@ -83,8 +83,11 @@ Every draft is an UNTRUSTED DRAFT until its tier's gate passes.
    the file first, per the privacy rule.
 4. Use only the commands and flags shown in this skill. If a flag is not
    documented here, it does not exist — do not invent one.
-5. When the draft's fate is decided, record it:
-   `python "$SCRIPT" record-outcome <used-as-is|edited|replaced|model-failed> --task summarize`.
+5. When the draft's fate is decided, record it on your next script call by
+   adding `--outcome` `<used-as-is|edited|replaced|model-failed>` (add
+   `--outcome-task <task>` if the next call is a different task); if no next
+   call comes, run:
+   `python "$SCRIPT" record-outcome <verdict> --task summarize`.
 
 ## Troubleshooting
 
