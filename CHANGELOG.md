@@ -23,7 +23,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
   identical. Caught by rendering it: the first version screenshotted empty.
 - The homepage leads with the privacy property rather than token savings, and
   its "Honest limits" section repeats — with a link to the A/B data — that
-  four measured rounds show no reliable cloud-token saving for unattended
+  five measured rounds show no reliable cloud-token saving for unattended
   neutral-prompt sessions. The one figure it does headline (176x less text
   into cloud context) is labelled as a single recorded ledger call, not an
   average.
@@ -44,6 +44,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
   model-tier routing section.
 - `benchmarks/measure_catalog.py` reports per-skill common-path load (body
   only) vs full-path load (body plus reference files).
+- Re-measured neutral A/B, fifth consecutive round, published as
+  `benchmarks/results/ab-published-0.8.0.json`: commit -10.9%, summarize
+  +0.9% (successful runs only, n=3, read as sign not magnitude — both
+  deltas sit inside within-arm noise).
 
 ## [0.7.0] - 2026-08-01
 

@@ -525,13 +525,18 @@ summarize  directed 0/3               —           —         —        34,69
   tier's judge rejecting a weak local digest in an unattended session, the
   same behavior observed live in the 0.8 directed audit.
 - Fifth consecutive round with arm deltas inside within-arm noise (after
-  -15/-17 at 0.4.0, +8/+10 at 0.5.0, -11/-19 at 0.6.0, and -8/-18 at 0.7.0):
-  the no-token-saving-claim conclusion for unattended neutral-prompt
-  sessions is unchanged.
-- One datum from outside this matrix, sign-only at n=1: in the 0.8 directed
-  audit, an agent-dispatched commit pipeline ran 3 turns / $0.22 / 1,182
-  output tokens, versus 10 turns / $0.42 / 3,861 output tokens for the same
-  commit done inline.
+  -15/-17 at 0.4.0, +8/+10 at 0.5.0, -11/-19 at 0.6.0, -8/-18 at 0.7.0, and
+  -10.9/+0.9 at 0.8.0 — ok-only and all-runs identical; all four
+  with/without cells are 3/3): the commit delta (1,959 tokens) sits inside
+  the with-arm's own 3,196-token spread, so the no-token-saving-claim
+  conclusion for unattended neutral-prompt sessions is unchanged.
+- One datum from outside this matrix, sign-only at n=1, sourced from the 0.8
+  directed audit (prose-recorded, same convention as the 0.7.0 audit above):
+  an agent-dispatched commit pipeline ran 3 turns / $0.22 / 1,182 output
+  tokens, versus 10 turns / $0.42 / 3,861 output tokens for the same commit
+  done inline. The dispatched agent ran on haiku while the inline
+  comparison ran opus, so most of that delta is model tier, not dispatch
+  isolation alone.
 
 ### The confirmation arm: skills invoked deliberately
 
@@ -580,7 +585,8 @@ files an unattended model would only sample, are the honest headline.
 ### Making local delegation cost-effective
 
 Four levers, in the order we'd reach for them (levers 1-2 and 4 are
-measured; lever 3 is expected, not yet measured):
+measured; lever 3 now has a single sign-only observation — the audit datum
+above — still not a measured magnitude):
 
 1. **Invoke skills explicitly** instead of hoping for auto-delegation
    (`/ollama-skills:ollama-commit`, `@agent-ollama-skills:ollama-git`, or a

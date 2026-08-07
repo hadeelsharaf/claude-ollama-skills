@@ -25,3 +25,5 @@ benchmarks/results/*
 !benchmarks/results/ab-published-*.json
 # claude plugin eval default output dir (timestamped run artifacts)
 evals/results/
+# untracked local tool output
+graphify-out/
