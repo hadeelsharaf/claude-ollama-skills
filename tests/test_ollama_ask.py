@@ -91,6 +91,11 @@ CANNED_RESPONSES = {
     # Long enough to exceed any small --max-tokens cap * 4 * 6 chars, so the
     # plain judge's length check rejects it on both attempts.
     "PLAINTOOLONG": "z" * 400,
+    "ZQTESTOK": json.dumps({"failures": [{
+        "test_id": "tests/test_math.py::test_add",
+        "error_type": "AssertionError",
+        "assertion_quote": "E       assert 4 == 5",
+        "suspect_frame": "src/mathx.py:12"}]}),
 }
 
 PYTEST_ONE_FAILURE = """\
@@ -132,6 +137,10 @@ E       assert 4 == 5
 src/mathx.py:12: AssertionError
 1 failed, 2 passed in 0.09s
 """
+
+PYTEST_MARKED_OK = PYTEST_ONE_FAILURE.replace(
+    ">       assert add(2, 2) == 5",
+    ">       assert add(2, 2) == 5  # ZQTESTOK")
 
 PYTEST_MIXED_COUNTS = """\
 ============================= test session starts =============================
@@ -1923,6 +1932,32 @@ class OllamaAskTests(unittest.TestCase):
         self.assertEqual(code, 6)
         self.assertIn("--kind log", err)
         self.assertEqual(FakeOllamaHandler.generate_calls, 0)
+
+    def test_kind_test_red_path_digests_one_failure(self):
+        code, out, err = self.run_stdin(PYTEST_MARKED_OK,
+                                        "summarize", "--kind", "test")
+        self.assertEqual(code, 0, msg=err)
+        self.assertIn("tests: 2 passed, 1 failed, 0 errors", out)
+        self.assertIn("tests/test_math.py::test_add", out)
+        self.assertIn("error: AssertionError", out)
+        self.assertIn("assert: E       assert 4 == 5", out)
+        self.assertIn("frame: src/mathx.py:12", out)
+        self.assertNotIn("VERDICT", out)  # --verdict is ignored for kind=test
+        self.assertEqual(FakeOllamaHandler.generate_calls, 1)  # map only, no reduce
+
+    def test_kind_test_sends_schema_object_not_json_string(self):
+        self.run_stdin(PYTEST_MARKED_OK, "summarize", "--kind", "test")
+        fmt = FakeOllamaHandler.last_payload.get("format")
+        self.assertIsInstance(fmt, dict)
+        self.assertEqual(fmt.get("type"), "object")
+        self.assertIn("failures", fmt.get("required", []))
+
+    def test_kind_test_coverage_line_counts_only(self):
+        code, out, err = self.run_stdin(PYTEST_MARKED_OK,
+                                        "summarize", "--kind", "test")
+        self.assertEqual(code, 0, msg=err)
+        self.assertIn("coverage: tests=3 passed=2 failed=1 errors=0 "
+                      "blocks=1/1 chunks=1/1 dropped=0", err)
 
     def test_draft_code_yaml_and_dockerfile_fence_free(self):
         for lang in ("yaml", "dockerfile"):
