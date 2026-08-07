@@ -2364,7 +2364,7 @@ def _summarize_test(args, cfg, lines) -> int:
     if wanted == 0 and not parsed.get("runner_failed"):
         print(header)
         print(f"coverage: tests={parsed['ran']} failed=0 errors=0 "
-              f"model_calls=0", file=sys.stderr)
+              f"blocks=0/0 dropped=0 model_calls=0", file=sys.stderr)
         return EXIT_OK
     if wanted == 0:
         raise CliError(

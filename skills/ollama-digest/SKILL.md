@@ -1,7 +1,7 @@
 ---
 name: ollama-digest
 description: Digest big local text with a local Ollama model — log files, command output, and git history; the raw text stays on the machine and Claude sees only a short digest. Use when the user asks to summarize or find errors in a log or text file, wants a failing test run digested, or a commit-history digest or release notes.
-argument-hint: "<path or git range> [--kind log|text]"
+argument-hint: "<path or git range> [--kind log|text|test]"
 ---
 
 # ollama-digest — private digests for logs, big text, and git history
