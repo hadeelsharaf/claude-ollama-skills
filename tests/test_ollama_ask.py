@@ -133,6 +133,26 @@ src/mathx.py:12: AssertionError
 1 failed, 2 passed in 0.09s
 """
 
+PYTEST_MIXED_COUNTS = """\
+============================= test session starts =============================
+collected 5 items
+
+tests/test_math.py .FsE.                                                 [100%]
+
+=================================== ERRORS ===================================
+__________________________________ test_div ___________________________________
+
+    def test_div():
+>       1 / 0
+E       ZeroDivisionError: division by zero
+
+src/mathx.py:20: ZeroDivisionError
+=========================== short test summary info ============================
+FAILED tests/test_math.py::test_add - assert 4 == 5
+ERROR tests/test_math.py::test_div - ZeroDivisionError: division by zero
+========================= 1 failed, 2 passed, 1 skipped, 1 error in 0.20s =========================
+"""
+
 
 class FakeOllamaHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.0"
@@ -1620,6 +1640,18 @@ class OllamaAskTests(unittest.TestCase):
         parsed = ollama_ask._parse_test_summary(PYTEST_ONE_FAILURE.splitlines())
         self.assertEqual(ollama_ask._test_counts_header(parsed),
                          "tests: 2 passed, 1 failed, 0 errors "
+                         "(parsed from pytest output)")
+
+    def test_parse_pytest_error_and_skipped_counts(self):
+        parsed = ollama_ask._parse_test_summary(PYTEST_MIXED_COUNTS.splitlines())
+        self.assertEqual(parsed["counts"],
+                         {"passed": 2, "failed": 1, "errors": 1, "skipped": 1})
+        self.assertEqual(parsed["ran"], 5)
+
+    def test_counts_header_appends_skipped_when_nonzero(self):
+        parsed = ollama_ask._parse_test_summary(PYTEST_MIXED_COUNTS.splitlines())
+        self.assertEqual(ollama_ask._test_counts_header(parsed),
+                         "tests: 2 passed, 1 failed, 1 errors, 1 skipped "
                          "(parsed from pytest output)")
 
     def test_summarize_dedupe_collapses_repeats(self):
