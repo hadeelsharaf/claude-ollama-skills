@@ -2126,7 +2126,8 @@ def _parse_pytest(lines):
     return {"framework": "pytest", "counts": counts,
             "ran": sum(counts.values()),
             "failing_ids": failing_ids or [n for n, _ in named],
-            "blocks": named}
+            "blocks": named,
+            "runner_failed": counts["failed"] + counts["errors"] > 0}
 
 
 def _parse_test_summary(lines):
@@ -2150,6 +2151,7 @@ def _parse_unittest(lines):
     ran = None
     counts = {"passed": 0, "failed": 0, "errors": 0, "skipped": 0}
     result_seen = False
+    runner_failed = False
     blocks, cur_id, cur = [], None, []
 
     def flush():
@@ -2167,6 +2169,7 @@ def _parse_unittest(lines):
         m = _UNITTEST_RESULT_RE.match(s)
         if m and ran is not None:
             result_seen = True
+            runner_failed = m.group(1) == "FAILED"
             for pair in (m.group(2) or "").split(","):
                 key, _, num = pair.strip().partition("=")
                 if key in ("failures",):
@@ -2196,7 +2199,8 @@ def _parse_unittest(lines):
         0, ran - counts["failed"] - counts["errors"] - counts["skipped"])
     return {"framework": "unittest", "counts": counts, "ran": ran,
             "failing_ids": [tid for tid, _ in blocks],
-            "blocks": blocks}
+            "blocks": blocks,
+            "runner_failed": runner_failed}
 
 
 def _test_counts_header(parsed) -> str:
@@ -2342,11 +2346,16 @@ def _summarize_test(args, cfg, lines) -> int:
             "it with --kind log instead, or run the suite yourself.")
     header = _test_counts_header(parsed)
     wanted = parsed["counts"]["failed"] + parsed["counts"]["errors"]
-    if wanted == 0:
+    if wanted == 0 and not parsed.get("runner_failed"):
         print(header)
         print(f"coverage: tests={parsed['ran']} failed=0 errors=0 "
               f"model_calls=0", file=sys.stderr)
         return EXIT_OK
+    if wanted == 0:
+        raise CliError(
+            EXIT_BAD_OUTPUT,
+            "The runner reported FAILED but no failure counts were "
+            "parsed; run the suite yourself.")
     blocks = parsed["blocks"]
     body = "\n\n".join(text for _tid, text in blocks)
     if len(body) > args.ceiling_chars and not args.force:

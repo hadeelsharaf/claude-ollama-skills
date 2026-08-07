@@ -266,6 +266,18 @@ Ran 3 tests in 0.002s
 FAILED (errors=1, skipped=1)
 """
 
+# Finding F1: unittest can print FAILED for a reason its own summary line
+# doesn't carry a failures=/errors=/skipped= key for (e.g. unexpected
+# successes on an expectedFailure test) -> zero parsed counts even though
+# the runner said FAILED. Must not be treated as green.
+UNITTEST_UNEXPECTED_SUCCESS = """\
+...
+----------------------------------------------------------------------
+Ran 3 tests in 0.003s
+
+FAILED (unexpected successes=1)
+"""
+
 
 class FakeOllamaHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.0"
@@ -1997,6 +2009,13 @@ class OllamaAskTests(unittest.TestCase):
                                         "summarize", "--kind", "test")
         self.assertEqual(code, 6)
         self.assertIn("--kind log", err)
+        self.assertEqual(FakeOllamaHandler.generate_calls, 0)
+
+    def test_kind_test_unittest_failed_without_counts_exits_6(self):
+        code, out, err = self.run_stdin(UNITTEST_UNEXPECTED_SUCCESS,
+                                        "summarize", "--kind", "test")
+        self.assertEqual(code, 6)
+        self.assertIn("no failure counts were parsed", err)
         self.assertEqual(FakeOllamaHandler.generate_calls, 0)
 
     def test_kind_test_red_path_digests_one_failure(self):
