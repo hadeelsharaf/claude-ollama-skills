@@ -153,6 +153,44 @@ ERROR tests/test_math.py::test_div - ZeroDivisionError: division by zero
 ========================= 1 failed, 2 passed, 1 skipped, 1 error in 0.20s =========================
 """
 
+UNITTEST_ONE_FAILURE = """\
+F..
+======================================================================
+FAIL: test_add (tests.test_math.MathTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "tests/test_math.py", line 12, in test_add
+    self.assertEqual(add(2, 2), 5)
+AssertionError: 4 != 5
+----------------------------------------------------------------------
+Ran 3 tests in 0.004s
+
+FAILED (failures=1)
+"""
+
+UNITTEST_ALL_GREEN = """\
+...
+----------------------------------------------------------------------
+Ran 3 tests in 0.003s
+
+OK
+"""
+
+UNITTEST_ERRORS_AND_SKIPS = """\
+E.s
+======================================================================
+ERROR: test_boom (tests.test_math.MathTests.test_boom)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "tests/test_math.py", line 20, in test_boom
+    raise RuntimeError("kaput")
+RuntimeError: kaput
+----------------------------------------------------------------------
+Ran 3 tests in 0.002s
+
+FAILED (errors=1, skipped=1)
+"""
+
 
 class FakeOllamaHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.0"
@@ -1653,6 +1691,32 @@ class OllamaAskTests(unittest.TestCase):
         self.assertEqual(ollama_ask._test_counts_header(parsed),
                          "tests: 2 passed, 1 failed, 1 errors, 1 skipped "
                          "(parsed from pytest output)")
+
+    def test_parse_unittest_counts_ids_and_blocks(self):
+        parsed = ollama_ask._parse_test_summary(UNITTEST_ONE_FAILURE.splitlines())
+        self.assertEqual(parsed["framework"], "unittest")
+        self.assertEqual(parsed["counts"],
+                         {"passed": 2, "failed": 1, "errors": 0, "skipped": 0})
+        self.assertEqual(parsed["ran"], 3)
+        self.assertEqual(parsed["failing_ids"],
+                         ["tests.test_math.MathTests.test_add"])
+        tid, text = parsed["blocks"][0]
+        self.assertEqual(tid, "tests.test_math.MathTests.test_add")
+        self.assertIn("AssertionError: 4 != 5", text)
+
+    def test_parse_unittest_all_green(self):
+        parsed = ollama_ask._parse_test_summary(UNITTEST_ALL_GREEN.splitlines())
+        self.assertEqual(parsed["counts"],
+                         {"passed": 3, "failed": 0, "errors": 0, "skipped": 0})
+        self.assertEqual(parsed["blocks"], [])
+
+    def test_parse_unittest_errors_and_skips(self):
+        parsed = ollama_ask._parse_test_summary(
+            UNITTEST_ERRORS_AND_SKIPS.splitlines())
+        self.assertEqual(parsed["counts"],
+                         {"passed": 1, "failed": 0, "errors": 1, "skipped": 1})
+        self.assertEqual(parsed["failing_ids"],
+                         ["tests.test_math.MathTests.test_boom"])
 
     def test_summarize_dedupe_collapses_repeats(self):
         repeated = "\n".join("ERROR connection refused to db" for _ in range(500))

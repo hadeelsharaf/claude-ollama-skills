@@ -2140,8 +2140,63 @@ def _parse_test_summary(lines):
     return parsed
 
 
+_UNITTEST_RAN_RE = re.compile(r"^Ran (\d+) tests? in [0-9.]+s$")
+_UNITTEST_RESULT_RE = re.compile(r"^(OK|FAILED)(?: \(([^)]*)\))?\s*$")
+_UNITTEST_HEADER_RE = re.compile(r"^(FAIL|ERROR): (\S+) \((\S+)\)")
+_UNITTEST_SEP_RE = re.compile(r"^={10,}$")
+
+
 def _parse_unittest(lines):
-    return None  # Task 2
+    ran = None
+    counts = {"passed": 0, "failed": 0, "errors": 0, "skipped": 0}
+    result_seen = False
+    blocks, cur_id, cur = [], None, []
+
+    def flush():
+        if cur_id is not None and cur:
+            blocks.append((cur_id, "\n".join(cur).strip()))
+
+    for i, line in enumerate(lines):
+        s = line.strip()
+        m = _UNITTEST_RAN_RE.match(s)
+        if m:
+            flush()
+            cur_id, cur = None, []
+            ran = int(m.group(1))
+            continue
+        m = _UNITTEST_RESULT_RE.match(s)
+        if m and ran is not None:
+            result_seen = True
+            for pair in (m.group(2) or "").split(","):
+                key, _, num = pair.strip().partition("=")
+                if key in ("failures",):
+                    counts["failed"] = int(num)
+                elif key in ("errors",):
+                    counts["errors"] = int(num)
+                elif key in ("skipped",):
+                    counts["skipped"] = int(num)
+            continue
+        m = _UNITTEST_HEADER_RE.match(s)
+        if m:
+            flush()
+            name, dotted = m.group(2), m.group(3)
+            cur_id = dotted if dotted.endswith(name) else f"{dotted}.{name}"
+            cur = [line]
+            continue
+        if _UNITTEST_SEP_RE.match(s):
+            flush()
+            cur_id, cur = None, []
+            continue
+        if cur_id is not None:
+            cur.append(line)
+    flush()
+    if ran is None or not result_seen:
+        return None
+    counts["passed"] = max(
+        0, ran - counts["failed"] - counts["errors"] - counts["skipped"])
+    return {"framework": "unittest", "counts": counts, "ran": ran,
+            "failing_ids": [tid for tid, _ in blocks],
+            "blocks": blocks}
 
 
 def _test_counts_header(parsed) -> str:
