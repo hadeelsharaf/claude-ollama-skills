@@ -2346,6 +2346,27 @@ class OllamaAskTests(unittest.TestCase):
                         .read_text(encoding="utf-8").split())
         self.assertIn(needle, body)
 
+    def test_digest_skill_points_at_tests_reference(self):
+        needle = ("Failing test run: read TESTS.md in this skill's folder "
+                  "first - it carries the exact pipe forms, the counts-header "
+                  "contract, and the one-named-retest rule.")
+        body = " ".join((ROOT / "skills" / "ollama-digest" / "SKILL.md")
+                        .read_text(encoding="utf-8").split())
+        self.assertIn(needle, body)
+
+    def test_tests_reference_keeps_privacy_rules(self):
+        ref = (ROOT / "skills" / "ollama-digest" / "TESTS.md").read_text(
+            encoding="utf-8")
+        for needle in ("never read the raw test-runner output",
+                       "at most one named failing test",
+                       "UNTRUSTED DRAFT", "--kind log", "2>&1"):
+            self.assertIn(needle, ref, msg=f"{needle!r} missing")
+
+    def test_digest_skill_description_mentions_test_runs(self):
+        skill = (ROOT / "skills" / "ollama-digest" / "SKILL.md").read_text(
+            encoding="utf-8")
+        self.assertIn("failing test run", skill.splitlines()[2])
+
     def test_removed_skills_are_gone(self):
         for rel in ("skills/ollama-k8s", "skills/ollama-logs",
                     "skills/ollama-git-history", "tests/e2e_k8s.py",

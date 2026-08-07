@@ -1,6 +1,6 @@
 ---
 name: ollama-digest
-description: Digest big local text with a local Ollama model — log files, command output, and git history; the raw text stays on the machine and Claude sees only a short digest. Use when the user asks to summarize or find errors in a log or text file, or wants a commit-history digest or release notes.
+description: Digest big local text with a local Ollama model — log files, command output, and git history; the raw text stays on the machine and Claude sees only a short digest. Use when the user asks to summarize or find errors in a log or text file, wants a failing test run digested, or a commit-history digest or release notes.
 argument-hint: "<path or git range> [--kind log|text]"
 ---
 
@@ -49,6 +49,15 @@ first - it carries the exact git log forms and the patch ban. A plain
 "show the commits" ask is covered there too (no model call).
 (plugin: `${CLAUDE_PLUGIN_ROOT}/skills/ollama-digest/GIT-HISTORY.md`;
 manual: `$OLLAMA_SKILLS_HOME/skills/ollama-digest/GIT-HISTORY.md`)
+
+## Path 3 — a failing test run
+
+Failing test run: read TESTS.md in this skill's folder first - it carries
+the exact pipe forms, the counts-header contract, and the one-named-retest
+rule. An all-green run costs no model call — the counts header alone is the
+verification evidence.
+(plugin: `${CLAUDE_PLUGIN_ROOT}/skills/ollama-digest/TESTS.md`;
+manual: `$OLLAMA_SKILLS_HOME/skills/ollama-digest/TESTS.md`)
 
 ## Input budget
 
