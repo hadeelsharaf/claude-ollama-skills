@@ -3,6 +3,13 @@
 All notable changes to this project are recorded here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- Homepage: a "New in v0.8.0" section — on-demand guardrail loading (with the
+  measured shell common-path drop), `--outcome` folding, and the stats/models
+  feedback lines. Copy only; numbers trace to the 0.8.0 accounting.
+
 ## [0.8.0] - 2026-08-07
 
 ### Added

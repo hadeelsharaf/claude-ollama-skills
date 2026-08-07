@@ -101,6 +101,37 @@
     </ul>
   </section>
 
+  <!-- ============ NEW IN 0.8 ============ -->
+  <section>
+    <p class="eyebrow">New in v0.8.0</p>
+
+    <ul class="cards">
+      <li class="card">
+        <h3>Guardrails load on demand</h3>
+        <p>Deny lists and the git-history rules moved into per-skill reference
+        files that Claude reads only when a draft actually needs review. A
+        command the script classifies <code>read-only</code> runs without
+        loading any of it — the shell skill's common-path text dropped from
+        5,499 to 2,663 characters.</p>
+      </li>
+      <li class="card">
+        <h3>Outcomes ride along</h3>
+        <p>Recording a draft's fate no longer costs a round trip: pass
+        <code>--outcome used-as-is</code> (or <code>edited</code> /
+        <code>replaced</code> / <code>model-failed</code>) on the next
+        delegation and it lands in the ledger first. Still counts only —
+        never content.</p>
+      </li>
+      <li class="card">
+        <h3>The tools coach you back</h3>
+        <p><code>stats</code> now prints a suggestion when a task's recent
+        drafts keep failing, and <code>models</code> hints when a
+        higher-preference model isn't installed — with the exact
+        <code>ollama pull</code> to fix it. Both computed from counts alone.</p>
+      </li>
+    </ul>
+  </section>
+
   <!-- ============ CARDS ============ -->
   <section>
     <p class="eyebrow">Why it is built this way</p>
