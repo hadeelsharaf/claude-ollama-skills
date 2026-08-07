@@ -1902,6 +1902,28 @@ class OllamaAskTests(unittest.TestCase):
                 self.assertEqual(code, 2, msg=err)
                 self.assertIn("invalid choice", err)
 
+    def test_kind_test_all_green_makes_zero_model_calls(self):
+        code, out, err = self.run_stdin(PYTEST_ALL_GREEN,
+                                        "summarize", "--kind", "test")
+        self.assertEqual(code, 0, msg=err)
+        self.assertIn("tests: 3 passed, 0 failed, 0 errors", out)
+        self.assertIn("model_calls=0", err)
+        self.assertEqual(FakeOllamaHandler.generate_calls, 0)
+
+    def test_kind_test_all_green_unittest(self):
+        code, out, err = self.run_stdin(UNITTEST_ALL_GREEN,
+                                        "summarize", "--kind", "test")
+        self.assertEqual(code, 0, msg=err)
+        self.assertIn("(parsed from unittest output)", out)
+        self.assertEqual(FakeOllamaHandler.generate_calls, 0)
+
+    def test_kind_test_rejects_unrecognized_input(self):
+        code, out, err = self.run_stdin("hello\nworld\n",
+                                        "summarize", "--kind", "test")
+        self.assertEqual(code, 6)
+        self.assertIn("--kind log", err)
+        self.assertEqual(FakeOllamaHandler.generate_calls, 0)
+
     def test_draft_code_yaml_and_dockerfile_fence_free(self):
         for lang in ("yaml", "dockerfile"):
             code, out, err = self.run_cli("draft-code", "--spec", "CODEBLOCK make it",

@@ -22,7 +22,7 @@ Subcommands:
                  in the usage ledger, counts only. Or fold it into the next
                  delegating call with --outcome [--outcome-task <task>].
   stats          Show recorded local usage and estimated cloud-token savings.
-  summarize      Log/git/plain text -> short digest (map-reduce, local).
+  summarize      Log/git/plain/test-run text -> short digest (map-reduce, local).
 
 Exit codes: 0 ok · 2 bad usage/over budget · 3 Ollama unreachable ·
 4 model missing · 5 timeout/stall · 6 output failed validation ·
@@ -2209,6 +2209,26 @@ def _test_counts_header(parsed) -> str:
             f"(parsed from {parsed['framework']} output)")
 
 
+def _summarize_test(args, cfg, lines) -> int:
+    parsed = _parse_test_summary(lines)
+    if parsed is None:
+        raise CliError(
+            EXIT_BAD_OUTPUT,
+            "Input was not recognized as pytest or unittest output; digest "
+            "it with --kind log instead, or run the suite yourself.")
+    header = _test_counts_header(parsed)
+    wanted = parsed["counts"]["failed"] + parsed["counts"]["errors"]
+    if wanted == 0:
+        print(header)
+        print(f"coverage: tests={parsed['ran']} failed=0 errors=0 "
+              f"model_calls=0", file=sys.stderr)
+        return EXIT_OK
+    raise CliError(
+        EXIT_BAD_OUTPUT,
+        "Failing-run digesting lands in the next commit; run the suite "
+        "yourself for now.")  # replaced in Task 4
+
+
 def _final_cap(args, cfg) -> int:
     if args.max_tokens is not None:
         return args.max_tokens
@@ -2244,6 +2264,8 @@ def cmd_summarize(args, cfg: dict) -> int:
     if args.tail and len(lines) > args.tail:
         lines = lines[-args.tail:]
         eprint(f"note: input trimmed to last {args.tail} lines")
+    if args.kind == "test":
+        return _summarize_test(args, cfg, lines)
     lines = _prefilter(lines, args.kind, args.dedupe, args.chunk_chars)
     body = "\n".join(lines)
     if len(body) > args.ceiling_chars and not args.force:
@@ -2458,7 +2480,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_sum = sub.add_parser("summarize", parents=[common],
                            help="digest log/git/plain text into a short draft")
     p_sum.add_argument("--file", help="read input text from this file (default: stdin)")
-    p_sum.add_argument("--kind", choices=["log", "git", "text"],
+    p_sum.add_argument("--kind", choices=["log", "git", "text", "test"],
                        default="text",
                        help="context hint; drives the pre-filter and prompt wording")
     p_sum.add_argument("--tail", type=int, default=0,
