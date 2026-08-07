@@ -36,7 +36,7 @@ Use `python` on Windows, `python3` on macOS/Linux.
 5. Show the user the command and the one-line explanation, then run it through the
    normal permission prompt. Never chain it with other commands.
 6. Return the command's real output to the user. When the draft's fate is
-   decided, record it on your next script call by adding
+   decided, record it on your next delegating call by adding
    `--outcome` `<used-as-is|edited|replaced|model-failed>` (add
    `--outcome-task <task>` if the next call is a different task); if no next
    call comes, run:

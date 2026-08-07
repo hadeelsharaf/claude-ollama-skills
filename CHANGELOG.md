@@ -39,7 +39,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
   fallback. Ledger rows are identical in shape and remain counts-only.
 - `stats` prints counts-only `suggestion:` lines when a task's recent drafts
   keep failing; `models` prints `hint:` lines when a higher-preference model
-  is not installed. `docs/ADVANCED.md` gains a model-tier routing section.
+  is not installed. `stats --json` gains a machine-readable `suggestions`
+  key and `models --json` gains a `hints` key. `docs/ADVANCED.md` gains a
+  model-tier routing section.
 - `benchmarks/measure_catalog.py` reports per-skill common-path load (body
   only) vs full-path load (body plus reference files).
 

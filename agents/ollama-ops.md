@@ -36,7 +36,7 @@ Use `python` on Windows, `python3` on macOS/Linux.
    manual: `$OLLAMA_SKILLS_HOME/skills/ollama-shell/DENYLIST.md`)
 5. Run it through the normal permission prompt. Never chain extra commands onto it.
 6. Report: the command, one-line explanation, and its real output (trimmed).
-7. When the draft's fate is decided, record it on your next script call by
+7. When the draft's fate is decided, record it on your next delegating call by
    adding `--outcome` `<used-as-is|edited|replaced|model-failed>` (add
    `--outcome-task <task>` if the next call is a different task); if no next
    call comes, run:

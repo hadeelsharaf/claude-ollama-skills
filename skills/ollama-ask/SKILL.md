@@ -28,7 +28,7 @@ Use `python` on Windows, `python3` on macOS/Linux.
    - Need machine-readable output? Add `--json-object`.
    - Task profiles change the model and budgets: `--task commit|shell|code|general|summarize`.
 4. Read the output. Judge it. Use it only if it is correct for the user's request.
-5. When the draft's fate is decided, record it on your next script call by
+5. When the draft's fate is decided, record it on your next delegating call by
    adding `--outcome` `<used-as-is|edited|replaced|model-failed>` (add
    `--outcome-task <task>` if the next call is a different task); if no next
    call comes, run:

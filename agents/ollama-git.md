@@ -42,7 +42,7 @@ Use `python` on Windows, `python3` on macOS/Linux.
    the git command IS the user's approval; do not stop to ask first.
 5. Report: the final message, the commit hash (`git rev-parse --short HEAD`), and
    whether the local model's draft was used, edited, or replaced. When the
-   draft's fate is decided, record it on your next script call by adding
+   draft's fate is decided, record it on your next delegating call by adding
    `--outcome` `<used-as-is|edited|replaced|model-failed>` (add
    `--outcome-task <task>` if the next call is a different task); if no next
    call comes, run:

@@ -2873,7 +2873,7 @@ class TrustTierProseTests(unittest.TestCase):
         # Sentence 6 varies per file (own --task value); only the shared
         # invariant prefix is pinned across all 11 files.
         needle = ("When the draft's fate is decided, record it on your next "
-                  "script call by adding `--outcome`")
+                  "delegating call by adding `--outcome`")
         for rel in self.ALL_11:
             self.assertIn(needle, self._normalized(rel), msg=f"missing from {rel}")
 

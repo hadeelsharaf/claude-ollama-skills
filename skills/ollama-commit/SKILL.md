@@ -41,7 +41,7 @@ Use `python` on Windows, `python3` on macOS/Linux.
    `git commit -m "<message>"`. The permission prompt on the git command IS
    the user's approval — do not stop to ask "shall I commit?" first.
 5. Report the commit hash. When the draft's fate is decided, record it on
-   your next script call by adding
+   your next delegating call by adding
    `--outcome` `<used-as-is|edited|replaced|model-failed>` (add
    `--outcome-task <task>` if the next call is a different task); if no next
    call comes, run:

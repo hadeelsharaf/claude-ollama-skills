@@ -38,7 +38,7 @@ Use `python` on Windows, `python3` on macOS/Linux.
    (add `--base` if the user named one). Add `--ready` ONLY when the user's words
    explicitly say ready / publish for review — "open a PR" alone gets a draft.
 5. Report the PR/MR URL the script prints. When the draft's fate is decided,
-   record it on your next script call by adding
+   record it on your next delegating call by adding
    `--outcome` `<used-as-is|edited|replaced|model-failed>` (add
    `--outcome-task <task>` if the next call is a different task); if no next
    call comes, run:

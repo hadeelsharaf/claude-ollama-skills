@@ -94,13 +94,15 @@ not draft from memory.
    in this skill's folder, and the base list in the ollama-shell skill), then
    review the draft - the deny-list check against those files, then the
    scope check (touches only what the user named) - before running.
+   (base list — plugin: `${CLAUDE_PLUGIN_ROOT}/skills/ollama-shell/DENYLIST.md`;
+   manual: `$OLLAMA_SKILLS_HOME/skills/ollama-shell/DENYLIST.md`)
    Read verb → fine to run. Mutate verb → only if the user's words clearly asked.
    Deny-list → rewrite narrow or refuse. Show the command + one-line explanation,
    then the normal permission prompt. Never chain extra commands.
 5. **Logs intent:** follow the logs → summarize flow above.
 6. **Dockerfile/compose intent:** follow DRAFTING.md; review; user places the file.
 7. Return the real command output / the reviewed artifact to the user. When the
-   draft's fate is decided, record it on your next script call by adding
+   draft's fate is decided, record it on your next delegating call by adding
    `--outcome` `<used-as-is|edited|replaced|model-failed>` (add
    `--outcome-task <task>` if the next call is a different task); if no next
    call comes, run:

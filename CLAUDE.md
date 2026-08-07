@@ -111,11 +111,13 @@ models --json` prints the resolved model and its source for every task.
   no `git diff --cached` (only `--stat`), no `git log -p`/`--patch` in
   `ollama-digest`. Preserve that when editing workflows.
 - **`commit-push` can never force-push or delete a branch.** Its argv is built from fixed
-  literals plus `--message`/`--remote`/`--allow-protected`; there is no flag that can
+  literals plus `--message`/`--remote`/`--allow-protected` (and the ledger-only
+  `--outcome`/`--outcome-task`); there is no flag that can
   smuggle in `--force` or a refspec. `main`/`master` require `--allow-protected`, which
   Claude may add only after the user explicitly insists. Keep it that way.
 - **`pr-create` is draft-by-default.** Its argv is fixed literals plus
-  `--title`/`--body`/`--base`/`--remote`/`--ready`; `--ready` is the only escalation and
+  `--title`/`--body`/`--base`/`--remote`/`--ready` (and the ledger-only
+  `--outcome`/`--outcome-task`); `--ready` is the only escalation and
   the head branch can never be main/master. Keep it that way.
 - **The usage ledger stores counts only** — never prompt content, paths, or repo
   names; ledger writes are best-effort and must never break a command.

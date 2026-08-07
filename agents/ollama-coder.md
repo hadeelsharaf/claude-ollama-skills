@@ -36,7 +36,7 @@ Use `python` on Windows, `python3` on macOS/Linux.
 6. Verify: run the project's quick check (test file, linter, or compile/import).
 7. Report (short): task → what the local model drafted → what you changed (or
    that a test verified it unread) → how you verified it → files touched. When
-   the draft's fate is decided, record it on your next script call by adding
+   the draft's fate is decided, record it on your next delegating call by adding
    `--outcome` `<used-as-is|edited|replaced|model-failed>` (add
    `--outcome-task <task>` if the next call is a different task); if no next
    call comes, run:
