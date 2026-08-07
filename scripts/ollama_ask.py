@@ -2061,6 +2061,99 @@ def _chunk_lines(lines, chunk_chars):
     return chunks
 
 
+# --------------------------------------------------------------------------
+# summarize --kind test (deterministic parse; the model never counts)
+# --------------------------------------------------------------------------
+
+_PYTEST_SUMMARY_RE = re.compile(
+    r"^=* ?(\d+ [a-z]+(?:, \d+ [a-z]+)*) in [0-9.]+s(?: \([^)]*\))? ?=*$")
+_PYTEST_SHORT_RE = re.compile(r"^(?:FAILED|ERROR) (\S+)")
+_PYTEST_SECTION_HDR_RE = re.compile(r"^=+ (FAILURES|ERRORS) =+$")
+_PYTEST_ANY_HDR_RE = re.compile(r"^=+ [^=]+ =+$")
+_PYTEST_BLOCK_RE = re.compile(r"^_{4,} (.*?) _{4,}$")
+_PYTEST_COUNT_KEYS = {"passed": "passed", "failed": "failed",
+                      "error": "errors", "errors": "errors",
+                      "skipped": "skipped"}
+
+
+def _parse_pytest(lines):
+    counts = {"passed": 0, "failed": 0, "errors": 0, "skipped": 0}
+    summary_seen = False
+    failing_ids, blocks = [], []
+    in_fail_section, cur_name, cur = False, None, []
+
+    def flush():
+        if cur_name is not None and cur:
+            blocks.append((cur_name, "\n".join(cur).strip()))
+
+    for line in lines:
+        match = _PYTEST_SUMMARY_RE.match(line.strip())
+        if match and any(k in match.group(1) for k in _PYTEST_COUNT_KEYS):
+            summary_seen = True
+            for token in match.group(1).split(", "):
+                num, _, word = token.partition(" ")
+                key = _PYTEST_COUNT_KEYS.get(word)
+                if key:
+                    counts[key] += int(num)
+            continue
+        short = _PYTEST_SHORT_RE.match(line.strip())
+        if short:
+            failing_ids.append(short.group(1))
+            continue
+        if _PYTEST_SECTION_HDR_RE.match(line.strip()):
+            in_fail_section = True
+            continue
+        if _PYTEST_ANY_HDR_RE.match(line.strip()) and in_fail_section:
+            flush()
+            in_fail_section, cur_name, cur = False, None, []
+            continue
+        block = _PYTEST_BLOCK_RE.match(line.strip())
+        if block and in_fail_section:
+            flush()
+            cur_name, cur = block.group(1), [line]
+            continue
+        if cur_name is not None:
+            cur.append(line)
+    flush()
+    if not summary_seen:
+        return None
+    # Prefer full ids from the short summary; match section names to them.
+    named = []
+    for name, text in blocks:
+        full = next((fid for fid in failing_ids
+                     if fid.endswith("::" + name) or fid.endswith(name)), name)
+        named.append((full, text))
+    return {"framework": "pytest", "counts": counts,
+            "ran": sum(counts.values()),
+            "failing_ids": failing_ids or [n for n, _ in named],
+            "blocks": named}
+
+
+def _parse_test_summary(lines):
+    """Deterministic parse of pytest/unittest output. None if unrecognized.
+
+    Counts come ONLY from the runner's own summary line (the model never
+    counts, and neither does a block-counting heuristic)."""
+    parsed = _parse_unittest(lines)
+    if parsed is None:
+        parsed = _parse_pytest(lines)
+    return parsed
+
+
+def _parse_unittest(lines):
+    return None  # Task 2
+
+
+def _test_counts_header(parsed) -> str:
+    c = parsed["counts"]
+    parts = [f"{c['passed']} passed", f"{c['failed']} failed",
+             f"{c['errors']} errors"]
+    if c["skipped"]:
+        parts.append(f"{c['skipped']} skipped")
+    return (f"tests: {', '.join(parts)} "
+            f"(parsed from {parsed['framework']} output)")
+
+
 def _final_cap(args, cfg) -> int:
     if args.max_tokens is not None:
         return args.max_tokens

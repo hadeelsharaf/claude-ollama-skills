@@ -93,6 +93,46 @@ CANNED_RESPONSES = {
     "PLAINTOOLONG": "z" * 400,
 }
 
+PYTEST_ONE_FAILURE = """\
+============================= test session starts =============================
+collected 3 items
+
+tests/test_math.py .F.                                                   [100%]
+
+=================================== FAILURES ===================================
+__________________________________ test_add ___________________________________
+
+    def test_add():
+>       assert add(2, 2) == 5
+E       assert 4 == 5
+
+src/mathx.py:12: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_math.py::test_add - assert 4 == 5
+========================= 1 failed, 2 passed in 0.12s ==========================
+"""
+
+PYTEST_ALL_GREEN = """\
+============================= test session starts =============================
+collected 3 items
+
+tests/test_math.py ...                                                   [100%]
+============================== 3 passed in 0.05s ===============================
+"""
+
+PYTEST_QUIET_TAIL = """\
+.F.                                                                      [100%]
+=================================== FAILURES ===================================
+__________________________________ test_add ___________________________________
+
+    def test_add():
+>       assert add(2, 2) == 5
+E       assert 4 == 5
+
+src/mathx.py:12: AssertionError
+1 failed, 2 passed in 0.09s
+"""
+
 
 class FakeOllamaHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.0"
@@ -1542,6 +1582,45 @@ class OllamaAskTests(unittest.TestCase):
         self.assertEqual(len(set(FakeOllamaHandler.models_seen)), 1)  # one model, pinned
         self.assertLessEqual(FakeOllamaHandler.tags_calls, 1)  # resolved at most once
         self.assertEqual(calls["n"], 1)  # free RAM sampled exactly once for the run
+
+    # -- summarize --kind test ------------------------------------------------
+
+    def test_parse_pytest_counts_ids_and_blocks(self):
+        parsed = ollama_ask._parse_test_summary(PYTEST_ONE_FAILURE.splitlines())
+        self.assertEqual(parsed["framework"], "pytest")
+        self.assertEqual(parsed["counts"],
+                         {"passed": 2, "failed": 1, "errors": 0, "skipped": 0})
+        self.assertEqual(parsed["ran"], 3)
+        self.assertEqual(parsed["failing_ids"], ["tests/test_math.py::test_add"])
+        self.assertEqual(len(parsed["blocks"]), 1)
+        tid, text = parsed["blocks"][0]
+        self.assertEqual(tid, "tests/test_math.py::test_add")
+        self.assertIn("assert 4 == 5", text)
+        self.assertNotIn("short test summary", text)
+
+    def test_parse_pytest_quiet_mode_without_short_summary_lines(self):
+        # -q / trimmed output: bare summary line, ids fall back to the
+        # FAILURES section headers.
+        parsed = ollama_ask._parse_test_summary(PYTEST_QUIET_TAIL.splitlines())
+        self.assertEqual(parsed["counts"]["failed"], 1)
+        self.assertEqual(len(parsed["blocks"]), 1)
+        self.assertIn("test_add", parsed["blocks"][0][0])
+
+    def test_parse_pytest_all_green(self):
+        parsed = ollama_ask._parse_test_summary(PYTEST_ALL_GREEN.splitlines())
+        self.assertEqual(parsed["counts"],
+                         {"passed": 3, "failed": 0, "errors": 0, "skipped": 0})
+        self.assertEqual(parsed["blocks"], [])
+
+    def test_parse_rejects_non_test_text(self):
+        self.assertIsNone(ollama_ask._parse_test_summary(
+            ["just some log line", "another line", "error: nothing here"]))
+
+    def test_counts_header_wording(self):
+        parsed = ollama_ask._parse_test_summary(PYTEST_ONE_FAILURE.splitlines())
+        self.assertEqual(ollama_ask._test_counts_header(parsed),
+                         "tests: 2 passed, 1 failed, 0 errors "
+                         "(parsed from pytest output)")
 
     def test_summarize_dedupe_collapses_repeats(self):
         repeated = "\n".join("ERROR connection refused to db" for _ in range(500))
