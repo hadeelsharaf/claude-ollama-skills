@@ -2575,6 +2575,51 @@ class OllamaAskTests(unittest.TestCase):
         self.assertIn("Draft outcomes:", out2)
         self.assertIn("None: None 1", out2)
 
+    # -- stats failure-feedback suggestions -----------------------------------
+
+    def _outcome_row(self, task, verdict):
+        return json.dumps({"ts": "2026-08-07T00:00:00+00:00", "v": 1,
+                           "cmd": "outcome", "task": task, "verdict": verdict})
+
+    def _write_outcome_ledger(self, rows: list) -> Path:
+        os.chdir(self._tmp)
+        path = Path(self._tmp) / "usage.jsonl"
+        path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+        (Path(self._tmp) / ".ollama-skills.json").write_text(
+            json.dumps({"usage_log_path": str(path)}), encoding="utf-8")
+        return path
+
+    def test_stats_suggestion_appears_at_three_failed(self):
+        rows = [self._outcome_row("shell", "model-failed")] * 3 \
+             + [self._outcome_row("shell", "used-as-is")] * 2
+        self._write_outcome_ledger(rows)
+        code, out, err = self.run_cli("stats")
+        self.assertEqual(code, 0, msg=err)
+        self.assertIn("suggestion: task shell: 3 failed drafts recently", out)
+
+    def test_stats_no_suggestion_below_threshold(self):
+        rows = [self._outcome_row("shell", "model-failed")] * 2
+        self._write_outcome_ledger(rows)
+        code, out, err = self.run_cli("stats")
+        self.assertEqual(code, 0, msg=err)
+        self.assertNotIn("suggestion:", out)
+
+    def test_stats_json_suggestions_shape(self):
+        rows = [self._outcome_row("commit", "model-failed")] * 3
+        self._write_outcome_ledger(rows)
+        code, out, err = self.run_cli("stats", "--json")
+        self.assertEqual(code, 0, msg=err)
+        data = json.loads(out)
+        self.assertEqual(data["suggestions"],
+                         [{"task": "commit", "failed": 3, "window": 3}])
+
+    def test_stats_json_suggestions_empty_list_when_none(self):
+        self._write_stats_fixture()   # non-outcome rows only; ledger exists
+        code, out, err = self.run_cli("stats", "--json")
+        self.assertEqual(code, 0, msg=err)
+        data = json.loads(out)
+        self.assertEqual(data["suggestions"], [])
+
     # -- outcome folding (--outcome / --outcome-task) ------------------------
     #
     # NOTE: the brief for this task sketched these as a separate

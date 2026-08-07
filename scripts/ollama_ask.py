@@ -743,6 +743,19 @@ def cmd_stats(args, cfg: dict) -> int:
         bucket = outcomes.setdefault(task, {})
         bucket[verdict] = bucket.get(verdict, 0) + 1
 
+    # Failure-feedback (counts only): a task whose trailing window keeps
+    # producing model-failed drafts gets one actionable line, never content.
+    SUGGEST_WINDOW, SUGGEST_THRESHOLD = 20, 3
+    suggestions = []
+    for task in sorted(outcomes):
+        window = [r for r in outcome_rows
+                  if str(r.get("task")) == task][-SUGGEST_WINDOW:]
+        failed = sum(1 for r in window
+                     if str(r.get("verdict")) == "model-failed")
+        if failed >= SUGGEST_THRESHOLD:
+            suggestions.append({"task": task, "failed": failed,
+                                "window": len(window)})
+
     per_cmd: dict = {}
     for rec in records:
         row = per_cmd.setdefault(str(rec.get("cmd")), {
@@ -773,7 +786,8 @@ def cmd_stats(args, cfg: dict) -> int:
     if args.json:
         print(json.dumps({"path": str(path), "skipped_lines": skipped,
                           "per_cmd": per_cmd, "total": total,
-                          "outcomes": outcomes}, indent=2))
+                          "outcomes": outcomes,
+                          "suggestions": suggestions}, indent=2))
     else:
         headers = ["cmd", "calls", "delivered", "local tokens",
                    "est. avoided", "est. returned", "net est. saved"]
@@ -804,6 +818,12 @@ def cmd_stats(args, cfg: dict) -> int:
                     f"{verdict} {count}"
                     for verdict, count in sorted(outcomes[task].items()))
                 print(f"  {task}: {parts}")
+        if suggestions:
+            print()
+            for s in suggestions:
+                print(f"suggestion: task {s['task']}: {s['failed']} failed "
+                      f"drafts recently - try a larger model (see models "
+                      f"--json) or a higher --timeout")
 
     if args.reset:
         backup = str(path) + ".bak"
