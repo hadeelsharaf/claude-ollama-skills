@@ -233,3 +233,18 @@ class CatalogTests(unittest.TestCase):
         src = Path(measure_catalog.__file__).read_text(encoding="utf-8")
         self.assertNotIn("except ImportError", src,
                          msg="the silent constants fallback must stay deleted")
+
+    def test_catalog_rows_report_reference_files(self):
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            skill = tmp / "skills" / "demo" / "SKILL.md"
+            skill.parent.mkdir(parents=True)
+            skill.write_text("---\nname: demo\ndescription: Use when demo.\n---\n"
+                             + "b" * 100, encoding="utf-8")
+            (skill.parent / "DENYLIST.md").write_text("d" * 50, encoding="utf-8")
+            (tmp / "agents").mkdir()
+            rows = measure_catalog.catalog_rows(tmp)
+            row = next(r for r in rows if r["name"] == "demo")
+            self.assertEqual(row["refs"], {"DENYLIST.md": 50})
+            self.assertEqual(row["ref_chars"], 50)
+            self.assertEqual(row["full_chars"], row["body_chars"] + 50)
