@@ -3,7 +3,7 @@
 All notable changes to this project are recorded here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [0.8.0] - 2026-08-07
 
 ### Added
 - A project homepage at <https://hadeelsharaf.github.io/claude-ollama-skills/>,

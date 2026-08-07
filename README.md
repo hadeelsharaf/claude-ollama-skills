@@ -9,7 +9,7 @@
 Commit messages, PR descriptions, shell drafts, small code, log digests —<br>
 Claude plans and reviews; your local model drafts.
 
-[![version](https://img.shields.io/badge/version-0.7.0-1F6FEB?style=flat-square&labelColor=0D1117)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.8.0-1F6FEB?style=flat-square&labelColor=0D1117)](CHANGELOG.md)
 [![license](https://img.shields.io/badge/license-MIT-1F6FEB?style=flat-square&labelColor=0D1117)](LICENSE)
 [![python](https://img.shields.io/badge/python-3.9%2B-1F6FEB?style=flat-square&labelColor=0D1117)](https://www.python.org/)
 [![dependencies](https://img.shields.io/badge/dependencies-none-1F6FEB?style=flat-square&labelColor=0D1117)](#requirements)
@@ -47,22 +47,27 @@ worker.
 > CPU-only machines are slow with big models — the defaults here are tuned for that
 > (see the measured numbers below). Fully offline options: [docs/ADVANCED.md](docs/ADVANCED.md).
 
-## What's new in v0.7
+## What's new in v0.8
 
-- **Trust tiers** (see the table below): every drafting path has an explicit
-  gate — hinted commit drafts auto-accept on exit 0, drafted commands are
-  classified by the script itself (deny-list refusal on exit 6; provably
-  read-only pipelines run without review), digests get a coverage line plus
-  a three-probe judge cap, code drafts apply unread only behind a test.
-- **Digest quality, twice-fixed by measurement**: fragment-style chunk notes
-  (120-token budget, was 80 and truncating), a 400-token final digest (was
-  200), rare single-occurrence events prioritized — first-ever 3/3 digest
-  validation round, with a transcript audit in the results section below.
-- **`record-outcome`**: draft fates (used-as-is / edited / replaced /
-  model-failed) land in the usage ledger as counts, so review policy is
-  driven by data. `stats` tallies them.
-- v0.6.0 was prepared but never shipped (its release gate failed on the cost
-  re-measure); its internal-deepening and skill-craft work ships here.
+- **Progressive disclosure**: the shell/ops deny list, the docker deny-list
+  additions, and the digest git-history path now live in per-skill
+  reference files, read only when their branch fires — read-only commands
+  and file/log digests no longer load them at all. Common-path (body only)
+  load drops from 5,499 to 2,663 chars for `ollama-shell`, 4,589 to 2,301
+  for the `ollama-ops` agent, 6,664 to 4,818 for `ollama-digest`, and 7,873
+  to 7,142 for `ollama-docker` — reproduce with
+  `python benchmarks/measure_catalog.py`.
+- **`--outcome` folding**: every delegating subcommand now accepts
+  `--outcome <used-as-is|edited|replaced|model-failed>` (plus
+  `--outcome-task <task>`) to record the previous draft's fate on the next
+  delegating call — no dedicated round trip. `record-outcome` stays as the
+  session-final fallback for when no next call comes.
+- **Failure feedback, counts-only**: `stats` prints a `suggestion:` line
+  when a task's recent drafts keep failing, and `models` prints a `hint:`
+  line when a higher-preference model is not installed.
+- **`measure_catalog.py`** now reports common-path load (body only)
+  alongside full-path load (body plus reference files) per skill, so the
+  progressive-disclosure savings above are checkable, not just claimed.
 
 Earlier releases: see [CHANGELOG.md](CHANGELOG.md).
 
@@ -292,8 +297,12 @@ Every draft is an UNTRUSTED DRAFT until its tier's gate passes. The gates:
 | PR description | small changesets only (exit 2 gates size); reviewed against commit subjects + shortstat; PRs open as drafts and `--ready` needs the user's explicit words |
 | plain `ask` / plain commit style | always reviewed - these are the flexible escape hatches |
 
-The exit-code contract is unchanged. Draft fates are recorded (counts only)
-with `record-outcome <used-as-is|edited|replaced|model-failed> --task <task>`.
+The exit-code contract is unchanged. Draft fates are recorded (counts only) —
+pass `--outcome <used-as-is|edited|replaced|model-failed>` (plus
+`--outcome-task <task>` when the previous draft was a different task) on the
+next delegating call to fold the previous draft's fate in with no extra round
+trip; `record-outcome <used-as-is|edited|replaced|model-failed> --task <task>`
+remains the fallback for when no next call comes.
 
 ### Measured, honestly: an A/B experiment
 
@@ -465,7 +474,9 @@ summarize  with savings vs without: -17.5% (mean tokens, successful runs only)
   token-saving claim for unattended neutral sessions. What this round
   proves is behavioral: the duplicate work is measurably reduced, the
   digests finally pass validation, and the machinery reports its own
-  outcomes.
+  outcomes. (Forward note: 0.8.0's `--outcome` folding — see "What's new
+  in v0.8" above — removes that extra round trip by carrying the previous
+  draft's fate on the next delegating call instead.)
 
 The release itself was gated on a follow-up **directed audit** (prompt names
 the skill, so the tier must fire): after the digest budget rose to 400
@@ -476,6 +487,51 @@ that is n=1 delegating-run evidence (two sibling sessions hit local-model
 memory pressure and took the documented fallback, recording `model-failed`
 honestly), and the tier's accepted failure mode — a rare event slipping a
 passing digest — remains accepted, now with a ledger field counting it.
+
+#### 0.8.0 round
+
+Same experiment, same neutral prompts, n=3 per cell, all three arms in one
+matrix (`benchmarks/results/ab-published-0.8.0.json`):
+
+```
+task       arm      ok    tokens (mean)  cache read  cost USD  local tokens  delegated
+commit     without  3/3          17,920         n/a       n/a           n/a    n/a
+commit     with     3/3          19,879         n/a       n/a           n/a    n/a
+commit     directed 3/3          17,933         n/a       n/a           n/a    n/a
+summarize  without  3/3          20,875         n/a       n/a           n/a    n/a
+summarize  with     3/3          20,695         n/a       n/a           n/a    n/a
+summarize  directed 0/3               —           —         —        34,692      1
+```
+
+- n=3 per cell. Provenance: the full 18-session matrix was stopped after 15
+  sessions; those rows keep only `tokens_consumed` and `success` from the
+  runner's stdout — this time `cache_read`, `cost_usd`, `duration_ms`,
+  `delegated`, and `local_tokens` did not survive the crash (earlier
+  interrupted rounds recovered some of those from the fixtures' usage
+  ledgers; this one could not), so they show as `n/a` rather than a real
+  zero. 15 of the 18 rows are recovered this way; the missing cell,
+  summarize/directed (3 runs), was re-run to completion and is complete.
+- The commit task passed 3/3 across all three arms, including the
+  `--outcome`-folded directed pipeline.
+- summarize/without and summarize/with both passed 3/3; the with arm's
+  recovered signal shows no delegation observed (all three runs' lost
+  `local_tokens` default to 0, and nothing else in the surviving data
+  indicates a local call happened).
+- summarize/directed went **0/3** on the content validator. Its all-runs
+  mean is 21,415 tokens, but with zero successful runs the successful-runs-
+  only convention this project has used since 0.4.0 leaves that cell empty.
+  One trial genuinely delegated — a real 34,692-local-token digest — and its
+  answer still failed the content check: consistent with the 0.8 trust
+  tier's judge rejecting a weak local digest in an unattended session, the
+  same behavior observed live in the 0.8 directed audit.
+- Fifth consecutive round with arm deltas inside within-arm noise (after
+  -15/-17 at 0.4.0, +8/+10 at 0.5.0, -11/-19 at 0.6.0, and -8/-18 at 0.7.0):
+  the no-token-saving-claim conclusion for unattended neutral-prompt
+  sessions is unchanged.
+- One datum from outside this matrix, sign-only at n=1: in the 0.8 directed
+  audit, an agent-dispatched commit pipeline ran 3 turns / $0.22 / 1,182
+  output tokens, versus 10 turns / $0.42 / 3,861 output tokens for the same
+  commit done inline.
 
 ### The confirmation arm: skills invoked deliberately
 
