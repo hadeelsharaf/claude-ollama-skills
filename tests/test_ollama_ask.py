@@ -489,6 +489,43 @@ class OllamaAskTests(unittest.TestCase):
             "model": self.DEVSTRAL, "size": 15_177_374_099,
             "free_ram": 8_000_000_000, "tasks": ["code"]}])
 
+    def test_models_hints_missing_higher_preference(self):
+        """Only gemma2 is installed: commit auto-resolves to gemma2, but
+        qwen2.5-coder -- higher in PREFERENCES["commit"] -- has no installed
+        match at all, so a hint should point at it."""
+        FakeOllamaHandler.models_response = [{"name": "gemma2:2b", "size": 1}]
+        code, out, err = self.run_cli("models")
+        self.assertEqual(code, 0, msg=err)
+        self.assertIn(
+            "hint: task commit prefers qwen2.5-coder - not "
+            "installed; ollama pull qwen2.5-coder to upgrade "
+            "(check RAM first)", out)
+
+    def test_models_no_hint_for_explicit_pin(self):
+        """An explicit pin (env default here) is never 'auto' -- no hint."""
+        FakeOllamaHandler.models_response = [{"name": "gemma2:2b", "size": 1}]
+        os.environ["OLLAMA_SKILLS_MODEL"] = "gemma2:2b"
+        code, out, err = self.run_cli("models")
+        self.assertEqual(code, 0, msg=err)
+        self.assertNotIn("hint:", out)
+
+    def test_models_json_hints_shape(self):
+        FakeOllamaHandler.models_response = [{"name": "gemma2:2b", "size": 1}]
+        code, out, err = self.run_cli("models", "--json")
+        self.assertEqual(code, 0, msg=err)
+        data = json.loads(out)
+        self.assertIn({"task": "commit", "prefix": "qwen2.5-coder"},
+                      data["hints"])
+
+    def test_models_no_hint_when_top_preference_installed(self):
+        """commit's top preference is installed -- auto-detect stops there
+        immediately, so no hint fires for commit."""
+        FakeOllamaHandler.models_response = [
+            {"name": "qwen2.5-coder:7b", "size": 1}]
+        code, out, err = self.run_cli("models")
+        self.assertEqual(code, 0, msg=err)
+        self.assertNotIn("hint: task commit", out)
+
     # -- ask ----------------------------------------------------------------
 
     def test_ask_returns_text_and_exit_0(self):

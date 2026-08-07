@@ -895,9 +895,24 @@ def cmd_models(args, cfg: dict) -> int:
             # models is a diagnostic command: report the gap, don't die on it.
             resolved[task] = {"model": None, "source": "none", "error": str(exc)}
     skipped = _oversized_report(cache)
+    # Upgrade hints: only for auto-resolved tasks, only for a HIGHER-ranked
+    # preference prefix with no installed match at all (a RAM-gated installed
+    # match is already reported by the skipped list, and no RAM claim may be
+    # made about a model that is not installed - size unknown).
+    hints = []
+    names = cache.get("models", [])
+    for task, info in resolved.items():
+        if info.get("source") != "auto" or not info.get("model"):
+            continue
+        for prefix in PREFERENCES.get(task, []):
+            if info["model"].startswith(prefix):
+                break  # reached the tier auto-detect settled on
+            if not any(n.startswith(prefix) for n in names):
+                hints.append({"task": task, "prefix": prefix})
+                break
     if args.json:
         print(json.dumps({"tasks": resolved, "installed": cache.get("models", []),
-                          "skipped": skipped}, indent=2))
+                          "skipped": skipped, "hints": hints}, indent=2))
         return EXIT_OK
     print(f"{'task':<10} {'model':<28} source")
     for task, info in resolved.items():
@@ -906,6 +921,10 @@ def cmd_models(args, cfg: dict) -> int:
     for rec in skipped:
         print(f"skipped {rec['model']} for {', '.join(rec['tasks'])} "
               f"({gb(rec['size'])} > {gb(rec['free_ram'])} free RAM)")
+    for rec in hints:
+        print(f"hint: task {rec['task']} prefers {rec['prefix']} - not "
+              f"installed; ollama pull {rec['prefix']} to upgrade "
+              f"(check RAM first)")
     return EXIT_OK
 
 
