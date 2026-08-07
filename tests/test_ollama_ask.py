@@ -107,6 +107,16 @@ CANNED_RESPONSES = {
         "error_type": "AssertionError",
         "assertion_quote": "E       assert 9 == 9",
         "suspect_frame": "src/elsewhere.py:99"}]}),
+    "ZQTEST2": json.dumps({"failures": [
+        {"test_id": "tests/test_math.py::test_mul",
+         "error_type": "AssertionError",
+         "assertion_quote": "E       assert 6 == 7",
+         "suspect_frame": "src/mathx.py:20"},
+        {"test_id": "tests/test_math.py::test_add",
+         "error_type": "AssertionError",
+         "assertion_quote": "E       assert 4 == 5",
+         "suspect_frame": "src/mathx.py:12"},
+    ]}),
 }
 
 PYTEST_ONE_FAILURE = """\
@@ -284,6 +294,36 @@ FAILED (unexpected successes=1)
 PYTEST_ONE_FAILURE_WITH_INDENTED_ERROR = PYTEST_ONE_FAILURE.replace(
     "E       assert 4 == 5\n",
     "E       assert 4 == 5\n    ERROR connection refused to db\n")
+
+# Finding F4: two failures that land in the SAME map chunk under the
+# default --chunk-chars (the common shape in real runs). Only the first
+# block carries a marker; the canned reply supplies both ids.
+PYTEST_TWO_FAILURES_ONE_CHUNK = """\
+============================= test session starts =============================
+collected 3 items
+
+tests/test_math.py .FF                                                   [100%]
+
+=================================== FAILURES ===================================
+__________________________________ test_mul ___________________________________
+
+    def test_mul():
+>       assert mul(2, 3) == 7  # ZQTEST2
+E       assert 6 == 7
+
+src/mathx.py:20: AssertionError
+__________________________________ test_add ___________________________________
+
+    def test_add():
+>       assert add(2, 2) == 5
+E       assert 4 == 5
+
+src/mathx.py:12: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_math.py::test_mul - assert 6 == 7
+FAILED tests/test_math.py::test_add - assert 4 == 5
+========================= 2 failed, 1 passed in 0.15s ==========================
+"""
 
 
 class FakeOllamaHandler(BaseHTTPRequestHandler):
@@ -2044,6 +2084,15 @@ class OllamaAskTests(unittest.TestCase):
         self.assertIn("frame: src/mathx.py:12", out)
         self.assertNotIn("VERDICT", out)  # --verdict is ignored for kind=test
         self.assertEqual(FakeOllamaHandler.generate_calls, 1)  # map only, no reduce
+
+    def test_kind_test_two_failures_share_one_chunk(self):
+        code, out, err = self.run_stdin(PYTEST_TWO_FAILURES_ONE_CHUNK,
+                                        "summarize", "--kind", "test")
+        self.assertEqual(code, 0, msg=err)
+        self.assertIn("tests/test_math.py::test_mul", out)
+        self.assertIn("tests/test_math.py::test_add", out)
+        self.assertEqual(FakeOllamaHandler.generate_calls, 1)
+        self.assertIn("chunks=1/1", err)
 
     def test_kind_test_sends_schema_object_not_json_string(self):
         self.run_stdin(PYTEST_MARKED_OK, "summarize", "--kind", "test")
