@@ -34,6 +34,10 @@ Use `python` on Windows, `python3` on macOS/Linux.
 5. Fix small problems yourself when you reviewed line by line; place the code
    with Write/Edit if not already placed above.
 6. Verify: run the project's quick check (test file, linter, or compile/import).
+   A full suite run goes through the digest, never into your context:
+   `<suite command> 2>&1 | python "$SCRIPT" summarize --kind test`
+   (rules: skills/ollama-digest/TESTS.md; exit 3/4/5/6 → run it yourself and
+   say so in the report).
 7. Report (short): task → what the local model drafted → what you changed (or
    that a test verified it unread) → how you verified it → files touched. When
    the draft's fate is decided, record it on your next delegating call by adding

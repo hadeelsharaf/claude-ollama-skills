@@ -3292,6 +3292,11 @@ class TrustTierProseTests(unittest.TestCase):
         self.assertIn(tail, docker)
         self.assertIn("Read both DENYLIST.md files first", docker)
 
+    def test_coder_agent_pipes_suite_runs_through_digest(self):
+        body = (ROOT / "agents" / "ollama-coder.md").read_text(encoding="utf-8")
+        self.assertIn('2>&1 | python "$SCRIPT" summarize --kind test', body)
+        self.assertIn("skills/ollama-digest/TESTS.md", body)
+
 
 if __name__ == "__main__":
     unittest.main()
