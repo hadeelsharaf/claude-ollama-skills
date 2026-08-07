@@ -96,6 +96,17 @@ CANNED_RESPONSES = {
         "error_type": "AssertionError",
         "assertion_quote": "E       assert 4 == 5",
         "suspect_frame": "src/mathx.py:12"}]}),
+    "ZQTESTGHOST": json.dumps({"failures": [{
+        "test_id": "tests/test_other.py::test_ghost",
+        "error_type": "AssertionError",
+        "assertion_quote": "E       assert 4 == 5",
+        "suspect_frame": "src/mathx.py:12"}]}),
+    "ZQTESTNOJSON": "sorry, cannot format that",
+    "ZQTESTSOFT": json.dumps({"failures": [{
+        "test_id": "tests/test_math.py::test_add",
+        "error_type": "AssertionError",
+        "assertion_quote": "E       assert 9 == 9",
+        "suspect_frame": "src/elsewhere.py:99"}]}),
 }
 
 PYTEST_ONE_FAILURE = """\
@@ -141,6 +152,61 @@ src/mathx.py:12: AssertionError
 PYTEST_MARKED_OK = PYTEST_ONE_FAILURE.replace(
     ">       assert add(2, 2) == 5",
     ">       assert add(2, 2) == 5  # ZQTESTOK")
+
+PYTEST_MARKED_GHOST = PYTEST_ONE_FAILURE.replace(
+    ">       assert add(2, 2) == 5",
+    ">       assert add(2, 2) == 5  # ZQTESTGHOST")
+PYTEST_MARKED_NOJSON = PYTEST_ONE_FAILURE.replace(
+    ">       assert add(2, 2) == 5",
+    ">       assert add(2, 2) == 5  # ZQTESTNOJSON")
+PYTEST_MARKED_SOFT = PYTEST_ONE_FAILURE.replace(
+    ">       assert add(2, 2) == 5",
+    ">       assert add(2, 2) == 5  # ZQTESTSOFT")
+PYTEST_TRUNCATED = PYTEST_MARKED_OK.replace(
+    "========================= 1 failed, 2 passed in 0.12s ==========================",
+    "========================= 2 failed, 1 passed in 0.12s ==========================")
+
+PYTEST_TWO_FAILURES = """\
+============================= test session starts =============================
+collected 3 items
+
+tests/test_math.py .FF                                                   [100%]
+
+=================================== FAILURES ===================================
+__________________________________ test_mul ___________________________________
+
+    def test_mul():
+>       assert mul(2, 3) == 7  # ZQTESTNOJSON
+E       assert 6 == 7
+
+src/mathx.py:20: AssertionError
+__________________________________ test_add ___________________________________
+
+    def test_add():
+>       assert add(2, 2) == 5  # ZQTESTOK
+E       assert 4 == 5
+
+src/mathx.py:12: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_math.py::test_mul - assert 6 == 7
+FAILED tests/test_math.py::test_add - assert 4 == 5
+========================= 2 failed, 1 passed in 0.15s ==========================
+"""
+
+# Task 5 promoted test: PYTEST_ONE_FAILURE's summary/short-summary lines,
+# with the entire FAILURES section (and its block) stripped. The short
+# summary line stays so ids still parse -> a truncated run with ZERO
+# failure blocks at all, not just some missing.
+PYTEST_COUNTS_NO_BLOCKS = """\
+============================= test session starts =============================
+collected 3 items
+
+tests/test_math.py .F.                                                   [100%]
+
+=========================== short test summary info ============================
+FAILED tests/test_math.py::test_add - assert 4 == 5
+========================= 1 failed, 2 passed in 0.12s ==========================
+"""
 
 PYTEST_MIXED_COUNTS = """\
 ============================= test session starts =============================
@@ -1958,6 +2024,75 @@ class OllamaAskTests(unittest.TestCase):
         self.assertEqual(code, 0, msg=err)
         self.assertIn("coverage: tests=3 passed=2 failed=1 errors=0 "
                       "blocks=1/1 chunks=1/1 dropped=0", err)
+
+    # -- fail-closed gates (Task 5) ------------------------------------------
+
+    def test_kind_test_hallucinated_id_exits_6(self):
+        code, out, err = self.run_stdin(PYTEST_MARKED_GHOST,
+                                        "summarize", "--kind", "test")
+        self.assertEqual(code, 6)
+        self.assertIn("not in the run", err)
+        self.assertEqual(FakeOllamaHandler.generate_calls, 2)  # one retry
+
+    def test_kind_test_all_chunks_schema_invalid_exits_6(self):
+        code, out, err = self.run_stdin(PYTEST_MARKED_NOJSON,
+                                        "summarize", "--kind", "test")
+        self.assertEqual(code, 6)
+        self.assertIn("no digest produced", err)
+
+    def test_kind_test_soft_gate_marks_unverified(self):
+        code, out, err = self.run_stdin(PYTEST_MARKED_SOFT,
+                                        "summarize", "--kind", "test")
+        self.assertEqual(code, 0, msg=err)
+        self.assertIn("assert: E       assert 9 == 9 (unverified)", out)
+        self.assertIn("frame: src/elsewhere.py:99 (unverified)", out)
+
+    def test_kind_test_truncated_run_reports_missing_blocks(self):
+        code, out, err = self.run_stdin(PYTEST_TRUNCATED,
+                                        "summarize", "--kind", "test")
+        self.assertEqual(code, 0, msg=err)
+        self.assertIn("[1 failure block(s) missing from input (truncated?)]", out)
+        self.assertIn("blocks=1/2", err)
+
+    def test_kind_test_counts_without_blocks_reports_all_missing(self):
+        code, out, err = self.run_stdin(PYTEST_COUNTS_NO_BLOCKS,
+                                        "summarize", "--kind", "test")
+        self.assertEqual(code, 0, msg=err)
+        self.assertIn("tests: 2 passed, 1 failed, 0 errors", out)
+        self.assertIn("[1 failure block(s) missing from input (truncated?)]", out)
+        self.assertEqual(FakeOllamaHandler.generate_calls, 0)
+        self.assertIn("blocks=0/1", err)
+
+    def test_kind_test_partial_chunk_drop_is_visible(self):
+        # Block 1's model reply is never valid JSON -> that chunk drops with
+        # a visible marker; block 2 digests fine. --chunk-chars 200 forces
+        # one block per chunk.
+        code, out, err = self.run_stdin(PYTEST_TWO_FAILURES, "summarize",
+                                        "--kind", "test",
+                                        "--chunk-chars", "200")
+        self.assertEqual(code, 0, msg=err)
+        self.assertIn("tests/test_math.py::test_add", out)
+        self.assertIn("[chunk 1/2 dropped: model error]", out)
+        self.assertIn("blocks=2/2", err)
+        self.assertIn("dropped=1", err)
+
+    def test_kind_test_over_ceiling_exits_2(self):
+        code, out, err = self.run_stdin(PYTEST_MARKED_OK, "summarize",
+                                        "--kind", "test",
+                                        "--ceiling-chars", "10")
+        self.assertEqual(code, 2)
+        self.assertIn("--force", err)
+        self.assertEqual(FakeOllamaHandler.generate_calls, 0)
+
+    def test_pack_blocks_truncates_oversized_block_keeping_tail(self):
+        chunks = ollama_ask._pack_blocks(
+            [("tid", "x" * 500 + "TAILMARK")], 200)
+        self.assertEqual(len(chunks), 1)
+        self.assertEqual(len(chunks[0]), 1)
+        text = chunks[0][0][1]
+        self.assertEqual(len(text), 200)
+        self.assertTrue(text.endswith("TAILMARK"))
+        self.assertEqual(text, ("x" * 500 + "TAILMARK")[-200:])
 
     def test_draft_code_yaml_and_dockerfile_fence_free(self):
         for lang in ("yaml", "dockerfile"):
