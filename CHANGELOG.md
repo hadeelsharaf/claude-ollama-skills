@@ -27,6 +27,21 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
   neutral-prompt sessions. The one figure it does headline (176x less text
   into cloud context) is labelled as a single recorded ledger call, not an
   average.
+- Progressive disclosure: the shell/ops deny list, the docker deny-list
+  additions, and the digest git-history path now live in per-skill reference
+  files (`DENYLIST.md`, `GIT-HISTORY.md`) read only when their branch fires;
+  read-only commands and file/log digests no longer load them at all.
+  `validate_repo.py` now fails on a pointer to a missing reference file.
+- Outcome folding: every delegating subcommand accepts
+  `--outcome <used-as-is|edited|replaced|model-failed>` (plus
+  `--outcome-task <task>`) to record the previous draft's fate on the next
+  call with no extra round trip; `record-outcome` stays as the session-final
+  fallback. Ledger rows are identical in shape and remain counts-only.
+- `stats` prints counts-only `suggestion:` lines when a task's recent drafts
+  keep failing; `models` prints `hint:` lines when a higher-preference model
+  is not installed. `docs/ADVANCED.md` gains a model-tier routing section.
+- `benchmarks/measure_catalog.py` reports per-skill common-path load (body
+  only) vs full-path load (body plus reference files).
 
 ## [0.7.0] - 2026-08-01
 

@@ -110,3 +110,20 @@ it ships disabled. If you want it, add to your `settings.json`:
 
 Never run two local models at the same time on CPU — they fight for RAM and both
 crawl (measured on the dev machine: everything timed out).
+
+## 7. Model tiers per task
+
+Auto-detect already routes each task to the first installed match in its
+preference list; this table is the rationale, for choosing what to
+`ollama pull`.
+
+| Task tier | Local model class | Why |
+|---|---|---|
+| commit, shell | 2-4B fast instruct (`llama3.2:3b`, `gemma2:2b`, `qwen2.5:3b`) | short outputs, tight formats, called often - latency beats depth |
+| code (draft-code, fix-lint) | 7-8B coder (`qwen2.5-coder:7b`, `qwen3-coder`) | code drafts need the coder-specialised family to stay syntactically valid |
+| summarize | small-and-fast (`llama3.2`, `gemma2:2b`) | a digest makes many map calls, so per-call latency multiplies by the chunk count - this is why `qwen3` is deliberately LAST in the summarize preference list |
+| general (ask) | any 3-8B instruct | the flexible escape hatch; budget bound by `--max-tokens` |
+
+`models --json` prints the resolved model and its source for every task, and
+`models` prints `hint:` lines when a higher-preference model for a task is
+not installed.

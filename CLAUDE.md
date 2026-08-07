@@ -104,7 +104,9 @@ models --json` prints the resolved model and its source for every task.
 - **Catalog budget is enforced, not aspirational.** The constants live in
   `validate_repo.py` (`DESC_CAP_SKILL`, `DESC_CAP_AGENT`, `CATALOG_BUDGET`) — never raise
   them casually; `python benchmarks/measure_catalog.py` reports the current spend per
-  skill/agent and the total.
+  skill/agent and the total. Catalog text is also cache-priced: every description edit
+  re-writes the cached system prompt for every user session, so batch description changes
+  into releases rather than shipping them piecemeal.
 - **Privacy invariant:** skills forbid Claude from reading what was delegated —
   no `git diff --cached` (only `--stat`), no `git log -p`/`--patch` in
   `ollama-digest`. Preserve that when editing workflows.
