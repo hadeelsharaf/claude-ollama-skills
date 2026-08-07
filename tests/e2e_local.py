@@ -22,6 +22,25 @@ sys.path.insert(0, str(ROOT / "tests"))
 
 from support import rmtree_force  # noqa: E402
 
+FAILING_PYTEST_CAPTURE = """\
+============================= test session starts =============================
+collected 2 items
+
+tests/test_upload.py .F                                                  [100%]
+
+=================================== FAILURES ===================================
+_________________________________ test_retry __________________________________
+
+    def test_retry():
+>       assert upload(FailingClient(), b"blob") is True
+E       assert False is True
+
+src/uploader.py:31: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_upload.py::test_retry - assert False is True
+========================= 1 failed, 1 passed in 0.08s ==========================
+"""
+
 
 def run_step(name: str, argv: list, cwd=None, stdin_text=None, env=None) -> str:
     started = time.monotonic()
@@ -128,6 +147,17 @@ def main() -> int:
         print(f"  commit-msg-hinted said: {out!r}")
     finally:
         rmtree_force(mixed_tmp)
+
+    out = run_step("summarize-test",
+                   ["summarize", "--kind", "test"],
+                   stdin_text=FAILING_PYTEST_CAPTURE)
+    if "tests: 1 passed, 1 failed, 0 errors" not in out:
+        print(f"E2E summarize-test FAILED: counts header missing, got {out[:200]!r}")
+        sys.exit(1)
+    if "test_retry" not in out:
+        print(f"E2E summarize-test FAILED: failing test id missing, got {out[:200]!r}")
+        sys.exit(1)
+    print(f"  summarize-test said: {out[:120]!r}")
 
     out = run_step("draft-command", ["draft-command", "show the five newest files in this folder"])
     print(f"  draft-command said: {out[:100]!r}...")

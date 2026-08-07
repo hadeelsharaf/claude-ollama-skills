@@ -5,6 +5,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ## [Unreleased]
 
+### Added
+- `summarize --kind test`: failing pytest/unittest runs digested locally. The
+  script parses the runner's own summary line (the model never counts), an
+  all-green run makes zero model calls, per-failure map calls are constrained
+  by a JSON schema, and a digest naming a test id not present in the run is
+  refused (exit 6). New `skills/ollama-digest/TESTS.md` carries the pipe
+  forms and the two privacy rules; `agents/ollama-coder.md` now verifies
+  full-suite runs through the digest.
+
 ### Changed
 - Homepage: a "New in v0.8.0" section — on-demand guardrail loading (with the
   measured shell common-path drop), `--outcome` folding, and the stats/models
