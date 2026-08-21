@@ -33,6 +33,7 @@ timestamps, never prompt content or paths. Opt out with `OLLAMA_SKILLS_NO_USAGE=
 | A hostile PROJECT config redirects data off the machine (a cloned repo ships `.ollama-skills.json` with a remote `host`) | The script prints a loud warning on stderr whenever the resolved host is not loopback: "prompts and diffs will LEAVE this machine". Check for that warning after cloning anything. A project config can also set `usage_log_path` to redirect where those counts-only lines are appended — nuisance/file-clutter, no content exposure. Same mitigation as `host`: review project configs in cloned repos. |
 | Supply chain | The runtime is one readable stdlib-only Python file — no pip packages, no server processes. Pin a commit SHA when you consume this repo in an organization. |
 | Prompt injection via commit subjects reaching a PUBLISHED PR title/body (the pr path uploads reviewed text to GitHub/GitLab with the user's credentials) | `pr-desc` feeds subjects+shortstat only; Claude reviews the draft as untrusted; `pr-create` is draft-by-default with a fixed argv; `--ready` requires the user's explicit words. |
+| Hook surface abuse | the dispatcher never emits allow/deny, is pin-tested to only ask, and any crash fails open with a counts-only ledger row |
 
 ## Permissions posture
 
@@ -48,13 +49,11 @@ Hooks only ever add a permission prompt or context - they never deny, never auto
 The `PreToolUse` hook adds a prompt for privacy: it names the banned
 command form and offers the local pipe alternative that skills already
 support. The hook never actually blocks execution — only Claude Code's
-platform permission prompt does that. As the platform states: "plugins are
-highly trusted components that can execute arbitrary code on your machine"
-(code.claude.com, discover-plugins, Security section).
-
-| Threat | Answer in this repo |
-|---|---|
-| Hook surface abuse | the dispatcher never emits allow/deny, is pin-tested to only ask, and any crash fails open with a counts-only ledger row |
+platform permission prompt does that. A hook `ask` only ever adds a permission
+prompt where one might not have appeared - it can never bypass, suppress, or
+auto-approve one. As the platform states: "plugins are highly trusted
+components that can execute arbitrary code on your machine" (code.claude.com,
+discover-plugins, Security section).
 
 ## Reporting
 
