@@ -3137,6 +3137,33 @@ class OllamaAskTests(unittest.TestCase):
         data = json.loads(out)
         self.assertEqual(data["suggestions"], [])
 
+    def test_stats_surfaces_hook_error_rows(self):
+        del os.environ["OLLAMA_SKILLS_NO_USAGE"]
+        os.chdir(self._tmp)
+        path = Path(self._tmp) / ".ollama-skills-usage.jsonl"
+        rows = [
+            {"v": 1, "cmd": "hook_error", "event": "SessionStart",
+             "error": "TimeoutExpired",
+             "ts": "2026-08-08T10:00:00+00:00"},
+            {"v": 1, "cmd": "hook_error", "event": "SessionStart",
+             "error": "JSONDecodeError",
+             "ts": "2026-08-08T10:01:00+00:00"},
+        ]
+        with open(path, "a", encoding="utf-8") as fh:
+            for row in rows:
+                fh.write(json.dumps(row) + "\n")
+        code, out, err = self.run_cli("stats", "--json")
+        self.assertEqual(code, 0, msg=err)
+        data = json.loads(out)
+        self.assertEqual(data["hook_errors"]["count"], 2)
+        self.assertEqual(data["hook_errors"]["events"], {"SessionStart": 2})
+        # hook rows are not model calls: they never enter per_cmd
+        self.assertNotIn("hook_error", data["per_cmd"])
+        code, out, err = self.run_cli("stats")
+        self.assertEqual(code, 0, msg=err)
+        self.assertIn("suggestion: 2 hook error(s) recorded", out)
+        self.assertIn("hooks fail open", out)
+
     # -- outcome folding (--outcome / --outcome-task) ------------------------
     #
     # NOTE: the brief for this task sketched these as a separate

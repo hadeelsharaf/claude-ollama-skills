@@ -743,6 +743,15 @@ def cmd_stats(args, cfg: dict) -> int:
         bucket = outcomes.setdefault(task, {})
         bucket[verdict] = bucket.get(verdict, 0) + 1
 
+    # Hook breadcrumbs (from hooks/dispatch.py) are not model calls:
+    # keep them out of per_cmd and surface them counts-only.
+    hook_rows = [r for r in records if r.get("cmd") == "hook_error"]
+    records = [r for r in records if r.get("cmd") != "hook_error"]
+    hook_errors: dict = {"count": len(hook_rows), "events": {}}
+    for rec in hook_rows:
+        event = str(rec.get("event"))
+        hook_errors["events"][event] = hook_errors["events"].get(event, 0) + 1
+
     # Failure-feedback (counts only): a task whose trailing window keeps
     # producing model-failed drafts gets one actionable line, never content.
     SUGGEST_WINDOW, SUGGEST_THRESHOLD = 20, 3
@@ -787,7 +796,8 @@ def cmd_stats(args, cfg: dict) -> int:
         print(json.dumps({"path": str(path), "skipped_lines": skipped,
                           "per_cmd": per_cmd, "total": total,
                           "outcomes": outcomes,
-                          "suggestions": suggestions}, indent=2))
+                          "suggestions": suggestions,
+                          "hook_errors": hook_errors}, indent=2))
     else:
         headers = ["cmd", "calls", "delivered", "local tokens",
                    "est. avoided", "est. returned", "net est. saved"]
@@ -824,6 +834,11 @@ def cmd_stats(args, cfg: dict) -> int:
                 print(f"suggestion: task {s['task']}: {s['failed']} failed "
                       f"drafts recently - try a larger model (see models "
                       f"--json) or a higher --timeout")
+        if hook_errors["count"]:
+            print()
+            print(f"suggestion: {hook_errors['count']} hook error(s) "
+                  f"recorded - hooks fail open; run a session with "
+                  f"claude --debug to see which hook")
 
     if args.reset:
         backup = str(path) + ".bak"
