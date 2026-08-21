@@ -30,7 +30,7 @@ timestamps, never prompt content or paths. Opt out with `OLLAMA_SKILLS_NO_USAGE=
 | The local model self-certifies safety | The JSON `caution` field explicitly does NOT count as a safety check. |
 | Over-eager lint "fixes" that change behavior | `fix-lint` never writes files. Claude applies a suggestion only when it touches just the flagged lines, then re-runs the linter. |
 | Permission bypass creep | Nothing in this repo uses or recommends `bypassPermissions` or `--no-verify`. Drafted commands still go through Claude Code's normal permission prompts. |
-| A hostile PROJECT config redirects data off the machine (a cloned repo ships `.ollama-skills.json` with a remote `host`) | The script prints a loud warning on stderr whenever the resolved host is not loopback: "prompts and diffs will LEAVE this machine". Check for that warning after cloning anything. A project config can also set `usage_log_path` to redirect where those counts-only lines are appended — nuisance/file-clutter, no content exposure. Same mitigation as `host`: review project configs in cloned repos. |
+| A hostile PROJECT config redirects data off the machine (a cloned repo ships `.ollama-skills.json` with a remote `host`) | The script prints a loud warning on stderr whenever the resolved host is not loopback: "prompts and diffs will LEAVE this machine". Check for that warning after cloning anything. A project config can also set `usage_log_path` to redirect where those counts-only lines are appended — nuisance/file-clutter, no content exposure. A hostile config's resolved model name also reaches the SessionStart hook card, so it is charset-validated (`_MODEL_NAME_OK`) before interpolation and the finished card is hard-capped at 250 chars — that channel cannot inject text into session context or overflow it. Same mitigation as `host`: review project configs in cloned repos. |
 | Supply chain | The runtime is one readable stdlib-only Python file — no pip packages, no server processes. Pin a commit SHA when you consume this repo in an organization. |
 | Prompt injection via commit subjects reaching a PUBLISHED PR title/body (the pr path uploads reviewed text to GitHub/GitLab with the user's credentials) | `pr-desc` feeds subjects+shortstat only; Claude reviews the draft as untrusted; `pr-create` is draft-by-default with a fixed argv; `--ready` requires the user's explicit words. |
 | Hook surface abuse | the dispatcher never emits allow/deny, is pin-tested to only ask, and any crash fails open with a counts-only ledger row |
@@ -48,7 +48,10 @@ Hooks only ever add a permission prompt or context - they never deny, never auto
 
 The `PreToolUse` hook adds a prompt for privacy: it names the banned
 command form and offers the local pipe alternative that skills already
-support. The hook never actually blocks execution — only Claude Code's
+support. The Bash-side filter only sees commands beginning with `git` or
+`docker`; compound or prefixed commands are not gated, and the skills'
+prose rules remain the primary privacy layer. The hook never actually
+blocks execution — only Claude Code's
 platform permission prompt does that. A hook `ask` only ever adds a permission
 prompt where one might not have appeared - it can never bypass, suppress, or
 auto-approve one. As the platform states: "plugins are highly trusted

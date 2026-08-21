@@ -319,7 +319,7 @@ served by one fail-open stdlib dispatcher:
 - **Outcome nudge** — when a delivered draft's fate was never recorded,
   one reminder to pass `--outcome` on the next call.
 
-Hooks only ever add a permission prompt or context - they never deny, never auto-approve, never rewrite a command, and fail open. Hook failures appear as counts-only `hook_error` rows in `stats`. To turn hooks off: disable the plugin, or start a run with `--settings '{"disableAllHooks": true}'`.
+Hooks only ever add a permission prompt or context - they never deny, never auto-approve, never rewrite a command, and fail open. The Bash-side filter only sees commands beginning with `git` or `docker`; compound or prefixed commands are not gated, and the skills' prose rules remain the primary privacy layer. Hook failures appear as counts-only `hook_error` rows in `stats`. To turn hooks off: disable the plugin, or start a run with `--settings '{"disableAllHooks": true}'`.
 
 ### Measured, honestly: an A/B experiment
 
