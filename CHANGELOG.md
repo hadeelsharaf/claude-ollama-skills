@@ -13,6 +13,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
   refused (exit 6). New `skills/ollama-digest/TESTS.md` carries the pipe
   forms and the two privacy rules; `agents/ollama-coder.md` now verifies
   full-suite runs through the digest.
+- Plugin hooks (`hooks/hooks.json`, one fail-open stdlib dispatcher): a
+  SessionStart card naming the resolved local models, a prompt routing
+  hint, a PreToolUse permission "ask" on raw bulk reads the skills already
+  ban, and a Stop reminder when a delivered draft has no recorded outcome.
+  Hook failures land as counts-only `hook_error` ledger rows surfaced by
+  `stats`; hooks never deny, never auto-approve, and never rewrite
+  commands.
 
 ### Changed
 - Homepage: a "New in v0.8.0" section — on-demand guardrail loading (with the

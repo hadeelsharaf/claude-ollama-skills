@@ -41,6 +41,21 @@ If the permission prompts get noisy, allowlist narrowly in `settings.json`
 git commands — instead of broad `Bash(*)` grants. Review your organization's policy
 first. This repo intentionally ships NO permission changes.
 
+## Hooks
+
+Hooks only ever add a permission prompt or context - they never deny, never auto-approve, never rewrite a command, and fail open. Hook failures fail open with a counts-only `hook_error` ledger row naming only the event type and exception class, never the input or stack trace.
+
+The `PreToolUse` hook adds a prompt for privacy: it names the banned
+command form and offers the local pipe alternative that skills already
+support. The hook never actually blocks execution — only Claude Code's
+platform permission prompt does that. As the platform states: "plugins are
+highly trusted components that can execute arbitrary code on your machine"
+(code.claude.com, discover-plugins, Security section).
+
+| Threat | Answer in this repo |
+|---|---|
+| Hook surface abuse | the dispatcher never emits allow/deny, is pin-tested to only ask, and any crash fails open with a counts-only ledger row |
+
 ## Reporting
 
 Found a security problem? Open a GitHub issue with the label `security`, or email

@@ -129,6 +129,11 @@ models --json` prints the resolved model and its source for every task.
   oversized changesets (exit 2); `record-outcome` writes counts-only verdict
   rows. The canonical tier sentences in skills/agents are pin-tested -
   rewording them is a test-touching change, by design.
+- **Hooks only tighten.** `hooks/dispatch.py` may emit `permissionDecision`
+  `"ask"` and context lines - never `"allow"`, never `"deny"`, never a
+  rewritten command; every exit code is 0 and any internal error fails
+  open after a counts-only `hook_error` ledger row. The guarantee sentence
+  is pin-tested in `tests/test_hooks.py`.
 
 ## Cross-platform details worth knowing
 

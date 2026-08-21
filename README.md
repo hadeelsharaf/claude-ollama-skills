@@ -304,6 +304,23 @@ next delegating call to fold the previous draft's fate in with no extra round
 trip; `record-outcome <used-as-is|edited|replaced|model-failed> --task <task>`
 remains the fallback for when no next call comes.
 
+## Hooks
+
+Since 0.9 the plugin ships four optional hooks (`hooks/hooks.json`), all
+served by one fail-open stdlib dispatcher:
+
+- **Session card** — at session start, one line naming the resolved local
+  models, only when Ollama is reachable.
+- **Routing hint** — when a prompt mentions a delegable task (a commit, a
+  log, a failing test run), one line naming the matching skill.
+- **Privacy ask** — a raw bulk-read command the skills already ban
+  (`git log -p`, bare `git diff --cached`, unpiped `docker logs`) gets an
+  explicit permission prompt with the local pipe form in the reason.
+- **Outcome nudge** — when a delivered draft's fate was never recorded,
+  one reminder to pass `--outcome` on the next call.
+
+Hooks only ever add a permission prompt or context - they never deny, never auto-approve, never rewrite a command, and fail open. Hook failures appear as counts-only `hook_error` rows in `stats`. To turn hooks off: disable the plugin, or start a run with `--settings '{"disableAllHooks": true}'`.
+
 ### Measured, honestly: an A/B experiment
 
 We ran the same two tasks (commit a staged multi-file change; summarize a

@@ -397,5 +397,21 @@ class ValidatorHooksTests(unittest.TestCase):
         self.assertEqual(failures, [])
 
 
+class HookProseTests(unittest.TestCase):
+
+    PIN = ("Hooks only ever add a permission prompt or context - they "
+           "never deny, never auto-approve, never rewrite a command, and "
+           "fail open.")
+
+    def test_security_md_pins_the_hook_guarantee(self):
+        text = (REPO / "docs" / "SECURITY.md").read_text(encoding="utf-8")
+        self.assertIn(self.PIN, text)
+
+    def test_readme_pins_the_hook_guarantee_and_disable_mechanisms(self):
+        text = (REPO / "README.md").read_text(encoding="utf-8")
+        self.assertIn(self.PIN, text)
+        self.assertIn("disableAllHooks", text)
+
+
 if __name__ == "__main__":
     unittest.main()
