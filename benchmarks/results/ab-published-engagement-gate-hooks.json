@@ -1,0 +1,24 @@
+{
+  "gate": "hooks engagement: did neutral-arm delegation move off its historical baseline of zero?",
+  "date": "2026-08-21",
+  "tree": "draft @ da2e7cc (hooks surface merged; plugin loaded via --plugin-dir)",
+  "model": "opus",
+  "arm": "with (neutral prompt, plugin loaded, hooks live)",
+  "baseline": "five prior A/B rounds (0.4.0-0.8.0): neutral-arm delegation was zero in every recorded session",
+  "recovery_note": "the 4-session gate run was killed by a 600s harness timeout after 3 completed trials; those 3 rows are recovered from their fixture ledgers per the 0.7.0 interrupted-run convention (delegated = any delivered:true ledger row, the same metric measure_ab.read_delegation applies). The killed 4th trial is reported as partial and excluded from success tallies. A replacement 4th session was run to completion.",
+  "sessions": [
+    {"label": "pilot", "task": "summarize", "ok": true, "tokens_consumed": 20240, "cost_usd": 0.3573, "delegated": false, "source": "engagement-pilot.json"},
+    {"label": "gate t1", "task": "commit", "ok": true, "tokens_consumed": 18655, "delegated": true, "source": "recovered fixture ab_commit_with_v9967mse (1 delivered row, 3 ledger rows)"},
+    {"label": "gate t2", "task": "commit", "ok": true, "tokens_consumed": 19821, "delegated": true, "source": "recovered fixture ab_commit_with_q9pf2yw1 (1 delivered row, 3 ledger rows)"},
+    {"label": "gate t3", "task": "summarize", "ok": true, "tokens_consumed": 26315, "delegated": true, "source": "recovered fixture ab_summarize_with_k03govyt (1 delivered row, 18 ledger rows - full map/reduce)"},
+    {"label": "gate t4 (killed)", "task": "summarize", "ok": null, "partial": true, "delegated": true, "source": "recovered fixture ab_summarize_with__7lmqz8d (1 delivered row, 9 ledger rows before the 600s kill); excluded from tallies"},
+    {"label": "gate t4 replacement", "task": "summarize", "ok": true, "tokens_consumed": 20592, "cost_usd": 0.3743, "delegated": false, "source": "engagement-gate-hooks-t4.json"}
+  ],
+  "tally": {
+    "completed_sessions": 5,
+    "delegated": 3,
+    "by_task": {"commit": "2/2 delegated", "summarize": "1/3 delegated (partial killed session had also delegated)"}
+  },
+  "verdict": "PASS on the gate's own question: neutral-arm delegation moved off zero (3/5 completed sessions, commit 2/2). Read as sign, not magnitude: n=5, one machine, one day. Summarize engagement remains unreliable (1/3).",
+  "cost_usd_total_approx": 1.9
+}
