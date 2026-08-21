@@ -31,26 +31,39 @@ HANDLERS = {}
 
 CARD_TASKS = ("commit", "summarize")
 
+# A resolved model name reaches this card verbatim (see resolve_model in
+# ollama_ask.py) and a hostile project .ollama-skills.json can set it to
+# anything, so it is charset-validated before it is ever interpolated and
+# the finished card is hard-capped below. Both are defense in depth, not
+# just cosmetic - this is session context, not a log line.
+_MODEL_NAME_OK = re.compile(r"^[A-Za-z0-9._:/@+-]{1,64}$")
+CARD_MAX_CHARS = 250
+
 
 def handle_session_start(event: dict) -> None:
     """One compact counts-only card; silent unless delegation is ready."""
-    proc = subprocess.run(
-        [sys.executable, str(SCRIPT), "models", "--json"],
-        capture_output=True, text=True, timeout=3)
-    if proc.returncode != 0:
-        return
-    data = json.loads(proc.stdout)
+    try:
+        proc = subprocess.run(
+            [sys.executable, str(SCRIPT), "models", "--json"],
+            capture_output=True, text=True, timeout=3)
+        if proc.returncode != 0:
+            return
+        data = json.loads(proc.stdout)
+    except (subprocess.TimeoutExpired, json.JSONDecodeError, OSError):
+        return  # slow/unreachable Ollama is normal silence, not an error
     if not data.get("installed"):
         return  # Ollama unreachable or no models: never advertise
     tasks = data.get("tasks", {})
     parts = ["{} -> {}".format(t, tasks[t]["model"])
              for t in CARD_TASKS
-             if isinstance(tasks.get(t), dict) and tasks[t].get("model")]
+             if isinstance(tasks.get(t), dict) and tasks[t].get("model")
+             and _MODEL_NAME_OK.match(str(tasks[t]["model"]))]
     if not parts:
         return
-    print("ollama-skills: local delegation ready ({}). Failing tests: "
-          "pipe the run into summarize --kind test (skill: ollama-digest)."
-          .format(", ".join(parts)))
+    card = ("ollama-skills: local delegation ready ({}). Failing tests: "
+            "pipe the run into summarize --kind test (skill: ollama-digest)."
+            .format(", ".join(parts)))
+    print(card[:CARD_MAX_CHARS])
 
 
 HANDLERS["SessionStart"] = handle_session_start
@@ -86,24 +99,43 @@ _GIT_LOG_PATCH = re.compile(r"(^|\s)(-p|--patch|--word-diff|--full-diff)\b")
 _GIT_DIFF_CACHED = re.compile(r"\bgit\s+diff\b[^|]*--cached")
 _DOCKER_LOGS = re.compile(r"\bdocker\s+logs\b")
 
+# Conservative backstop, not a shell parser: split only on statement
+# separators so a later clause's "--stat"/"summarize" can't launder an
+# earlier bulk-read clause (pipes stay within a segment on purpose).
+_STATEMENT_SPLIT = re.compile(r"(?:;|&&|\|\|)")
+
+
+def _classify_segment(segment: str):
+    """(skill, pipe_form) for one statement, else None.
+
+    Conservative on purpose: prefer missing a match to flagging a form a
+    skill mandates (git diff --cached --stat must never match)."""
+    if _GIT_LOG.search(segment) and _GIT_LOG_PATCH.search(segment):
+        return ("ollama-digest",
+                'git log --oneline <range> | python <script> summarize '
+                '--kind git')
+    if _GIT_DIFF_CACHED.search(segment) and "--stat" not in segment:
+        return ("ollama-commit",
+                "git diff --cached --stat (names and sizes only), or "
+                "commit-msg to draft the message locally")
+    if (_DOCKER_LOGS.search(segment) and "--tail" not in segment
+            and "summarize" not in segment):
+        return ("ollama-docker",
+                'docker logs --tail 200 <container> 2>&1 | python <script> '
+                'summarize --kind log')
+    return None
+
 
 def classify_bulk_read(command: str):
     """(skill, pipe_form) for a raw bulk read the skills ban, else None.
 
-    Conservative on purpose: prefer missing a match to flagging a form a
-    skill mandates (git diff --cached --stat must never match)."""
-    if _GIT_LOG.search(command) and _GIT_LOG_PATCH.search(command):
-        return ("ollama-digest",
-                'git log --oneline <range> | python <script> summarize '
-                '--kind git')
-    if _GIT_DIFF_CACHED.search(command) and "--stat" not in command:
-        return ("ollama-commit",
-                "git diff --cached --stat (names and sizes only), or "
-                "commit-msg to draft the message locally")
-    if _DOCKER_LOGS.search(command) and "summarize" not in command:
-        return ("ollama-docker",
-                'docker logs --tail 200 <container> 2>&1 | python <script> '
-                'summarize --kind log')
+    Evaluated per statement (split on ;, &&, ||) so a form one clause
+    mandates can't hide a banned form in another clause of the same
+    command string; first hit wins."""
+    for segment in _STATEMENT_SPLIT.split(command):
+        hit = _classify_segment(segment)
+        if hit is not None:
+            return hit
     return None
 
 
@@ -180,12 +212,14 @@ def _breadcrumb(event_name: str, exc: BaseException) -> None:
         cfg = ollama_ask.load_config()
         if not ollama_ask._usage_enabled(cfg):
             return
-        path, _ = ollama_ask._usage_path(cfg)
+        path, repo_root = ollama_ask._usage_path(cfg)
         row = {"ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                "v": 1, "cmd": "hook_error", "event": event_name,
                "error": type(exc).__name__}
         with open(path, "a", encoding="utf-8") as fh:
             fh.write(json.dumps(row) + "\n")
+        if repo_root is not None:
+            ollama_ask._ensure_excluded()
     except Exception:
         pass
 
@@ -194,7 +228,13 @@ def main() -> int:
     event_name = "unknown"
     try:
         sys.path.insert(0, str(SCRIPTS_DIR))
-        event = json.load(sys.stdin)
+        # Windows editors/pipes sometimes prepend a BOM; sys.stdin here may
+        # be a real TextIOWrapper (has .buffer) or a test double that
+        # doesn't - guard the attribute access rather than assume either.
+        buf = getattr(sys.stdin, "buffer", None)
+        raw = (buf.read().decode("utf-8-sig") if buf is not None
+               else sys.stdin.read().lstrip("﻿"))
+        event = json.loads(raw)
         if not isinstance(event, dict):
             return 0
         event_name = str(event.get("hook_event_name") or "unknown")
