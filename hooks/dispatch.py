@@ -128,6 +128,50 @@ def handle_pretooluse(event: dict) -> None:
 HANDLERS["PreToolUse"] = handle_pretooluse
 
 
+DELEGATING_CMDS = frozenset(
+    {"ask", "commit-msg", "pr-desc", "draft-command", "draft-code",
+     "fix-lint", "summarize"})
+
+
+def handle_stop(event: dict) -> None:
+    """Nudge once when a delivered draft's fate is unrecorded. Uses the
+    documented gentle channel (additionalContext); never blocks."""
+    if event.get("stop_hook_active"):
+        return
+    import ollama_ask
+    cfg = ollama_ask.load_config()
+    if not ollama_ask._usage_enabled(cfg):
+        return
+    path, _ = ollama_ask._usage_path(cfg)
+    if not path.is_file():
+        return
+    lines = path.read_text(encoding="utf-8",
+                           errors="replace").splitlines()[-50:]
+    last_delegation = last_outcome = -1
+    for i, line in enumerate(lines):
+        try:
+            rec = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(rec, dict):
+            continue
+        if rec.get("cmd") in DELEGATING_CMDS and rec.get("delivered"):
+            last_delegation = i
+        elif rec.get("cmd") == "outcome":
+            last_outcome = i
+    if last_delegation > last_outcome:
+        print(json.dumps({"hookSpecificOutput": {
+            "hookEventName": "Stop",
+            "additionalContext": (
+                "ollama-skills: a delivered local draft has no recorded "
+                "outcome yet - add --outcome "
+                "<used-as-is|edited|replaced|model-failed> to the next "
+                "delegating call, or run record-outcome.")}}))
+
+
+HANDLERS["Stop"] = handle_stop
+
+
 def _breadcrumb(event_name: str, exc: BaseException) -> None:
     """Counts-only failure row. Best-effort: swallows its own errors."""
     try:

@@ -262,6 +262,55 @@ class PrivacyAskTests(HookTestCase):
         self.assertEqual((code, out), (0, ""))
 
 
+class StopNudgeTests(HookTestCase):
+
+    def write_ledger(self, rows):
+        path = Path(self._tmp) / ".ollama-skills-usage.jsonl"
+        with open(path, "a", encoding="utf-8") as fh:
+            for row in rows:
+                fh.write(json.dumps(row) + "\n")
+
+    def stop(self, active=False):
+        return self.run_hook(
+            {"hook_event_name": "Stop", "stop_hook_active": active})
+
+    DELEGATION = {"v": 1, "cmd": "commit-msg", "delivered": True,
+                  "prompt_tokens": 10, "output_tokens": 5,
+                  "avoided_chars": 100, "returned_chars": 20}
+    OUTCOME = {"v": 1, "cmd": "outcome", "task": "commit",
+               "verdict": "used-as-is"}
+
+    def test_unrecorded_delivered_draft_gets_one_nudge(self):
+        self.write_ledger([self.DELEGATION])
+        code, out, err = self.stop()
+        self.assertEqual(code, 0)
+        payload = json.loads(out)
+        ctx = payload["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("--outcome", ctx)
+        self.assertNotIn('"decision"', out)
+
+    def test_recorded_draft_is_silent(self):
+        self.write_ledger([self.DELEGATION, self.OUTCOME])
+        self.assertEqual(self.stop()[1], "")
+
+    def test_undelivered_rows_do_not_nudge(self):
+        row = dict(self.DELEGATION, delivered=False)
+        self.write_ledger([row])
+        self.assertEqual(self.stop()[1], "")
+
+    def test_stop_hook_active_guard_exits_early(self):
+        self.write_ledger([self.DELEGATION])
+        self.assertEqual(self.stop(active=True)[1], "")
+
+    def test_no_ledger_is_silent(self):
+        self.assertEqual(self.stop()[1], "")
+
+    def test_hook_error_rows_do_not_count_as_delegations(self):
+        self.write_ledger([{"v": 1, "cmd": "hook_error",
+                            "event": "Stop", "error": "ValueError"}])
+        self.assertEqual(self.stop()[1], "")
+
+
 class HooksJsonTests(unittest.TestCase):
 
     def setUp(self):
