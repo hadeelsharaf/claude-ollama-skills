@@ -102,16 +102,67 @@ class DispatcherSkeletonTests(HookTestCase):
     def test_crashing_handler_fails_open_with_breadcrumb(self):
         def boom(event):
             raise RuntimeError("handler exploded")
+        original = dispatch.HANDLERS.get("SessionStart")
         dispatch.HANDLERS["SessionStart"] = boom
         try:
             code, out, err = self.run_hook(
                 {"hook_event_name": "SessionStart"})
         finally:
-            dispatch.HANDLERS.pop("SessionStart", None)
+            if original is not None:
+                dispatch.HANDLERS["SessionStart"] = original
+            else:
+                dispatch.HANDLERS.pop("SessionStart", None)
         self.assertEqual((code, out, err), (0, "", ""))
         rows = self.ledger_rows()
         self.assertEqual(rows[0]["error"], "RuntimeError")
         self.assertEqual(rows[0]["event"], "SessionStart")
+
+
+class _FakeProc:
+    def __init__(self, returncode, stdout):
+        self.returncode = returncode
+        self.stdout = stdout
+
+
+class SessionStartTests(HookTestCase):
+
+    MODELS_OK = json.dumps({
+        "tasks": {"commit": {"model": "qwen2.5-coder:1.5b", "source": "auto"},
+                  "summarize": {"model": "gemma2:2b", "source": "auto"},
+                  "shell": {"model": "gemma2:2b", "source": "auto"}},
+        "installed": ["qwen2.5-coder:1.5b", "gemma2:2b"],
+        "skipped": [], "hints": []})
+
+    MODELS_DOWN = json.dumps({
+        "tasks": {"commit": {"model": None, "source": "none"},
+                  "summarize": {"model": None, "source": "none"}},
+        "installed": [], "skipped": [], "hints": []})
+
+    def _patch_models(self, proc):
+        self._orig_run = dispatch.subprocess.run
+        dispatch.subprocess.run = lambda *a, **k: proc
+        self.addCleanup(
+            lambda: setattr(dispatch.subprocess, "run", self._orig_run))
+
+    def test_card_names_commit_and_summarize_models(self):
+        self._patch_models(_FakeProc(0, self.MODELS_OK))
+        code, out, err = self.run_hook({"hook_event_name": "SessionStart"})
+        self.assertEqual(code, 0)
+        self.assertIn("ollama-skills: local delegation ready", out)
+        self.assertIn("commit -> qwen2.5-coder:1.5b", out)
+        self.assertIn("summarize -> gemma2:2b", out)
+        self.assertIn("summarize --kind test", out)
+        self.assertLessEqual(len(out), 300)
+
+    def test_silent_when_ollama_down(self):
+        self._patch_models(_FakeProc(0, self.MODELS_DOWN))
+        code, out, err = self.run_hook({"hook_event_name": "SessionStart"})
+        self.assertEqual((code, out), (0, ""))
+
+    def test_silent_when_models_call_fails(self):
+        self._patch_models(_FakeProc(3, ""))
+        code, out, err = self.run_hook({"hook_event_name": "SessionStart"})
+        self.assertEqual((code, out), (0, ""))
 
 
 class HooksJsonTests(unittest.TestCase):

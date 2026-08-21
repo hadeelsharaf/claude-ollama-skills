@@ -15,8 +15,8 @@ docs/superpowers/notes/2026-08-08-hooks-capabilities-research.md
 """
 from __future__ import annotations
 
-import io
 import json
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -27,6 +27,32 @@ SCRIPT = SCRIPTS_DIR / "ollama_ask.py"
 
 # Tasks 2-5 register handlers here: {event_name: handler(event) -> None}
 HANDLERS = {}
+
+CARD_TASKS = ("commit", "summarize")
+
+
+def handle_session_start(event: dict) -> None:
+    """One compact counts-only card; silent unless delegation is ready."""
+    proc = subprocess.run(
+        [sys.executable, str(SCRIPT), "models", "--json"],
+        capture_output=True, text=True, timeout=3)
+    if proc.returncode != 0:
+        return
+    data = json.loads(proc.stdout)
+    if not data.get("installed"):
+        return  # Ollama unreachable or no models: never advertise
+    tasks = data.get("tasks", {})
+    parts = ["{} -> {}".format(t, tasks[t]["model"])
+             for t in CARD_TASKS
+             if isinstance(tasks.get(t), dict) and tasks[t].get("model")]
+    if not parts:
+        return
+    print("ollama-skills: local delegation ready ({}). Failing tests: "
+          "pipe the run into summarize --kind test (skill: ollama-digest)."
+          .format(", ".join(parts)))
+
+
+HANDLERS["SessionStart"] = handle_session_start
 
 
 def _breadcrumb(event_name: str, exc: BaseException) -> None:
