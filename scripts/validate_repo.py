@@ -214,9 +214,46 @@ def check_exit_code_sync(script: Path, readme: Path) -> None:
     ok(readme, "exit codes in sync with the script")
 
 
+KNOWN_HOOK_EVENTS = {"SessionStart", "UserPromptSubmit", "PreToolUse",
+                     "Stop"}
+_HOOK_REF = re.compile(r"\$\{CLAUDE_PLUGIN_ROOT\}/([^\s\"']+)")
+
+
+def check_hooks(root: Path) -> None:
+    """hooks/hooks.json must parse, register only known events, and every
+    ${CLAUDE_PLUGIN_ROOT}/... path in a command must exist in the repo."""
+    path = root / "hooks" / "hooks.json"
+    if not path.is_file():
+        return  # hooks are an optional surface
+    data = check_json(path, ["hooks"])
+    if data is None:
+        return
+    hooks = data.get("hooks")
+    if not isinstance(hooks, dict):
+        fail(path, "hooks key must be an object")
+        return
+    problems = []
+    for event, entries in hooks.items():
+        if event not in KNOWN_HOOK_EVENTS:
+            problems.append(f"unknown event {event}")
+            continue
+        for entry in entries if isinstance(entries, list) else []:
+            for hook in entry.get("hooks", []):
+                if hook.get("type") != "command":
+                    problems.append(f"{event}: non-command hook type")
+                for rel in _HOOK_REF.findall(str(hook.get("command", ""))):
+                    if not (root / rel).is_file():
+                        problems.append(f"{event}: missing file {rel}")
+    if problems:
+        fail(path, "; ".join(problems))
+    else:
+        ok(path, f"{len(hooks)} event(s)")
+
+
 def main() -> int:
     check_json(ROOT / ".claude-plugin" / "plugin.json", ["name", "version", "description"])
     check_json(ROOT / ".claude-plugin" / "marketplace.json", ["name", "owner", "plugins"])
+    check_hooks(ROOT)
 
     example = ROOT / "config" / ".ollama-skills.example.json"
     if example.exists():

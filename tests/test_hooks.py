@@ -5,6 +5,7 @@ The dispatcher is loaded from its file path (hooks/ is not a package) and
 driven in-process: stdin is replaced per call, stdout captured.
 """
 import importlib.util
+import importlib.util as _ilu
 import io
 import json
 import os
@@ -22,6 +23,11 @@ _spec = importlib.util.spec_from_file_location(
     "dispatch", REPO / "hooks" / "dispatch.py")
 dispatch = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(dispatch)
+
+_vspec = _ilu.spec_from_file_location(
+    "validate_repo", REPO / "scripts" / "validate_repo.py")
+validate_repo = _ilu.module_from_spec(_vspec)
+_vspec.loader.exec_module(validate_repo)
 
 
 def rmtree_force(path):
@@ -339,6 +345,56 @@ class HooksJsonTests(unittest.TestCase):
         bash_entry = self.data["hooks"]["PreToolUse"][0]
         ifs = [h.get("if") for h in bash_entry["hooks"]]
         self.assertEqual(ifs, ["Bash(git *)", "Bash(docker *)"])
+
+
+class ValidatorHooksTests(unittest.TestCase):
+
+    def _check(self, hooks_obj) -> list:
+        """Run check_hooks against a temp tree; return recorded failures."""
+        tmp = Path(tempfile.mkdtemp(prefix="vhooks_"))
+        self.addCleanup(rmtree_force, tmp)
+        (tmp / "hooks").mkdir()
+        (tmp / "hooks" / "hooks.json").write_text(
+            json.dumps(hooks_obj), encoding="utf-8")
+        (tmp / "hooks" / "dispatch.py").write_text("# stub", encoding="utf-8")
+        failures = []
+        orig_fail = validate_repo.fail
+        orig_ok = validate_repo.ok
+        validate_repo.fail = lambda path, reason: failures.append(reason)
+        validate_repo.ok = lambda path, note="": None
+        try:
+            validate_repo.check_hooks(tmp)
+        finally:
+            validate_repo.fail = orig_fail
+            validate_repo.ok = orig_ok
+        return failures
+
+    GOOD = {"hooks": {"Stop": [{"hooks": [
+        {"type": "command",
+         "command": 'python "${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.py"'}]}]}}
+
+    def test_valid_hooks_json_passes(self):
+        self.assertEqual(self._check(self.GOOD), [])
+
+    def test_unknown_event_fails(self):
+        bad = {"hooks": {"NotAnEvent": self.GOOD["hooks"]["Stop"]}}
+        self.assertTrue(any("NotAnEvent" in f for f in self._check(bad)))
+
+    def test_missing_referenced_file_fails(self):
+        bad = {"hooks": {"Stop": [{"hooks": [
+            {"type": "command",
+             "command": 'python "${CLAUDE_PLUGIN_ROOT}/hooks/gone.py"'}]}]}}
+        self.assertTrue(any("gone.py" in f for f in self._check(bad)))
+
+    def test_real_repo_hooks_json_passes_the_validator(self):
+        failures = []
+        orig = validate_repo.fail
+        validate_repo.fail = lambda path, reason: failures.append(reason)
+        try:
+            validate_repo.check_hooks(REPO)
+        finally:
+            validate_repo.fail = orig
+        self.assertEqual(failures, [])
 
 
 if __name__ == "__main__":
