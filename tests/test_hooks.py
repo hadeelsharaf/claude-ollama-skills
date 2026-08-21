@@ -203,6 +203,65 @@ class PromptHintTests(HookTestCase):
         self.assertNotIn("SECRET_TOKEN", out)
 
 
+class PrivacyAskTests(HookTestCase):
+
+    def ask_for(self, command: str, tool: str = "Bash") -> dict:
+        code, out, err = self.run_hook(
+            {"hook_event_name": "PreToolUse", "tool_name": tool,
+             "tool_input": {"command": command}})
+        self.assertEqual(code, 0)
+        return json.loads(out) if out else {}
+
+    def decision(self, command: str, tool: str = "Bash"):
+        payload = self.ask_for(command, tool)
+        return payload.get("hookSpecificOutput", {}).get("permissionDecision")
+
+    # --- banned forms MUST ask (mirrors test_denylist_covers_* style) ---
+
+    def test_banned_forms_ask(self):
+        for cmd in ["git log -p", "git log --patch -3",
+                    "git log --word-diff", "git log --full-diff master",
+                    "git diff --cached", "git diff --cached HEAD~1",
+                    "docker logs api", "docker logs --tail 500 web"]:
+            with self.subTest(cmd=cmd):
+                self.assertEqual(self.decision(cmd), "ask")
+
+    # --- mandated forms must NEVER ask ---
+
+    def test_mandated_forms_pass_silently(self):
+        for cmd in ["git diff --cached --stat", "git diff --stat --cached",
+                    "git log --oneline -10",
+                    "git log --oneline | python ollama_ask.py summarize --kind git",
+                    'docker logs --tail 200 web 2>&1 | python "$S" summarize --kind log',
+                    "git status", "docker ps"]:
+            with self.subTest(cmd=cmd):
+                self.assertEqual(self.ask_for(cmd), {})
+
+    def test_reason_names_pipe_form_and_asks(self):
+        payload = self.ask_for("git log -p")
+        reason = payload["hookSpecificOutput"]["permissionDecisionReason"]
+        self.assertIn("ollama-skills:", reason)
+        self.assertIn("Run it anyway?", reason)
+        self.assertIn("summarize --kind git", reason)
+        self.assertEqual(
+            payload["hookSpecificOutput"]["hookEventName"], "PreToolUse")
+
+    def test_never_emits_allow_or_deny(self):
+        for cmd in ["git log -p", "git diff --cached", "docker logs x",
+                    "git status", "ls"]:
+            with self.subTest(cmd=cmd):
+                self.assertIn(self.decision(cmd), ("ask", None))
+
+    def test_powershell_tool_uses_same_gate(self):
+        self.assertEqual(self.decision("git log -p", tool="PowerShell"), "ask")
+
+    def test_missing_command_field_fails_open(self):
+        code, out, err = self.run_hook(
+            {"hook_event_name": "PreToolUse", "tool_name": "PowerShell",
+             "tool_input": {"script": "git log -p"}})
+        self.assertEqual((code, out), (0, ""))
+
+
 class HooksJsonTests(unittest.TestCase):
 
     def setUp(self):

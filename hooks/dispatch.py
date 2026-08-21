@@ -81,6 +81,53 @@ def handle_prompt(event: dict) -> None:
 HANDLERS["UserPromptSubmit"] = handle_prompt
 
 
+_GIT_LOG = re.compile(r"\bgit\s+log\b")
+_GIT_LOG_PATCH = re.compile(r"(^|\s)(-p|--patch|--word-diff|--full-diff)\b")
+_GIT_DIFF_CACHED = re.compile(r"\bgit\s+diff\b[^|]*--cached")
+_DOCKER_LOGS = re.compile(r"\bdocker\s+logs\b")
+
+
+def classify_bulk_read(command: str):
+    """(skill, pipe_form) for a raw bulk read the skills ban, else None.
+
+    Conservative on purpose: prefer missing a match to flagging a form a
+    skill mandates (git diff --cached --stat must never match)."""
+    if _GIT_LOG.search(command) and _GIT_LOG_PATCH.search(command):
+        return ("ollama-digest",
+                'git log --oneline <range> | python <script> summarize '
+                '--kind git')
+    if _GIT_DIFF_CACHED.search(command) and "--stat" not in command:
+        return ("ollama-commit",
+                "git diff --cached --stat (names and sizes only), or "
+                "commit-msg to draft the message locally")
+    if _DOCKER_LOGS.search(command) and "summarize" not in command:
+        return ("ollama-docker",
+                'docker logs --tail 200 <container> 2>&1 | python <script> '
+                'summarize --kind log')
+    return None
+
+
+def handle_pretooluse(event: dict) -> None:
+    """Only ever tightens: "ask" adds a prompt; never allow, never deny."""
+    if event.get("tool_name") not in ("Bash", "PowerShell"):
+        return
+    command = str((event.get("tool_input") or {}).get("command") or "")
+    hit = classify_bulk_read(command)
+    if hit is None:
+        return
+    skill, pipe_form = hit
+    print(json.dumps({"hookSpecificOutput": {
+        "hookEventName": "PreToolUse",
+        "permissionDecision": "ask",
+        "permissionDecisionReason": (
+            "ollama-skills: this reads bulk content the {} path delegates "
+            "locally - pipe form: {}. Run it anyway?".format(
+                skill, pipe_form))}}))
+
+
+HANDLERS["PreToolUse"] = handle_pretooluse
+
+
 def _breadcrumb(event_name: str, exc: BaseException) -> None:
     """Counts-only failure row. Best-effort: swallows its own errors."""
     try:
