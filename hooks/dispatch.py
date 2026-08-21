@@ -16,6 +16,7 @@ docs/superpowers/notes/2026-08-08-hooks-capabilities-research.md
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -53,6 +54,31 @@ def handle_session_start(event: dict) -> None:
 
 
 HANDLERS["SessionStart"] = handle_session_start
+
+
+HINT_TRIGGERS = [
+    (re.compile(r"\bcommit\b", re.I), "ollama-commit"),
+    (re.compile(r"\bchangelog\b|\brelease notes\b", re.I), "ollama-digest"),
+    (re.compile(r"\bdocker logs\b|\blog file\b|\bsummarize\b.{0,20}\blog\b",
+                re.I), "ollama-digest"),
+    (re.compile(r"\bfailing tests?\b|\btests? fail\b|\btest failures?\b",
+                re.I), "ollama-digest"),
+    (re.compile(r"\bpull request\b|\bpr description\b", re.I), "ollama-pr"),
+]
+
+
+def handle_prompt(event: dict) -> None:
+    """First matching trigger wins; silent otherwise. Never echoes the
+    prompt back - the hint names a skill and nothing else."""
+    prompt = str(event.get("prompt") or "")
+    for pattern, skill in HINT_TRIGGERS:
+        if pattern.search(prompt):
+            print("hint: ollama-skills can do this locally "
+                  "(skill: {}).".format(skill))
+            return
+
+
+HANDLERS["UserPromptSubmit"] = handle_prompt
 
 
 def _breadcrumb(event_name: str, exc: BaseException) -> None:

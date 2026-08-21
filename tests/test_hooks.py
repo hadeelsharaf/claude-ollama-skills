@@ -165,6 +165,44 @@ class SessionStartTests(HookTestCase):
         self.assertEqual((code, out), (0, ""))
 
 
+class PromptHintTests(HookTestCase):
+
+    def hint_for(self, prompt: str) -> str:
+        code, out, err = self.run_hook(
+            {"hook_event_name": "UserPromptSubmit", "prompt": prompt})
+        self.assertEqual(code, 0)
+        return out
+
+    def test_commit_prompt_names_commit_skill(self):
+        out = self.hint_for("please commit these changes")
+        self.assertEqual(
+            out, "hint: ollama-skills can do this locally "
+                 "(skill: ollama-commit).\n")
+
+    def test_failing_test_prompt_names_digest_skill(self):
+        out = self.hint_for("the tests fail after my change, take a look")
+        self.assertIn("(skill: ollama-digest).", out)
+
+    def test_release_notes_prompt_names_digest_skill(self):
+        out = self.hint_for("draft release notes for v0.9")
+        self.assertIn("(skill: ollama-digest).", out)
+
+    def test_pull_request_prompt_names_pr_skill(self):
+        out = self.hint_for("open a pull request for this branch")
+        self.assertIn("(skill: ollama-pr).", out)
+
+    def test_unrelated_prompt_is_silent(self):
+        self.assertEqual(self.hint_for("rename this variable please"), "")
+
+    def test_one_hint_even_when_multiple_triggers_match(self):
+        out = self.hint_for("commit this and open a pull request")
+        self.assertEqual(out.count("hint:"), 1)
+
+    def test_prompt_text_never_echoed(self):
+        out = self.hint_for("commit the SECRET_TOKEN change")
+        self.assertNotIn("SECRET_TOKEN", out)
+
+
 class HooksJsonTests(unittest.TestCase):
 
     def setUp(self):
